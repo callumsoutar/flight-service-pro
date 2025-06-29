@@ -1,0 +1,132 @@
+
+## 26-06-2025
+
+### Project Initialization & Auth
+- Initialized Next.js 15 app with TypeScript, Tailwind, ESLint, and /src directory.
+- Set up file structure for authenticated pages under (auth) and a login page under /login.
+- Implemented Supabase Auth using @supabase/ssr, with strict cookie handling (per bootstrapSupabase.md).
+- Created Supabase client utilities for browser and server.
+- Built login page using React Hook Form, Zod, and Supabase.
+- Refined login page UI for modern, branded, accessible experience (Tailwind + shadcn/ui).
+
+### Dashboard Shell
+- Built dashboard shell with fixed sidebar (Lucide icons, purple gradient, large text), top navbar with user avatar dropdown (shadcn/ui), and scrollable main content area.
+- Sidebar and navbar are fixed; only main content scrolls. Layout is scalable for many pages.
+- Sidebar navigation is ready for future role-based visibility.
+- Fetched logged-in user's info from Supabase for avatar, with robust fallback logic for initials and email.
+- Generated TypeScript type for users table from Supabase schema.
+- Fixed TypeScript error by ensuring email and initials are always strings (nullish coalescing, fallback logic).
+
+### Members Page & API
+- Confirmed multi-tenant setup: users table does NOT have organization_id; user_organizations join table is used for all org membership and role logic.
+- Database structure:
+  - users: global user info (id, email, name, etc). No org-specific fields.
+  - organizations: org info (id, name, etc).
+  - user_organizations: join table (user_id, organization_id, role, joined_at, etc). Used for all org membership, role, and scoping.
+- Used Supabase MCP to fetch schema for user_organizations table and created src/types/user_organizations.ts.
+- Created src/app/api/.keep to ensure api directory exists.
+- Created API route at src/app/api/members/route.ts:
+  - Authenticates user, gets current org from session cookie (current_org_id).
+  - Joins user_organizations and users, paginates and filters by search.
+  - Returns minimal fields for members table (id, name, email, avatar, role).
+  - All queries are always scoped by organization_id from the cookie, never by user metadata.
+  - RLS (Row Level Security) is recommended on user_organizations and related tables to enforce org boundaries at the DB level.
+  - Fixed all import path linter errors.
+
+### Organization Context & Middleware
+- Multi-tenant org context is managed via a current_org_id cookie, set via the /api/set-org route.
+- The /api/set-org route sets the cookie with path: '/', sameSite: 'lax', secure in production, and maxAge for 30 days. This ensures the org context persists across reloads and sessions.
+- After login or org switch, the client calls /api/set-org to set the current org. The org switcher UI in the avatar dropdown allows users to switch orgs, which updates the cookie and reloads the session.
+- All server components and API routes read the current_org_id cookie to determine org context. No org context is ever stored in user metadata.
+- Middleware is used for authentication, but org context is always set and read via the cookie and /api/set-org, not in middleware directly.
+
+### API Calls & Data Fetching
+- All data fetching for org-scoped resources (members, etc) is done via API routes that read the current_org_id cookie for context.
+- No direct DB calls from client components; all data is fetched via secure API routes.
+- Server components use the cookies() API to read current_org_id and scope all queries.
+- All queries for members, orgs, etc, are always filtered by organization_id via the user_organizations join table.
+- Hydration errors are avoided by formatting dates server-side and passing as string props to client components.
+
+### UI/UX & Components
+- Member action buttons (New Invoice, New Booking, Report Occurrence) are now in a single Quick Actions dropdown in the member header, not as separate buttons.
+- Org switcher is in the avatar dropdown, with a checkmark for the current org, and persists across reloads.
+- The current org name is always shown left-aligned in the header bar for context.
+- User greeting uses first and last name if available, falling back to full name or 'User'.
+
+### Security & Best Practices
+- All org-specific data is always scoped by organization_id from the cookie and join table.
+- RLS policies are recommended for user_organizations and related tables to prevent cross-org data leaks.
+- No organization_id is ever stored in the users table; all org membership is via user_organizations.
+- All interactive components (dropdowns, buttons) are client components with 'use client' at the top.
+- All event handlers are only used in client components.
+
+### Members Page UI
+- Created /dashboard/members as a server component (SSR) that fetches the first page of members from the API and renders a MembersTable client component.
+- Scaffolded src/components/members/MembersTable.tsx:
+  - Uses Tanstack Query for pagination and search.
+  - Uses shadcn/ui Avatar, but falls back to native HTML for Input and Table (with TODOs to replace with shadcn/ui components when available).
+  - Pagination, search, and table layout match best practices and screenshot reference.
+  - All linter errors fixed except for missing Tanstack Query dependency (to be installed).
+
+## 27-06-2025
+
+### Bookings System, Audit Log, and UI/UX Overhaul
+
+#### Database & Types
+- Confirmed and documented all relevant enums and relationships for bookings, including `booking_type` (enum: flight, groundwork, maintenance, other) and `booking_status`.
+- Used Supabase MCP to generate and sync TypeScript types for all tables and enums, ensuring type safety and up-to-date enums in the codebase.
+- Added `BookingType` enum to `src/types/bookings.ts` and updated all booking-related code to use this type for dropdowns and API payloads.
+
+#### API & Data Fetching
+- All booking-related data is fetched server-side in the `/dashboard/bookings/view/[id]` page and passed to client components as props for best performance and security.
+- Created/updated API routes for bookings, booking details, audit logs, and members:
+  - `/api/bookings`: Handles PATCH for booking updates, using validated payloads and correct enum values.
+  - `/api/audit_logs`: Fetches audit logs for bookings, supports filtering and org scoping.
+  - `/api/members`: Supports fetching users by a list of IDs for audit log lookups.
+- All API routes are secured by Supabase Auth and organization scoping (via current_org_id cookie). No direct DB calls from client components.
+- All API endpoints validate input and return user-friendly error messages.
+
+#### File Structure & Architecture
+- All types are defined in `src/types/` (one file per table or domain, e.g., `bookings.ts`, `equipment.ts`).
+- API routes are in `src/app/api/` (one folder per resource, RESTful conventions).
+- Dashboard pages are under `src/app/(auth)/dashboard/`, with one folder per feature (bookings, equipment, members, etc).
+- Components are grouped by domain in `src/components/`, with further subfolders for feature-specific components (e.g., `members/`, `ui/`).
+- All UI components use shadcn/ui and Tailwind CSS for consistent, modern styling.
+
+#### UI/UX & Components
+- Booking view page (`/dashboard/bookings/view/[id]`) fetches all booking data server-side and passes to client components.
+- `BookingDetails` form uses React Hook Form, Zod, and shadcn/ui components for all fields, including:
+  - Date/time pickers (shadcn/ui Calendar, Select)
+  - Member, instructor, aircraft, lesson, flight type, and booking type dropdowns (all type-safe, using enums)
+  - Remarks and description fields (textarea, styled)
+  - Save/Undo buttons only enabled when form is dirty; clear feedback for saving state
+- Booking type dropdown now references the correct enum and always matches the database.
+- Action row (Check Out, 3-dot menu) is right-aligned and visually consistent, with icons for all actions.
+- 3-dot dropdown menu includes: Cancel Booking, Email Confirmation, View History, Instructor Comments (with icons and compact styling).
+- Audit log (Booking History) is a collapsible section at the bottom of the booking view, fetching data only when opened. Table shows date, user, and a concise, user-friendly description of changes, with field names mapped to readable labels and IDs mapped to names.
+- Resource card groups users under "People" and aircraft under "Aircraft", with icons and clear separation.
+- All tables and cards use ample padding, rounded corners, and shadow for a modern look. Responsive grid layouts for stat cards and tables.
+- All code is robust to empty/undefined data, and uses type-safe props throughout.
+
+#### Design & Style
+- All UI uses shadcn/ui and Tailwind CSS for a modern, accessible, and responsive design.
+- Consistent use of Card, Table, Button, Select, Popover, and other shadcn/ui primitives.
+- Sidebar and layout use large, readable fonts and clear navigation structure.
+- All forms and tables are grouped with clear section headings and icons.
+- All interactive components are client components with 'use client' at the top.
+
+#### Security & Best Practices
+- All API routes and data fetching are secured by Supabase Auth and RLS (Row Level Security) at the DB level.
+- All queries are always scoped by organization_id from the cookie and join table.
+- No direct DB calls from client components; all data is fetched via secure API routes.
+- All input is validated (Zod, React Hook Form) and errors are handled gracefully.
+- All code follows modern web development best practices for security, maintainability, and performance.
+
+#### Testing & Maintainability
+- All critical logic is type-safe and robust to edge cases.
+- All new features and refactors are explained in code comments and changelog for future maintainers.
+- The codebase is structured for easy extension and onboarding of new developers.
+
+---
+
+This file will be updated with every major change for full traceability and reference. 
