@@ -1,0 +1,72 @@
+// Types for invoices table (generated from Supabase)
+export type Invoice = {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  booking_id: string | null;
+  invoice_number: string;
+  issue_date: string;
+  due_date: string;
+  status: string;
+  subtotal: number;
+  tax_amount: number;
+  tax_rate: number;
+  total_amount: number;
+  balance_due: number | null;
+  paid: number | null;
+  paid_date: string | null;
+  payment_method: string | null;
+  payment_reference: string | null;
+  reference: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InvoiceInsert = {
+  id?: string;
+  organization_id: string;
+  user_id: string;
+  booking_id?: string | null;
+  invoice_number: string;
+  issue_date?: string;
+  due_date: string;
+  status?: string;
+  subtotal?: number;
+  tax_amount?: number;
+  tax_rate?: number;
+  total_amount?: number;
+  balance_due?: number | null;
+  paid?: number | null;
+  paid_date?: string | null;
+  payment_method?: string | null;
+  payment_reference?: string | null;
+  reference?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type InvoiceUpdate = {
+  id?: string;
+  organization_id?: string;
+  user_id?: string;
+  booking_id?: string | null;
+  invoice_number?: string;
+  issue_date?: string;
+  due_date?: string;
+  status?: string;
+  subtotal?: number;
+  tax_amount?: number;
+  tax_rate?: number;
+  total_amount?: number;
+  balance_due?: number | null;
+  paid?: number | null;
+  paid_date?: string | null;
+  payment_method?: string | null;
+  payment_reference?: string | null;
+  reference?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}; 

@@ -1,0 +1,121 @@
+import { BookingStages, BOOKING_STAGES } from "@/components/bookings/BookingStages";
+import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
+import { Badge } from "@/components/ui/badge";
+import { Booking } from "@/types/bookings";
+import React from "react";
+import { createClient } from "@/lib/SupabaseServerClient";
+import { cookies } from "next/headers";
+import CheckInDetails from "@/components/bookings/CheckInDetails";
+
+interface BookingCheckInPageProps {
+  params: Promise<{ id: string }>;
+}
+
+const STATUS_BADGE: Record<Booking["status"], { label: string; color: string }> = {
+  confirmed: { label: "Confirmed", color: "bg-green-100 text-green-800" },
+  unconfirmed: { label: "Unconfirmed", color: "bg-gray-100 text-gray-800" },
+  briefing: { label: "Briefing", color: "bg-yellow-100 text-yellow-800" },
+  flying: { label: "Flying", color: "bg-blue-100 text-blue-800" },
+  complete: { label: "Complete", color: "bg-violet-100 text-violet-800" },
+};
+
+export default async function BookingCheckInPage({ params }: BookingCheckInPageProps) {
+  const { id: bookingId } = await params;
+  const supabase = await createClient();
+  const cookiesList = await cookies();
+  const orgId = cookiesList.get("current_org_id")?.value;
+
+  let booking: Booking | null = null;
+  let instructorCommentsCount = 0;
+  let instructors: { id: string; name: string }[] = [];
+
+  if (orgId) {
+    // Fetch booking
+    const { data: bookingData } = await supabase
+      .from("bookings")
+      .select("*",)
+      .eq("organization_id", orgId)
+      .eq("id", bookingId)
+      .single();
+    booking = bookingData;
+
+    // Fetch instructor comments count
+    if (booking && booking.id) {
+      const { count } = await supabase
+        .from("instructor_comments")
+        .select("id", { count: "exact", head: true })
+        .eq("booking_id", booking.id)
+        .eq("organization_id", orgId);
+      instructorCommentsCount = count || 0;
+    }
+
+    // Fetch all instructors (users in org with instructor/admin/owner role)
+    const { data: instructorRows } = await supabase
+      .from("user_organizations")
+      .select("user_id, users(first_name, last_name, email), role")
+      .eq("organization_id", orgId)
+      .in("role", ["instructor", "admin", "owner"]);
+    instructors = (instructorRows || []).map((row: { user_id: string; users?: { first_name?: string; last_name?: string; email?: string } | { first_name?: string; last_name?: string; email?: string }[]; role: string }) => {
+      let name = row.user_id;
+      const userObj = Array.isArray(row.users) ? row.users[0] : row.users;
+      if (userObj) {
+        const fullName = `${userObj.first_name || ""} ${userObj.last_name || ""}`.trim();
+        if (fullName) {
+          name = fullName;
+        } else if (userObj.email) {
+          name = userObj.email;
+        }
+      }
+      return {
+        id: row.user_id,
+        name,
+      };
+    });
+  }
+
+  const status = booking?.status ?? "unconfirmed";
+
+  return (
+    <div className="w-full min-h-screen flex flex-col items-center">
+      <div className="w-full max-w-6xl px-4 pt-8 pb-12 flex flex-col gap-8">
+        {/* Title and actions row */}
+        <div className="flex flex-row items-center w-full mb-2 gap-4">
+          <div className="flex-1 min-w-0 flex items-center gap-4">
+            <h1 className="text-[3rem] font-extrabold tracking-tight text-gray-900" style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1 }}>Check-In Booking</h1>
+            <Badge className={STATUS_BADGE[status].color + " text-lg px-4 py-2 font-semibold"}>{STATUS_BADGE[status].label}</Badge>
+          </div>
+          <div className="flex-none flex items-center justify-end gap-3">
+            <BookingStagesOptions bookingId={bookingId} instructorCommentsCount={instructorCommentsCount} />
+          </div>
+        </div>
+        <BookingStages stages={BOOKING_STAGES} currentStage={3} />
+        {/* Main content row: 40% left, 60% right */}
+        <div className="flex flex-row w-full max-w-6xl mx-auto gap-6">
+          {/* Left column (40%) */}
+          <div className="flex-[2] flex flex-col gap-6 min-w-0" style={{ flexBasis: '40%' }}>
+            <div className="bg-white border rounded-xl p-6 shadow-sm">
+              <CheckInDetails 
+                aircraftId={booking?.aircraft_id}
+                organizationId={orgId}
+                selectedFlightTypeId={booking?.flight_type_id}
+                instructorId={booking?.checked_out_instructor_id}
+                instructors={instructors}
+              />
+            </div>
+            <div className="bg-white border rounded-xl p-6 shadow-sm">
+              <h2 className="font-bold text-lg mb-4">Additional Charges</h2>
+              {/* TODO: Additional Charges form goes here */}
+            </div>
+          </div>
+          {/* Right column (60%) */}
+          <div className="flex-[3] flex flex-col gap-6 min-w-0" style={{ flexBasis: '60%' }}>
+            <div className="bg-white border rounded-xl p-6 shadow-sm">
+              <h2 className="font-bold text-lg mb-4">Invoice</h2>
+              {/* TODO: Invoice details go here */}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+} 
