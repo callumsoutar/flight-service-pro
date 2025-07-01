@@ -6,6 +6,7 @@ export type InvoiceItem = {
   description: string;
   quantity: number;
   rate: number;
+  rate_inclusive: number; // tax-inclusive rate
   amount: number;
   tax_rate: number;
   tax_amount: number;
@@ -21,6 +22,7 @@ export type InvoiceItemInsert = {
   description: string;
   quantity?: number;
   rate: number;
+  rate_inclusive?: number;
   amount: number;
   tax_rate?: number;
   tax_amount?: number;
@@ -36,6 +38,7 @@ export type InvoiceItemUpdate = {
   description?: string;
   quantity?: number;
   rate?: number;
+  rate_inclusive?: number;
   amount?: number;
   tax_rate?: number;
   tax_amount?: number;

@@ -1,4 +1,12 @@
 // Types for invoices table (generated from Supabase)
+export type InvoiceStatus =
+  | 'draft'
+  | 'pending'
+  | 'paid'
+  | 'overdue'
+  | 'cancelled'
+  | 'refunded';
+
 export type Invoice = {
   id: string;
   organization_id: string;
@@ -7,7 +15,7 @@ export type Invoice = {
   invoice_number: string;
   issue_date: string;
   due_date: string;
-  status: string;
+  status: InvoiceStatus;
   subtotal: number;
   tax_amount: number;
   tax_rate: number;
@@ -31,7 +39,7 @@ export type InvoiceInsert = {
   invoice_number: string;
   issue_date?: string;
   due_date: string;
-  status?: string;
+  status?: InvoiceStatus;
   subtotal?: number;
   tax_amount?: number;
   tax_rate?: number;
@@ -55,7 +63,7 @@ export type InvoiceUpdate = {
   invoice_number?: string;
   issue_date?: string;
   due_date?: string;
-  status?: string;
+  status?: InvoiceStatus;
   subtotal?: number;
   tax_amount?: number;
   tax_rate?: number;

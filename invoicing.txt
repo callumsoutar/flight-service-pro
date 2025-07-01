@@ -1,0 +1,111 @@
+# Invoicing System Architecture & Workflows
+
+## Overview
+This document describes the architecture, triggers, functions, and workflows for the invoicing system, specifically the `invoices` and `invoice_items` tables. It covers how amounts, taxes, and statuses are calculated and maintained for data integrity and compliance.
+
+---
+
+## Tables Involved
+- **invoices**: Stores invoice headers, totals, status, and metadata.
+- **invoice_items**: Stores individual line items for each invoice, including rates, quantities, and tax details.
+
+---
+
+## Triggers & Functions
+
+### invoice_items Table
+
+#### 1. `calculate_invoice_item_amounts_trigger`
+- **Events:** `INSERT`, `UPDATE`
+- **Function:** `calculate_invoice_item_amounts()`
+- **Purpose:**
+  - Ensures all financial calculations for an invoice item are performed in the database for immutability and accuracy.
+  - **Logic:**
+    - Sets `tax_rate` to 0.15 (15%)
+    - Calculates `amount` (tax-exclusive): `rate * quantity`
+    - Calculates `tax_amount`: `amount * tax_rate` (rounded to 2 decimals)
+    - Calculates `total_amount`: `amount + tax_amount`
+
+#### 2. `update_invoice_totals_on_item_change`
+- **Events:** `INSERT`, `UPDATE`, `DELETE`
+- **Function:** `update_invoice_totals()`
+- **Purpose:**
+  - Keeps the parent invoice's totals in sync with its items.
+  - **Logic:**
+    - Sums all `amount`, `tax_amount`, and `total_amount` for the invoice's items
+    - Updates the parent invoice's `subtotal`, `tax_amount`, `total_amount`, and `tax_rate` (always 0.15)
+    - Updates `updated_at` timestamp
+
+---
+
+### invoices Table
+
+#### 1. `ensure_invoice_number`
+- **Event:** `INSERT`
+- **Function:** `set_invoice_number()`
+- **Purpose:**
+  - Ensures every invoice has a unique, generated invoice number if not provided.
+
+#### 2. `update_invoice_status_on_payment`
+- **Event:** `UPDATE`
+- **Function:** `update_invoice_status()`
+- **Purpose:**
+  - Automatically updates the invoice status based on payment and due date.
+  - **Logic:**
+    - If `paid_date` is set, status becomes `paid`.
+    - If `paid_date` is unset, status is `overdue` if `due_date` is past, otherwise `pending`.
+
+---
+
+## Workflow Summary
+
+### Invoice Creation
+1. **Insert into `invoices`**
+   - Trigger: `ensure_invoice_number` sets the invoice number if not provided.
+2. **Insert into `invoice_items`**
+   - Trigger: `calculate_invoice_item_amounts_trigger` calculates all financial fields for the item.
+   - Trigger: `update_invoice_totals_on_item_change` updates the parent invoice's totals.
+
+### Invoice Item Update/Delete
+- Any change to an item triggers recalculation of the parent invoice's totals.
+
+### Payment/Status Update
+- When the invoice's `paid_date` is updated, the status is automatically set to `paid` or reverts to `pending/overdue` as appropriate.
+
+---
+
+## Data Integrity & Best Practices
+- **All calculations are performed in the database** for immutability and historical accuracy.
+- **Tax rate is stored per item and invoice** to ensure historical rates are preserved.
+- **Never recalculate historical values on the client.**
+- **Triggers ensure that all totals and statuses are always correct and up-to-date.**
+
+---
+
+## Diagram: Invoice Workflow
+
+```
+sequenceDiagram
+    participant User
+    participant API
+    participant DB
+    User->>API: Create Invoice
+    API->>DB: INSERT invoices
+    DB->>DB: set_invoice_number()
+    User->>API: Add Invoice Item
+    API->>DB: INSERT invoice_items
+    DB->>DB: calculate_invoice_item_amounts()
+    DB->>DB: update_invoice_totals()
+    User->>API: Update/Delete Invoice Item
+    API->>DB: UPDATE/DELETE invoice_items
+    DB->>DB: calculate_invoice_item_amounts()/update_invoice_totals()
+    User->>API: Mark Invoice Paid
+    API->>DB: UPDATE invoices (set paid_date)
+    DB->>DB: update_invoice_status()
+```
+
+---
+
+## Notes
+- All business logic for calculations and status is enforced at the database level for security and consistency.
+- The system is designed for immutability and auditability, critical for financial data. 

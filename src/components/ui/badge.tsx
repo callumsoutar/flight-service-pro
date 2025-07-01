@@ -37,7 +37,11 @@ function Badge({
   return (
     <Comp
       data-slot="badge"
-      className={cn(badgeVariants({ variant }), className)}
+      className={cn(
+        badgeVariants({ variant }),
+        className,
+        className?.includes("large") ? "text-base px-4 py-2 rounded-lg font-semibold" : ""
+      )}
       {...props}
     />
   )
