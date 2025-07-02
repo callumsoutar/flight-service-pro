@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "../../../../lib/SupabaseServerClient";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function PATCH(req: NextRequest, { params }: any) {
-  const { id } = params;
+  const { id } = await params;
   const supabase = await createClient();
   const body = await req.json();
 
@@ -32,4 +31,18 @@ export async function PATCH(req: NextRequest, { params }: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ invoice: data });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function DELETE(req: NextRequest, { params }: any) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("invoices")
+    .delete()
+    .eq("id", id);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ success: true });
 } 

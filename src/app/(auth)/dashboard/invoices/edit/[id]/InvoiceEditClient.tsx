@@ -8,9 +8,9 @@ import type { Invoice } from "@/types/invoices";
 import type { InvoiceItem } from "@/types/invoice_items";
 import { format } from "date-fns";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, ChevronDown, Pencil, X, Check, Trash2, ChevronRight } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronDown, Pencil, X, Check, Trash2, ChevronRight, Copy } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import type { Chargeable } from '@/types/chargeables';
 import MemberSelect from '@/components/invoices/MemberSelect';
@@ -18,6 +18,14 @@ import type { UserResult } from '@/components/invoices/MemberSelect';
 import { toast } from "sonner";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useRouter } from "next/navigation";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export default function InvoiceEditClient({ id }: { id: string }) {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -42,6 +50,8 @@ export default function InvoiceEditClient({ id }: { id: string }) {
   const [approveLoading, setApproveLoading] = useState(false);
   const router = useRouter();
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -280,6 +290,28 @@ export default function InvoiceEditClient({ id }: { id: string }) {
     }
   };
 
+  const handleDeleteInvoice = async () => {
+    if (!invoice) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.error || "Failed to delete invoice");
+        setDeleting(false);
+        return;
+      }
+      toast.success("Invoice deleted");
+      setDeleteDialogOpen(false);
+      router.push("/dashboard/invoices");
+    } catch {
+      toast.error("Failed to delete invoice");
+      setDeleting(false);
+    }
+  };
+
   if (loading) return <div className="p-10 text-center text-muted-foreground">Loading invoice...</div>;
   if (error || !invoice) return <div className="p-10 text-center text-destructive">Invoice not found.</div>;
 
@@ -326,8 +358,15 @@ export default function InvoiceEditClient({ id }: { id: string }) {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem>Duplicate Invoice</DropdownMenuItem>
-              <DropdownMenuItem>Delete Invoice</DropdownMenuItem>
+              <DropdownMenuItem>
+                <Copy className="w-4 h-4 mr-2" />
+                Duplicate Invoice
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+                <Trash2 className="w-4 h-4 mr-2 text-red-600" />
+                <span className="text-red-600">Delete Invoice</span>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -557,6 +596,35 @@ export default function InvoiceEditClient({ id }: { id: string }) {
           </CollapsibleContent>
         </Collapsible>
       </div>
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Invoice</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this invoice? It cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 justify-end">
+            <button
+              type="button"
+              className="px-4 py-2 rounded-md bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200 transition"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={deleting}
+            >
+              No
+            </button>
+            <button
+              type="button"
+              className="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-700 transition"
+              onClick={handleDeleteInvoice}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting..." : "Yes, Delete"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 
