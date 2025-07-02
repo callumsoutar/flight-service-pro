@@ -103,7 +103,19 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ invoice_item: data });
 }
 
-export async function DELETE() {
-  // TODO: Implement DELETE invoice_item
-  return NextResponse.json({ message: "DELETE invoice_item" });
+export async function DELETE(req: NextRequest) {
+  const supabase = await createClient();
+  const body = await req.json();
+  const { id } = body;
+  if (!id) {
+    return NextResponse.json({ error: 'Missing invoice_item id' }, { status: 400 });
+  }
+  const { error } = await supabase
+    .from('invoice_items')
+    .delete()
+    .eq('id', id);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ success: true });
 } 

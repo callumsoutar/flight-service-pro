@@ -7,6 +7,9 @@ import { InvoiceItem } from '@/types/invoice_items';
 import { cookies } from 'next/headers';
 import * as React from 'react';
 import InvoiceViewHeader from '@/components/invoices/InvoiceViewHeader';
+import InvoiceViewActions from '@/components/invoices/InvoiceViewActions';
+import { Button } from '@/components/ui/button';
+import { PlusCircle } from 'lucide-react';
 
 async function getInvoiceAndItems(id: string) {
   const supabase = await createClient();
@@ -47,7 +50,6 @@ export default async function InvoiceViewPage({ params }: { params: Promise<{ id
 
   return (
     <div className="flex flex-col gap-8 p-6 md:p-10 max-w-4xl mx-auto">
-      {/* Header */}
       <InvoiceViewHeader
         invoiceId={invoice.id}
         invoiceNumber={invoice.invoice_number}
@@ -162,12 +164,25 @@ export default async function InvoiceViewPage({ params }: { params: Promise<{ id
             <div className="font-semibold text-red-600">${typeof invoice.balance_due === 'number' ? invoice.balance_due.toFixed(2) : '0.00'}</div>
           </div>
         </div>
+        {/* Add Payment Button (below balance due, tight spacing) */}
+        <div className="mt-2">
+          <InvoiceViewActions
+            invoiceId={invoice.id}
+            invoiceNumber={invoice.invoice_number}
+            totalAmount={invoice.total_amount}
+            balanceDue={typeof invoice.balance_due === 'number' ? invoice.balance_due : invoice.total_amount}
+            status={invoice.status}
+          />
+        </div>
         {/* Footer */}
         <div className="mt-8 text-center text-muted-foreground text-sm border-t pt-4">
           Thank you for choosing to train with Kapiti Aero Club.<br />
           <span className="text-xs">Payment terms: within 7 days of receipt of this invoice. Late payments may incur additional charges.</span>
         </div>
       </Card>
+
+      
+
       {/* Payment History */}
       <PaymentHistory invoiceId={invoice.id} />
     </div>

@@ -104,8 +104,7 @@ export default function RecordPaymentModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[66vh] w-full max-w-lg flex flex-col justify-between rounded-2xl p-0 overflow-hidden"
-        style={{ minHeight: 480 }}
+        className="w-full max-w-lg flex flex-col justify-between rounded-2xl p-0 overflow-visible"
       >
         <DialogHeader className="px-6 pt-6 pb-2 border-b flex flex-row items-center gap-3 relative">
           <span className="bg-green-100 text-green-600 rounded-full p-2">
@@ -130,7 +129,7 @@ export default function RecordPaymentModal({
           </div>
         </div>
         {/* Form fields */}
-        <form className="flex-1 flex flex-col gap-3 px-6 py-5 overflow-y-auto" onSubmit={handleSubmit}>
+        <form className="flex flex-col gap-3 px-6 py-5" onSubmit={handleSubmit}>
           <div>
             <label className="block text-sm font-medium mb-1">Payment Amount <span className="text-destructive">*</span></label>
             <div className="relative flex items-center">
@@ -180,7 +179,7 @@ export default function RecordPaymentModal({
             />
           </div>
           {error && <div className="text-destructive text-sm mb-2">{error}</div>}
-          <DialogFooter className="flex flex-row gap-2 px-6 pb-8 pt-2 bg-background border-t mt-2">
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-4 mt-4 px-0 pb-0 pt-0">
             <DialogClose asChild>
               <Button variant="outline" type="button" className="flex-1 cursor-pointer" disabled={loading}>Cancel</Button>
             </DialogClose>

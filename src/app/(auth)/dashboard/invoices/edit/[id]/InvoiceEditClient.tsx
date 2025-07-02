@@ -42,6 +42,7 @@ export default function InvoiceEditClient({ id }: { id: string }) {
   const [notes, setNotes] = useState("");
   const [approveLoading, setApproveLoading] = useState(false);
   const router = useRouter();
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -266,6 +267,28 @@ export default function InvoiceEditClient({ id }: { id: string }) {
     }
   };
 
+  const deleteItem = async (itemId: string) => {
+    setDeletingItemId(itemId);
+    try {
+      const res = await fetch('/api/invoice_items', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: itemId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to delete item');
+      } else {
+        toast.success('Item deleted');
+        fetchItems();
+      }
+    } catch (err: unknown) {
+      toast.error('Failed to delete item');
+    } finally {
+      setDeletingItemId(null);
+    }
+  };
+
   if (loading) return <div className="p-10 text-center text-muted-foreground">Loading invoice...</div>;
   if (error || !invoice) return <div className="p-10 text-center text-destructive">Invoice not found.</div>;
 
@@ -277,13 +300,20 @@ export default function InvoiceEditClient({ id }: { id: string }) {
     <div className="flex flex-col gap-8 p-6 md:p-10 max-w-4xl mx-auto">
       {/* Top Action/Header Row */}
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard/invoices" className="text-sm text-muted-foreground hover:underline flex items-center gap-1">
-            &larr; Back to Invoices
-          </Link>
+        <div>
+          <div className="flex items-center gap-2 text-lg font-semibold text-muted-foreground">
+            <a href="/dashboard/invoices" className="text-indigo-600 hover:underline text-base">&larr; Back to Invoices</a>
+          </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Approve button only if status is draft */}
+          <button
+            type="button"
+            className="px-6 py-2 rounded-md bg-blue-100 text-blue-700 font-semibold hover:bg-blue-200 transition disabled:opacity-50 cursor-pointer"
+            onClick={handleSave}
+            disabled={!dirty || saveLoading}
+          >
+            {saveLoading ? 'Saving...' : 'Save'}
+          </button>
           {invoice.status === 'draft' && (
             <button
               type="button"
@@ -309,21 +339,6 @@ export default function InvoiceEditClient({ id }: { id: string }) {
               <DropdownMenuItem>Delete Invoice</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <button
-            type="button"
-            className="px-6 py-2 rounded-md bg-blue-100 text-blue-700 font-semibold hover:bg-blue-200 transition disabled:opacity-50 cursor-pointer"
-            onClick={handleSave}
-            disabled={!dirty || saveLoading}
-          >
-            {saveLoading ? 'Saving...' : 'Save'}
-          </button>
-          <button
-            type="button"
-            className="px-6 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 transition flex items-center gap-2 cursor-pointer"
-          >
-            <Send className="w-4 h-4 text-white" />
-            Send Invoice
-          </button>
         </div>
       </div>
       <Card className="p-8 shadow-md">
@@ -499,6 +514,8 @@ export default function InvoiceEditClient({ id }: { id: string }) {
                         type="button"
                         className="text-red-500 hover:text-red-700"
                         aria-label="Delete"
+                        onClick={() => deleteItem(item.id)}
+                        disabled={deletingItemId === item.id}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

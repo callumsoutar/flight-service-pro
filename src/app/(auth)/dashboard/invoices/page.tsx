@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
+// Move InvoiceSummaryCards to a client wrapper
+import InvoiceSummaryCardsClient from "@/components/invoices/InvoiceSummaryCardsClient";
+
 export default function InvoicesPage() {
   return (
     <main className="flex flex-col gap-8 p-6 md:p-10">
@@ -20,20 +23,8 @@ export default function InvoicesPage() {
           </Button>
         </Link>
       </div>
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="rounded-xl border bg-white p-6 flex flex-col items-center justify-center shadow-sm">
-          <div className="text-2xl font-bold">12</div>
-          <div className="text-muted-foreground mt-1">Total Invoices</div>
-        </div>
-        <div className="rounded-xl border bg-white p-6 flex flex-col items-center justify-center shadow-sm">
-          <div className="text-2xl font-bold">8</div>
-          <div className="text-muted-foreground mt-1">Paid Invoices</div>
-        </div>
-        <div className="rounded-xl border bg-white p-6 flex flex-col items-center justify-center shadow-sm">
-          <div className="text-2xl font-bold">4</div>
-          <div className="text-muted-foreground mt-1">Outstanding Invoices</div>
-        </div>
-      </section>
+      {/* Render summary cards via client wrapper */}
+      <InvoiceSummaryCardsClient />
       <InvoicesTable />
     </main>
   );
