@@ -1,0 +1,212 @@
+# Aircraft Maintenance Tracking: Architecture & Workflow
+
+## Overview
+This document describes the minimal, robust approach for tracking aircraft maintenance, due dates, and costs in the database. It covers how to keep "last visit" and "next due" columns up to date for each component, and how the workflow operates in practice.
+
+---
+
+## 1. Key Tables
+
+### aircraft
+- Holds aircraft details (registration, type, total_hours, etc.)
+
+### aircraft_equipment (or aircraft_components)
+- Tracks all components/inspections for each aircraft.
+- Key fields:
+  - `component_type` (e.g., Battery, Inspection)
+  - `interval_type` ('HOURS', 'CALENDAR', 'BOTH')
+  - `interval_hours`, `interval_days`
+  - `current_due_date`, `current_due_hours`
+  - `last_completed_date`, `last_completed_hours`
+  - `status`, `priority`, `notes`
+
+### maintenance_visits
+- Logs each maintenance event (date, type, description, cost, etc.)
+- Links to aircraft and optionally to a component.
+
+### (Optional) maintenance_costs
+- For detailed cost breakdowns (labor, parts, etc.)
+
+---
+
+## 2. Maintenance Workflow
+
+### A. Initial Setup
+1. Add aircraft to the system.
+2. For each aircraft, add components/inspections to `aircraft_equipment`, specifying intervals, due dates/hours, and priorities.
+
+### B. Daily Operations
+- Query `aircraft_equipment` for items where `current_due_date` or `current_due_hours` is approaching.
+- Show these on a dashboard as "Due Soon."
+
+### C. Performing Maintenance
+1. When maintenance is performed, create a `maintenance_visits` record.
+2. Record the date, type, description, technician, hours, and cost.
+3. For each component serviced:
+   - Update `last_completed_date` and `last_completed_hours`.
+   - Calculate and update `current_due_date` and `current_due_hours` based on the interval.
+
+### D. Cost Tracking
+- Enter the cost in `maintenance_visits.total_cost` (or in `maintenance_costs` if you want breakdowns).
+
+---
+
+## 3. Keeping Dates and Hours Up to Date
+
+### Core Principle
+- The `aircraft_equipment` table holds the current state for each component:
+  - When it's next due (`current_due_date`, `current_due_hours`)
+  - When it was last completed (`last_completed_date`, `last_completed_hours`)
+- Each maintenance event is logged in `maintenance_visits` (and optionally, `maintenance_costs`).
+
+### Update Workflow
+1. Maintenance visit is marked as "Completed" in the app.
+2. For each component serviced:
+   - Update `last_completed_date` = date maintenance was performed
+   - Update `last_completed_hours` = aircraft hours at completion
+   - If interval is calendar-based: `current_due_date` = `last_completed_date` + `interval_days`
+   - If interval is hours-based: `current_due_hours` = `last_completed_hours` + `interval_hours`
+   - If both: set both fields; whichever comes first triggers the next due
+3. Optionally, log the update in `maintenance_visit_items` for audit/history.
+
+### Implementation
+- In the app/API: When a maintenance visit is completed, run a transaction that updates both the visit and the relevant component(s).
+- Optionally, use a database trigger for automation, but app logic is usually simpler and easier to debug.
+
+---
+
+## 4. Example SQL for Due Items
+```sql
+SELECT 
+  a.registration,
+  e.name AS component_name,
+  e.current_due_date,
+  e.current_due_hours,
+  a.total_hours,
+  CASE 
+    WHEN e.current_due_hours IS NOT NULL 
+    THEN e.current_due_hours - a.total_hours 
+    ELSE NULL 
+  END as hours_remaining,
+  CASE 
+    WHEN e.current_due_date IS NOT NULL 
+    THEN DATEDIFF(e.current_due_date, NOW()) 
+    ELSE NULL 
+  END as days_remaining
+FROM aircraft_equipment e
+JOIN aircraft a ON e.aircraft_id = a.id
+WHERE 
+  (e.current_due_date <= DATE_ADD(NOW(), INTERVAL 30 DAY)) 
+  OR 
+  (e.current_due_hours <= a.total_hours + 50)
+ORDER BY 
+  COALESCE(e.current_due_date, '9999-12-31'),
+  COALESCE(e.current_due_hours, 999999);
+```
+
+---
+
+## 5. Benefits
+- **Simple:** Only two tables need to be updated per maintenance event.
+- **Reliable:** The "current" state is always in the component row, so queries for "what's due" are fast and simple.
+- **Auditable:** The full history of what was done, when, and by whom is in `maintenance_visits` (and optionally, `maintenance_visit_items`).
+- **Flexible:** Handles both hour-based and calendar-based maintenance, and can be extended if needed.
+
+---
+
+## 6. Summary Table
+| Action                        | Table(s) Updated           | Fields Updated                                 |
+|-------------------------------|----------------------------|------------------------------------------------|
+| Complete maintenance visit    | maintenance_visits         | status, total_cost, etc.                       |
+|                               | aircraft_equipment         | last_completed_date/hours, current_due_date/hours |
+|                               | (optional) maintenance_visit_items | work_performed, etc.                    |
+
+---
+
+## 7. In Practice
+- User completes maintenance in UI → API call updates both the visit and the component(s) in a transaction.
+- Dashboard queries always use the "current_due_date" and "current_due_hours" fields for what's due.
+- History and costs are always available in the visits table.
+
+---
+
+## 8. Keeping Aircraft Last/Next Maintenance Dates Up to Date (Triggers & Functions)
+
+### Why?
+- The `aircraft` table has `last_maintenance_date` and `next_maintenance_date` fields.
+- These should always reflect the most recent completed maintenance and the soonest upcoming due date for each aircraft.
+- To ensure data integrity and reduce manual errors, use a database function and trigger to keep these fields in sync automatically.
+
+### When to Update
+- Whenever a maintenance visit is marked as 'Completed' in `maintenance_visits`.
+
+### How It Works
+1. **Function:**
+   - Sets `last_maintenance_date` to the latest `visit_date` from `maintenance_visits` where status = 'Completed'.
+   - Sets `next_maintenance_date` to the soonest `current_due_date` from `aircraft_equipment` where due date is in the future.
+2. **Trigger:**
+   - After an insert or update on `maintenance_visits` (when status becomes 'Completed'), call the function for the relevant `aircraft_id`.
+
+### Example SQL Implementation
+
+#### A. Update Function
+```sql
+CREATE OR REPLACE FUNCTION update_aircraft_maintenance_dates(aircraft_id uuid)
+RETURNS void AS $$
+DECLARE
+  last_date timestamptz;
+  next_date timestamptz;
+BEGIN
+  -- Find the most recent completed maintenance visit
+  SELECT MAX(visit_date)
+    INTO last_date
+    FROM maintenance_visits
+   WHERE aircraft_id = update_aircraft_maintenance_dates.aircraft_id
+     AND status = 'Completed';
+
+  -- Find the soonest due date from components
+  SELECT MIN(current_due_date)
+    INTO next_date
+    FROM aircraft_equipment
+   WHERE aircraft_id = update_aircraft_maintenance_dates.aircraft_id
+     AND current_due_date > NOW();
+
+  -- Update the aircraft table
+  UPDATE aircraft
+     SET last_maintenance_date = last_date,
+         next_maintenance_date = next_date
+   WHERE id = update_aircraft_maintenance_dates.aircraft_id;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+#### B. Trigger
+```sql
+CREATE OR REPLACE FUNCTION trg_maintenance_visit_completed()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Only run if status is set to 'Completed'
+  IF NEW.status = 'Completed' THEN
+    PERFORM update_aircraft_maintenance_dates(NEW.aircraft_id);
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER after_maintenance_visit_completed
+AFTER INSERT OR UPDATE ON maintenance_visits
+FOR EACH ROW
+EXECUTE FUNCTION trg_maintenance_visit_completed();
+```
+
+### Workflow Summary
+- Any time a maintenance visit is completed, the trigger fires.
+- The function recalculates and updates the `last_maintenance_date` and `next_maintenance_date` for the aircraft.
+- Your dashboard and queries always show the correct, up-to-date values.
+
+### Benefits
+- **Automated:** No manual intervention needed to keep aircraft maintenance dates accurate.
+- **Reliable:** Ensures the `aircraft` table always reflects the true maintenance state.
+- **Auditable:** All updates are based on actual maintenance records and component schedules.
+
+---

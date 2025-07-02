@@ -24,7 +24,7 @@ const mainNavOptions = [
   { label: "Dashboard", icon: LucideHome, href: "/dashboard", tab: "dashboard" },
   { label: "Scheduler", icon: LucideCalendar, href: "/scheduler", tab: "scheduler" },
   { label: "Bookings", icon: LucideBookOpen, href: "/dashboard/bookings", tab: "bookings" },
-  { label: "Aircraft", icon: LucidePlane, href: "/aircraft", tab: "aircraft" },
+  { label: "Aircraft", icon: LucidePlane, href: "/dashboard/aircraft", tab: "aircraft" },
   { label: "Members", icon: LucideUsers, href: "/dashboard/members", tab: "members" },
   { label: "Staff", icon: LucideUserCog, href: "/staff", tab: "staff" },
   { label: "Invoicing", icon: LucideFileText, href: "/dashboard/invoices", tab: "invoices" },
