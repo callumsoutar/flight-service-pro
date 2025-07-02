@@ -71,9 +71,36 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ id: data.id });
 }
 
-export async function PATCH() {
-  // TODO: Implement PATCH invoice_item
-  return NextResponse.json({ message: "PATCH invoice_item" });
+export async function PATCH(req: NextRequest) {
+  const supabase = await createClient();
+  const body = await req.json();
+  const { id, ...fields } = body;
+  if (!id) {
+    return NextResponse.json({ error: 'Missing invoice_item id' }, { status: 400 });
+  }
+  // Only allow updating certain fields
+  const updatableFields = [
+    'quantity', 'rate', 'rate_inclusive', 'amount', 'tax_rate', 'tax_amount', 'total_amount', 'description', 'chargeable_id'
+  ];
+  const updateData: Record<string, string | number | undefined> = {};
+  for (const key of updatableFields) {
+    if (fields[key] !== undefined) {
+      updateData[key] = fields[key];
+    }
+  }
+  if (Object.keys(updateData).length === 0) {
+    return NextResponse.json({ error: 'No updatable fields provided' }, { status: 400 });
+  }
+  const { data, error } = await supabase
+    .from('invoice_items')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ invoice_item: data });
 }
 
 export async function DELETE() {

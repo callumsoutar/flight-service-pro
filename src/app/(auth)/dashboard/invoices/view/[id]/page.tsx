@@ -1,19 +1,12 @@
-// No 'use client' – this is a server component
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Calendar, User, DollarSign, ChevronDown } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from '@/components/ui/dropdown-menu';
+import { Calendar, User, DollarSign } from 'lucide-react';
 import PaymentHistory from '@/components/invoices/PaymentHistory';
 import DraftRedirector from '@/components/invoices/DraftRedirector';
 import { createClient } from '@/lib/SupabaseServerClient';
 import { InvoiceItem } from '@/types/invoice_items';
 import { cookies } from 'next/headers';
+import * as React from 'react';
+import InvoiceViewHeader from '@/components/invoices/InvoiceViewHeader';
 
 async function getInvoiceAndItems(id: string) {
   const supabase = await createClient();
@@ -51,34 +44,18 @@ export default async function InvoiceViewPage({ params }: { params: Promise<{ id
   const memberName = invoice.users
     ? `${invoice.users.first_name || ''} ${invoice.users.last_name || ''}`.trim() || invoice.users.email
     : invoice.user_id;
+
   return (
     <div className="flex flex-col gap-8 p-6 md:p-10 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-lg font-semibold text-muted-foreground">
-            <a href="/dashboard/invoices" className="text-indigo-600 hover:underline text-base">&larr; Back to Invoices</a>
-          </div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight mt-2">{invoice.invoice_number}</h1>
-          <div className="text-muted-foreground text-base mt-1">Invoice for {memberName}</div>
-        </div>
-        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mt-2 md:mt-0">
-          <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 px-3 py-1.5 text-sm font-semibold">{invoice.status}</Badge>
-          <Button variant="outline">Download PDF</Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-2">
-                Options <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => alert('Resend invoice')}>Resend</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => alert('Mark as Paid')}>Mark as Paid</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.print()}>Print</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <InvoiceViewHeader
+        invoiceId={invoice.id}
+        invoiceNumber={invoice.invoice_number}
+        status={invoice.status}
+        totalAmount={invoice.total_amount}
+        balanceDue={typeof invoice.balance_due === 'number' ? invoice.balance_due : invoice.total_amount}
+        memberName={memberName}
+      />
 
       {/* Stat Cards */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
