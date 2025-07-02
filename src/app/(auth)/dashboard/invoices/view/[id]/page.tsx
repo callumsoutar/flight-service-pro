@@ -8,8 +8,6 @@ import { cookies } from 'next/headers';
 import * as React from 'react';
 import InvoiceViewHeader from '@/components/invoices/InvoiceViewHeader';
 import InvoiceViewActions from '@/components/invoices/InvoiceViewActions';
-import { Button } from '@/components/ui/button';
-import { PlusCircle } from 'lucide-react';
 
 async function getInvoiceAndItems(id: string) {
   const supabase = await createClient();
@@ -51,11 +49,8 @@ export default async function InvoiceViewPage({ params }: { params: Promise<{ id
   return (
     <div className="flex flex-col gap-8 p-6 md:p-10 max-w-4xl mx-auto">
       <InvoiceViewHeader
-        invoiceId={invoice.id}
         invoiceNumber={invoice.invoice_number}
         status={invoice.status}
-        totalAmount={invoice.total_amount}
-        balanceDue={typeof invoice.balance_due === 'number' ? invoice.balance_due : invoice.total_amount}
         memberName={memberName}
       />
 

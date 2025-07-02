@@ -8,9 +8,8 @@ import type { Invoice } from "@/types/invoices";
 import type { InvoiceItem } from "@/types/invoice_items";
 import { format } from "date-fns";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, ChevronDown, Pencil, X, Check, Trash2, ChevronRight, Send } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronDown, Pencil, X, Check, Trash2, ChevronRight } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
-import Link from "next/link";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import type { Chargeable } from '@/types/chargeables';
@@ -195,12 +194,8 @@ export default function InvoiceEditClient({ id }: { id: string }) {
       }
       toast.success('Invoice saved');
       setDirty(false);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        toast.error(err.message || 'Failed to save invoice');
-      } else {
-        toast.error('Failed to save invoice');
-      }
+    } catch {
+      toast.error('Failed to save invoice');
     } finally {
       setSaveLoading(false);
     }
@@ -256,12 +251,8 @@ export default function InvoiceEditClient({ id }: { id: string }) {
       toast.success('Invoice approved');
       // Redirect to view page
       router.push(`/dashboard/invoices/view/${invoice.id}`);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        toast.error(err.message || 'Failed to approve invoice');
-      } else {
-        toast.error('Failed to approve invoice');
-      }
+    } catch {
+      toast.error('Failed to approve invoice');
     } finally {
       setApproveLoading(false);
     }
@@ -282,7 +273,7 @@ export default function InvoiceEditClient({ id }: { id: string }) {
         toast.success('Item deleted');
         fetchItems();
       }
-    } catch (err: unknown) {
+    } catch {
       toast.error('Failed to delete item');
     } finally {
       setDeletingItemId(null);

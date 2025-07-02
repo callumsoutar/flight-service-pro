@@ -24,7 +24,7 @@ export default function InvoiceSummaryCards() {
         setCounts({ total, paid, pending });
         setLoading(false);
       })
-      .catch((err) => {
+      .catch(() => {
         setError("Failed to load invoice summary");
         setLoading(false);
       });
