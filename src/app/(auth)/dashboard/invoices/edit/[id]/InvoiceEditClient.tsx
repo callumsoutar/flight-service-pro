@@ -363,9 +363,12 @@ export default function InvoiceEditClient({ id }: { id: string }) {
                 Duplicate Invoice
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
-                <Trash2 className="w-4 h-4 mr-2 text-red-600" />
-                <span className="text-red-600">Delete Invoice</span>
+              <DropdownMenuItem
+                onClick={() => setDeleteDialogOpen(true)}
+                className="text-red-600 focus:bg-red-50 hover:bg-red-50 group"
+              >
+                <Trash2 className="w-4 h-4 mr-2 text-red-600 group-hover:text-red-700" />
+                <span>Delete Invoice</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
