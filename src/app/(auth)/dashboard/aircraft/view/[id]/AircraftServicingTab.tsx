@@ -1,4 +1,6 @@
 "use client";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal, ClipboardList, CalendarCheck, Eye } from "lucide-react";
@@ -9,55 +11,23 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { AircraftComponent } from "@/types/aircraft_components";
 
-const services = [
-  {
-    id: "s1",
-    name: "100 Hour Inspection",
-    due_date: "2024-08-15",
-    due_hours: 1300,
-    last_completed: "2024-05-10",
-    next_due: "2024-08-15",
-    status: "Upcoming",
-  },
-  {
-    id: "s2",
-    name: "Annual Inspection",
-    due_date: "2024-09-30",
-    due_hours: null,
-    last_completed: "2023-09-25",
-    next_due: "2024-09-30",
-    status: "Upcoming",
-  },
-  {
-    id: "s3",
-    name: "Pitot Static System Check",
-    due_date: "2024-07-20",
-    due_hours: null,
-    last_completed: "2022-07-20",
-    next_due: "2024-07-20",
-    status: "Due Soon",
-  },
-];
-
-function isDueSoon(dueDate: string) {
-  // For demo: mark as due soon if within 30 days
+function isDueSoon(dueDate: string | null | undefined) {
+  if (!dueDate) return false;
   const now = new Date();
   const due = new Date(dueDate);
   const diff = (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
   return diff <= 30;
 }
 
-function getDueIn(service: typeof services[0]) {
-  // If due_hours is present, show hours; otherwise, show days until due_date
-  if (service.due_hours !== null && service.due_hours !== undefined) {
-    // For demo, assume current hours is 1245
-    const currentHours = 1245;
-    const hoursLeft = service.due_hours - currentHours;
+function getDueIn(comp: AircraftComponent, currentHours: number | null) {
+  if (comp.current_due_hours !== null && comp.current_due_hours !== undefined && currentHours !== null) {
+    const hoursLeft = comp.current_due_hours - currentHours;
     return hoursLeft > 0 ? `${hoursLeft} hours` : "Due now";
-  } else if (service.due_date) {
+  } else if (comp.current_due_date) {
     const now = new Date();
-    const due = new Date(service.due_date);
+    const due = new Date(comp.current_due_date);
     const daysLeft = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     return daysLeft > 0 ? `${daysLeft} days` : "Due now";
   }
@@ -65,6 +35,36 @@ function getDueIn(service: typeof services[0]) {
 }
 
 export default function AircraftServicingTab() {
+  const { id: aircraft_id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const [components, setComponents] = useState<AircraftComponent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentHours, setCurrentHours] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!aircraft_id) return;
+    setLoading(true);
+    setError(null);
+    // Fetch components
+    fetch(`/api/aircraft_components?aircraft_id=${aircraft_id}`)
+      .then((res) => res.json())
+      .then((data: AircraftComponent[]) => {
+        setComponents(data.filter((c) => c.component_type === "inspection"));
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+    // Fetch aircraft for current hours (for due in calculation)
+    fetch(`/api/aircraft?id=${aircraft_id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.aircraft && data.aircraft.total_hours) {
+          setCurrentHours(Number(data.aircraft.total_hours));
+        }
+      })
+      .catch(() => {});
+  }, [aircraft_id]);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between mb-4">
@@ -86,49 +86,64 @@ export default function AircraftServicingTab() {
             </tr>
           </thead>
           <tbody>
-            {services.map((service) => {
-              const dueSoon = isDueSoon(service.due_date);
-              const dueIn = getDueIn(service);
-              return (
-                <tr
-                  key={service.id}
-                  className={
-                    dueSoon
-                      ? "bg-yellow-50 border-l-4 border-yellow-400"
-                      : "hover:bg-muted/50 transition-colors"
-                  }
-                >
-                  <td className="px-4 py-2 font-medium whitespace-nowrap">{service.name}</td>
-                  <td className="px-4 py-2 font-semibold">{service.due_date}</td>
-                  <td className="px-4 py-2 font-semibold">{service.due_hours !== null ? `${service.due_hours}h` : "N/A"}</td>
-                  <td className="px-4 py-2 font-semibold">{dueIn}</td>
-                  <td className="px-4 py-2 text-muted-foreground">{service.last_completed}</td>
-                  <td className="px-4 py-2">{service.next_due}</td>
-                  <td className="px-4 py-2">
-                    <Badge variant={service.status === "Due Soon" ? "secondary" : "outline"} className="capitalize px-2 py-0.5 text-xs font-medium">{service.status}</Badge>
-                  </td>
-                  <td className="px-4 py-2">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 p-0"><MoreHorizontal className="w-5 h-5" /></Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <ClipboardList className="w-4 h-4 mr-2" /> Log Maintenance
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <CalendarCheck className="w-4 h-4 mr-2" /> Schedule Maintenance
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem>
-                          <Eye className="w-4 h-4 mr-2" /> View Details
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </td>
-                </tr>
-              );
-            })}
+            {loading ? (
+              <tr><td colSpan={8} className="text-center py-8">Loading...</td></tr>
+            ) : error ? (
+              <tr><td colSpan={8} className="text-center text-red-500 py-8">{error}</td></tr>
+            ) : components.length === 0 ? (
+              <tr><td colSpan={8} className="text-center py-8">No scheduled inspections found.</td></tr>
+            ) : (
+              components.map((comp) => {
+                const dueSoon = isDueSoon(comp.current_due_date);
+                const dueIn = getDueIn(comp, currentHours);
+                // Status: Due Soon, Upcoming, Overdue, etc. (simple logic for now)
+                let status = "Upcoming";
+                if (dueSoon) status = "Due Soon";
+                if (
+                  (typeof comp.current_due_hours === "number" && currentHours !== null && comp.current_due_hours - currentHours <= 0) ||
+                  (comp.current_due_date && new Date(comp.current_due_date) <= new Date())
+                ) status = "Overdue";
+                return (
+                  <tr
+                    key={comp.id}
+                    className={
+                      dueSoon
+                        ? "bg-yellow-50 border-l-4 border-yellow-400"
+                        : "hover:bg-muted/50 transition-colors"
+                    }
+                  >
+                    <td className="px-4 py-2 font-medium whitespace-nowrap">{comp.name}</td>
+                    <td className="px-4 py-2 font-semibold">{comp.current_due_date ? comp.current_due_date.split("T")[0] : "N/A"}</td>
+                    <td className="px-4 py-2 font-semibold">{comp.current_due_hours !== null ? `${comp.current_due_hours}h` : "N/A"}</td>
+                    <td className="px-4 py-2 font-semibold">{dueIn}</td>
+                    <td className="px-4 py-2 text-muted-foreground">{comp.last_completed_date ? comp.last_completed_date.split("T")[0] : "N/A"}</td>
+                    <td className="px-4 py-2">{comp.current_due_date ? comp.current_due_date.split("T")[0] : "N/A"}</td>
+                    <td className="px-4 py-2">
+                      <Badge variant={status === "Due Soon" ? "secondary" : status === "Overdue" ? "destructive" : "outline"} className="capitalize px-2 py-0.5 text-xs font-medium">{status}</Badge>
+                    </td>
+                    <td className="px-4 py-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 p-0"><MoreHorizontal className="w-5 h-5" /></Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem>
+                            <ClipboardList className="w-4 h-4 mr-2" /> Log Maintenance
+                          </DropdownMenuItem>
+                          <DropdownMenuItem>
+                            <CalendarCheck className="w-4 h-4 mr-2" /> Schedule Maintenance
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => router.push(`/dashboard/aircraft/view/${aircraft_id}/component/${comp.id}`)}>
+                            <Eye className="w-4 h-4 mr-2" /> View Details
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

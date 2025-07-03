@@ -1,7 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import { Plane, Settings, Wrench, ClipboardList, History, Layers, Info } from "lucide-react";
 import AircraftMaintenanceTab from "./AircraftMaintenanceTab";
 import AircraftServicingTab from "./AircraftServicingTab";

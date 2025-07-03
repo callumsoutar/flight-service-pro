@@ -7,8 +7,10 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const aircraft_id = searchParams.get('aircraft_id');
   const organization_id = searchParams.get('organization_id');
+  const component_id = searchParams.get('component_id');
 
   let query = supabase.from('aircraft_components').select('*');
+  if (component_id) query = query.eq('id', component_id);
   if (aircraft_id) query = query.eq('aircraft_id', aircraft_id);
   if (organization_id) query = query.eq('organization_id', organization_id);
 

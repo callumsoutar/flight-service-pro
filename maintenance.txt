@@ -210,3 +210,82 @@ EXECUTE FUNCTION trg_maintenance_visit_completed();
 - **Auditable:** All updates are based on actual maintenance records and component schedules.
 
 ---
+Scenario: OIL FILTER Replacement Every 50 Hours
+1. Setup (Admin/Engineer)
+Component Creation:
+The OIL FILTER is added as a row in the aircraft_components table.
+Fields:
+name: "Oil Filter"
+component_type: "service"
+interval_type: "HOURS"
+interval_hours: 50
+current_due_hours: (e.g., 1300)
+last_completed_hours: (e.g., 1250)
+status: "active"
+priority: "medium"
+notes: "Replace with approved filter only"
+UI:
+This appears in the Equipment & Components tab, showing when it’s next due (e.g., "Due in 5 hours").
+2. Monitoring (Daily Use)
+UI:
+As the aircraft is flown, the current hours increase.
+The OIL FILTER row in the table shows "Due in X hours" and a progress bar.
+When it’s within 10% of due, it’s highlighted as "Due Soon".
+3. Due for Service
+UI:
+When the aircraft reaches 1300 hours, the OIL FILTER row is highlighted as "Due now".
+In the Servicing tab, the OIL FILTER appears in the list of services due.
+4. Booking & Logging the Maintenance Visit
+User Action:
+The engineer or admin clicks “Schedule” or “Log Maintenance” for the OIL FILTER.
+A Maintenance Visit is created (in maintenance_visits):
+aircraft_id: (the aircraft)
+component_id: (the OIL FILTER)
+visit_date: (today)
+visit_type: "Scheduled"
+description: "Oil filter replaced"
+hours_at_visit: 1300
+status: "Completed"
+notes: "Used Champion CH48108-1"
+UI:
+This visit appears in the Maintenance History for the aircraft/component.
+5. Updating the Component
+Automatic or Manual Update:
+When the maintenance visit is marked as "Completed":
+The OIL FILTER’s last_completed_hours is updated to 1300.
+The current_due_hours is set to 1350 (1300 + 50).
+The last_completed_date is set to today.
+The current_due_date is recalculated if needed (for calendar-based intervals).
+UI:
+The OIL FILTER row now shows the next due at 1350 hours, and the progress bar resets.
+6. Logging the Cost
+User Action:
+In the maintenance visit details, the user adds a Maintenance Cost:
+maintenance_visit_id: (the visit)
+aircraft_component_id: (the OIL FILTER)
+cost_type: "Parts"
+description: "Oil filter"
+quantity: 1
+unit_cost: 100
+total_cost: 100
+supplier_vendor: "AeroParts Ltd"
+invoice_reference: "INV-12345"
+UI:
+The cost appears in the visit’s cost breakdown and in reporting/analytics.
+7. Ongoing Cycle
+The process repeats:
+The OIL FILTER is now tracked for the next 50 hours.
+All history, costs, and compliance are logged and auditable.
+Summary Table of User Actions
+Step	User Action / UI Location	Table(s) Updated	Automated?
+Add Component	Equipment/Components Tab	aircraft_components	Manual
+Monitor Due	Equipment/Components Tab, Servicing Tab	—	—
+Log Maintenance	Servicing Tab / Maintenance Tab	maintenance_visits	Manual
+Update Component	On visit completion (auto/manual)	aircraft_components	Auto/Manual
+Log Cost	Maintenance Visit Details	maintenance_costs	Manual
+Key UX Features in Your UI
+Quick-glance tables for due/soon components and services.
+Highlighting for due/overdue items.
+One-click logging of maintenance visits and costs.
+Automatic update of component intervals on visit completion.
+Full history and cost tracking for compliance and analytics.
