@@ -16,12 +16,18 @@ export async function GET(req: NextRequest) {
   if (!currentOrgId) {
     return NextResponse.json({ error: "No organization selected" }, { status: 400 });
   }
-  // Fetch invoices for the org, join users
-  const { data, error } = await supabase
+  // Check for booking_id filter
+  const { searchParams } = new URL(req.url);
+  const booking_id = searchParams.get("booking_id");
+  let query = supabase
     .from("invoices")
-    .select(`*, users:user_id(id, first_name, last_name, email)`)
-    .eq("organization_id", currentOrgId)
-    .order("issue_date", { ascending: false });
+    .select(`*, users:user_id(id, first_name, last_name, email)`);
+  query = query.eq("organization_id", currentOrgId);
+  if (booking_id) {
+    query = query.eq("booking_id", booking_id);
+  }
+  query = query.order("issue_date", { ascending: false });
+  const { data, error } = await query;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -31,7 +37,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const body = await req.json();
-  const { organization_id, user_id, status = 'draft' } = body;
+  const { organization_id, user_id, booking_id, status = 'draft' } = body;
   if (!organization_id || !user_id) {
     return NextResponse.json({ error: 'Missing organization_id or user_id' }, { status: 400 });
   }
@@ -46,6 +52,7 @@ export async function POST(req: NextRequest) {
       {
         organization_id,
         user_id,
+        booking_id: booking_id || null,
         invoice_number,
         issue_date,
         due_date,

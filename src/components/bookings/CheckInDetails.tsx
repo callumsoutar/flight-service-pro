@@ -12,9 +12,17 @@ interface CheckInDetailsProps {
   selectedFlightTypeId?: string | null;
   instructorId?: string | null;
   instructors: { id: string; name: string }[];
+  onCalculateCharges?: (details: {
+    chargeTime: number;
+    aircraftRate: number;
+    instructorRate: number;
+    chargingBy: 'hobbs' | 'tacho' | null;
+    selectedInstructor: string;
+    selectedFlightType: string;
+  }) => void;
 }
 
-export default function CheckInDetails({ aircraftId, organizationId, selectedFlightTypeId, instructorId, instructors }: CheckInDetailsProps) {
+export default function CheckInDetails({ aircraftId, organizationId, selectedFlightTypeId, instructorId, instructors, onCalculateCharges }: CheckInDetailsProps) {
   const [startHobbs, setStartHobbs] = useState("");
   const [startTacho, setStartTacho] = useState("");
   const [flightTypes, setFlightTypes] = useState<{ id: string; name: string }[]>([]);
@@ -111,6 +119,25 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
   const aircraftRateInclusive = aircraftRateExclusive && taxRate != null ? (aircraftRateExclusive * (1 + taxRate)) : null;
   const instructorRateExclusive = instructorRate?.rate ?? null;
   const instructorRateInclusive = instructorRateExclusive && taxRate != null ? (instructorRateExclusive * (1 + taxRate)) : null;
+
+  const handleCalculateCharges = () => {
+    let chargeTime = 0;
+    if (chargingBy === "hobbs") {
+      chargeTime = parseFloat(hobbsTotal);
+    } else if (chargingBy === "tacho") {
+      chargeTime = parseFloat(tachoTotal);
+    }
+    if (onCalculateCharges && chargeTime > 0 && aircraftRateExclusive && instructorRateExclusive && selectedInstructor && selectedFlightType) {
+      onCalculateCharges({
+        chargeTime,
+        aircraftRate: aircraftRateExclusive,
+        instructorRate: instructorRateExclusive,
+        chargingBy,
+        selectedInstructor,
+        selectedFlightType,
+      });
+    }
+  };
 
   return (
     <div className="p-0">
@@ -218,7 +245,7 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
         </div>
       </div>
       <div className="mt-6">
-        <Button variant="outline" className="w-full flex items-center gap-2 justify-center">
+        <Button variant="outline" className="w-full flex items-center gap-2 justify-center" onClick={handleCalculateCharges}>
           <ClipboardList className="w-5 h-5" />
           Calculate Flight Charges
         </Button>

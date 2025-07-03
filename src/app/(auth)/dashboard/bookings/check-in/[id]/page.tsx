@@ -2,10 +2,9 @@ import { BookingStages, BOOKING_STAGES } from "@/components/bookings/BookingStag
 import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
 import { Badge } from "@/components/ui/badge";
 import { Booking } from "@/types/bookings";
-import React from "react";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { cookies } from "next/headers";
-import CheckInDetails from "@/components/bookings/CheckInDetails";
+import BookingCheckInClient from "./BookingCheckInClient";
 
 interface BookingCheckInPageProps {
   params: Promise<{ id: string }>;
@@ -90,31 +89,13 @@ export default async function BookingCheckInPage({ params }: BookingCheckInPageP
         </div>
         <BookingStages stages={BOOKING_STAGES} currentStage={3} />
         {/* Main content row: 40% left, 60% right */}
-        <div className="flex flex-row w-full max-w-6xl mx-auto gap-6">
-          {/* Left column (40%) */}
-          <div className="flex-[2] flex flex-col gap-6 min-w-0" style={{ flexBasis: '40%' }}>
-            <div className="bg-white border rounded-xl p-6 shadow-sm">
-              <CheckInDetails 
-                aircraftId={booking?.aircraft_id}
-                organizationId={orgId}
-                selectedFlightTypeId={booking?.flight_type_id}
-                instructorId={booking?.checked_out_instructor_id}
-                instructors={instructors}
-              />
-            </div>
-            <div className="bg-white border rounded-xl p-6 shadow-sm">
-              <h2 className="font-bold text-lg mb-4">Additional Charges</h2>
-              {/* TODO: Additional Charges form goes here */}
-            </div>
-          </div>
-          {/* Right column (60%) */}
-          <div className="flex-[3] flex flex-col gap-6 min-w-0" style={{ flexBasis: '60%' }}>
-            <div className="bg-white border rounded-xl p-6 shadow-sm">
-              <h2 className="font-bold text-lg mb-4">Invoice</h2>
-              {/* TODO: Invoice details go here */}
-            </div>
-          </div>
-        </div>
+        {booking && orgId && (
+          <BookingCheckInClient
+            booking={booking}
+            instructors={instructors}
+            orgId={orgId}
+          />
+        )}
       </div>
     </div>
   );

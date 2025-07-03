@@ -25,9 +25,10 @@ const groupByCategory = (items: Chargeable[]) => {
 interface ChargeableSearchDropdownProps {
   onAdd?: (item: Chargeable, quantity: number) => void;
   taxRate: number; // e.g. 0.15 for 15%
+  category?: 'landing_fee' | 'airways_fees' | 'other';
 }
 
-export default function ChargeableSearchDropdown({ onAdd, taxRate }: ChargeableSearchDropdownProps) {
+export default function ChargeableSearchDropdown({ onAdd, taxRate, category }: ChargeableSearchDropdownProps) {
   const [search, setSearch] = useState("");
   const [focused, setFocused] = useState(false);
   const [selected, setSelected] = useState<Chargeable | null>(null);
@@ -41,18 +42,26 @@ export default function ChargeableSearchDropdown({ onAdd, taxRate }: ChargeableS
     setLoading(true);
     setError(null);
     const controller = new AbortController();
-    fetch(`/api/chargeables?q=${encodeURIComponent(search)}`, { signal: controller.signal })
+    let url = `/api/chargeables?q=${encodeURIComponent(search)}`;
+    if (category === 'landing_fee' || category === 'airways_fees') {
+      url += `&type=${category}`;
+    }
+    fetch(url, { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error("Failed to fetch chargeables");
         const data = await res.json();
-        setChargeables(data.chargeables || []);
+        let items = data.chargeables || [];
+        if (category === 'other') {
+          items = items.filter((c: Chargeable) => c.type !== 'landing_fee' && c.type !== 'airways_fees');
+        }
+        setChargeables(items);
       })
       .catch((err) => {
         if (err.name !== "AbortError") setError("Failed to load chargeables");
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [search, focused]);
+  }, [search, focused, category]);
 
   return (
     <div className="w-full flex flex-col gap-2 p-2">
