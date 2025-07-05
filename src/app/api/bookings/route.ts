@@ -65,7 +65,9 @@ export async function PATCH(req: NextRequest) {
   }
   // Only allow patching safe fields
   const allowedFields = [
-    "start_time", "end_time", "purpose", "remarks", "instructor_id", "user_id", "aircraft_id", "lesson_id", "flight_type_id", "booking_type", "status"
+    "start_time", "end_time", "purpose", "remarks", "instructor_id", "user_id", "aircraft_id", "lesson_id", "flight_type_id", "booking_type", "status",
+    // Add meter fields for patching
+    "hobbs_start", "hobbs_end", "tach_start", "tach_end"
   ];
   const updates: Record<string, unknown> = {};
   for (const key of allowedFields) {
@@ -85,5 +87,15 @@ export async function PATCH(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ success: true });
+  // Fetch and return the updated booking (including flight_time)
+  const { data: updatedBooking, error: fetchError } = await supabase
+    .from("bookings")
+    .select("*")
+    .eq("id", id)
+    .eq("organization_id", orgId)
+    .single();
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  }
+  return NextResponse.json({ booking: updatedBooking });
 } 

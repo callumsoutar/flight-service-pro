@@ -19,12 +19,24 @@ interface CheckInDetailsProps {
     chargingBy: 'hobbs' | 'tacho' | null;
     selectedInstructor: string;
     selectedFlightType: string;
+    hobbsStart?: number;
+    hobbsEnd?: number;
+    tachStart?: number;
+    tachEnd?: number;
   }) => void;
+  initialStartHobbs?: number | null;
+  initialStartTacho?: number | null;
+  initialEndHobbs?: number | null;
+  initialEndTacho?: number | null;
 }
 
-export default function CheckInDetails({ aircraftId, organizationId, selectedFlightTypeId, instructorId, instructors, onCalculateCharges }: CheckInDetailsProps) {
-  const [startHobbs, setStartHobbs] = useState("");
-  const [startTacho, setStartTacho] = useState("");
+export default function CheckInDetails({ aircraftId, organizationId, selectedFlightTypeId, instructorId, instructors, onCalculateCharges, initialStartHobbs, initialStartTacho, initialEndHobbs, initialEndTacho }: CheckInDetailsProps) {
+  // Start values: ONLY from props
+  const [startHobbs, setStartHobbs] = useState(initialStartHobbs !== undefined && initialStartHobbs !== null ? String(initialStartHobbs) : "");
+  const [startTacho, setStartTacho] = useState(initialStartTacho !== undefined && initialStartTacho !== null ? String(initialStartTacho) : "");
+  // End values: ONLY from props
+  const [endHobbs, setEndHobbs] = useState(initialEndHobbs !== undefined && initialEndHobbs !== null ? String(initialEndHobbs) : "");
+  const [endTacho, setEndTacho] = useState(initialEndTacho !== undefined && initialEndTacho !== null ? String(initialEndTacho) : "");
   const [flightTypes, setFlightTypes] = useState<{ id: string; name: string }[]>([]);
   const [selectedFlightType, setSelectedFlightType] = useState<string>(selectedFlightTypeId || "");
   const [chargeRate, setChargeRate] = useState<string | null>(null);
@@ -36,18 +48,39 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
   // Get org tax rate from context
   const { taxRate } = useOrgContext();
 
+  // Sync start values with props ONLY when those props change
   useEffect(() => {
-    if (!aircraftId) return;
-    // Fetch aircraft details from API
-    fetch(`/api/aircraft?id=${aircraftId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.aircraft) {
-          setStartHobbs(data.aircraft.current_hobbs || "");
-          setStartTacho(data.aircraft.current_tach || "");
-        }
-      });
-  }, [aircraftId]);
+    if (initialStartHobbs !== undefined && initialStartHobbs !== null) {
+      setStartHobbs(String(initialStartHobbs));
+    } else {
+      setStartHobbs("");
+    }
+  }, [initialStartHobbs]);
+
+  useEffect(() => {
+    if (initialStartTacho !== undefined && initialStartTacho !== null) {
+      setStartTacho(String(initialStartTacho));
+    } else {
+      setStartTacho("");
+    }
+  }, [initialStartTacho]);
+
+  // Sync end values with props ONLY when those props change
+  useEffect(() => {
+    if (initialEndHobbs !== undefined && initialEndHobbs !== null) {
+      setEndHobbs(String(initialEndHobbs));
+    } else {
+      setEndHobbs("");
+    }
+  }, [initialEndHobbs]);
+
+  useEffect(() => {
+    if (initialEndTacho !== undefined && initialEndTacho !== null) {
+      setEndTacho(String(initialEndTacho));
+    } else {
+      setEndTacho("");
+    }
+  }, [initialEndTacho]);
 
   useEffect(() => {
     if (!organizationId) return;
@@ -108,8 +141,6 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
   }, [organizationId, selectedInstructor]);
 
   // Calculate totals
-  const [endTacho, setEndTacho] = useState("");
-  const [endHobbs, setEndHobbs] = useState("");
   const tachoTotal = (parseFloat(endTacho) - parseFloat(startTacho)).toFixed(2);
   const hobbsTotal = (parseFloat(endHobbs) - parseFloat(startHobbs)).toFixed(2);
   const chargingBy = chargeHobbs ? "hobbs" : chargeTacho ? "tacho" : null;
@@ -135,6 +166,10 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
         chargingBy,
         selectedInstructor,
         selectedFlightType,
+        hobbsStart: startHobbs !== "" ? parseFloat(startHobbs) : undefined,
+        hobbsEnd: endHobbs !== "" ? parseFloat(endHobbs) : undefined,
+        tachStart: startTacho !== "" ? parseFloat(startTacho) : undefined,
+        tachEnd: endTacho !== "" ? parseFloat(endTacho) : undefined,
       });
     }
   };
