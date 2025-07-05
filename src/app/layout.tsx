@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import QueryProvider from "@/components/QueryProvider";
+import { SpeedInsights } from "@vercel/speed-insights/next"
+<SpeedInsights/>
+import { Analytics } from "@vercel/analytics/next"
+<Analytics/>
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

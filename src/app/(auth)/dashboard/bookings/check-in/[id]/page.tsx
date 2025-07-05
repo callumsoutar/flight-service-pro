@@ -5,6 +5,8 @@ import { Booking } from "@/types/bookings";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { cookies } from "next/headers";
 import BookingCheckInClient from "./BookingCheckInClient";
+import BookingActions from "@/components/bookings/BookingActions";
+import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 
 interface BookingCheckInPageProps {
   params: Promise<{ id: string }>;
@@ -25,18 +27,36 @@ export default async function BookingCheckInPage({ params }: BookingCheckInPageP
   const orgId = cookiesList.get("current_org_id")?.value;
 
   let booking: Booking | null = null;
+  let member: { id: string; first_name?: string; last_name?: string } | null = null;
   let instructorCommentsCount = 0;
   let instructors: { id: string; name: string }[] = [];
 
   if (orgId) {
-    // Fetch booking
+    // Fetch booking with user join
     const { data: bookingData } = await supabase
       .from("bookings")
-      .select("*",)
+      .select(`*, user:user_id(*)`)
       .eq("organization_id", orgId)
       .eq("id", bookingId)
       .single();
     booking = bookingData;
+
+    // Fallback: fetch all members (users in org)
+    if (!booking?.user?.first_name || !booking?.user?.last_name) {
+      const { data: memberRows } = await supabase
+        .from("user_organizations")
+        .select("user_id, users(first_name, last_name)")
+        .eq("organization_id", orgId);
+      const members = (memberRows || []).map((row: { user_id: string; users?: { first_name?: string; last_name?: string } | { first_name?: string; last_name?: string }[] }) => {
+        const userObj = Array.isArray(row.users) ? row.users[0] : row.users;
+        return {
+          id: row.user_id,
+          first_name: userObj?.first_name,
+          last_name: userObj?.last_name,
+        };
+      });
+      member = members.find(m => m.id === booking?.user_id) || null;
+    }
 
     // Fetch instructor comments count
     if (booking && booking.id) {
@@ -79,11 +99,21 @@ export default async function BookingCheckInPage({ params }: BookingCheckInPageP
       <div className="w-full max-w-6xl px-4 pt-8 pb-12 flex flex-col gap-8">
         {/* Title and actions row */}
         <div className="flex flex-row items-center w-full mb-2 gap-4">
-          <div className="flex-1 min-w-0 flex items-center gap-4">
+          <div className="flex-1 min-w-0 flex flex-col items-start gap-0">
             <h1 className="text-[3rem] font-extrabold tracking-tight text-gray-900" style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1 }}>Check-In Booking</h1>
-            <Badge className={STATUS_BADGE[status].color + " text-lg px-4 py-2 font-semibold"}>{STATUS_BADGE[status].label}</Badge>
+            {booking && (
+              <BookingMemberLink
+                userId={booking.user_id}
+                firstName={booking.user?.first_name || member?.first_name}
+                lastName={booking.user?.last_name || member?.last_name}
+              />
+            )}
           </div>
+          <Badge className={STATUS_BADGE[status].color + " text-lg px-4 py-2 font-semibold"}>{STATUS_BADGE[status].label}</Badge>
           <div className="flex-none flex items-center justify-end gap-3">
+            {booking && booking.id && (
+              <BookingActions status={status} bookingId={booking.id} mode="check-in" />
+            )}
             <BookingStagesOptions bookingId={bookingId} instructorCommentsCount={instructorCommentsCount} />
           </div>
         </div>

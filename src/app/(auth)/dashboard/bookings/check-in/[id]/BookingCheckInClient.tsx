@@ -20,6 +20,11 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [chargeableTab, setChargeableTab] = useState<'landing_fee' | 'airways_fees' | 'other'>('landing_fee');
+  // Registration state for checked out aircraft
+  const [checkedOutAircraftReg, setCheckedOutAircraftReg] = useState<string | null>(null);
+  // Add state for current_hobbs and current_tach
+  const [checkedOutAircraftHobbs, setCheckedOutAircraftHobbs] = useState<number | null>(null);
+  const [checkedOutAircraftTacho, setCheckedOutAircraftTacho] = useState<number | null>(null);
 
   // Fetch invoice and items on mount (for refresh)
   useEffect(() => {
@@ -50,6 +55,35 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
     fetchInvoiceAndItems();
   }, [booking.id]);
 
+  useEffect(() => {
+    const fetchCheckedOutAircraft = async () => {
+      if (booking.checked_out_aircraft_id) {
+        try {
+          const res = await fetch(`/api/aircraft?id=${booking.checked_out_aircraft_id}`);
+          const data = await res.json();
+          if (data.aircraft) {
+            setCheckedOutAircraftReg(data.aircraft.registration || null);
+            setCheckedOutAircraftHobbs(typeof data.aircraft.current_hobbs === 'number' ? data.aircraft.current_hobbs : null);
+            setCheckedOutAircraftTacho(typeof data.aircraft.current_tach === 'number' ? data.aircraft.current_tach : null);
+          } else {
+            setCheckedOutAircraftReg(null);
+            setCheckedOutAircraftHobbs(null);
+            setCheckedOutAircraftTacho(null);
+          }
+        } catch {
+          setCheckedOutAircraftReg(null);
+          setCheckedOutAircraftHobbs(null);
+          setCheckedOutAircraftTacho(null);
+        }
+      } else {
+        setCheckedOutAircraftReg(null);
+        setCheckedOutAircraftHobbs(null);
+        setCheckedOutAircraftTacho(null);
+      }
+    };
+    fetchCheckedOutAircraft();
+  }, [booking.checked_out_aircraft_id]);
+
   const handleCalculateCharges = async (details: {
     chargeTime: number;
     aircraftRate: number;
@@ -57,11 +91,48 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
     chargingBy: 'hobbs' | 'tacho' | null;
     selectedInstructor: string;
     selectedFlightType: string;
+    hobbsStart?: number;
+    hobbsEnd?: number;
+    tachStart?: number;
+    tachEnd?: number;
   }) => {
     setInvoiceLoading(true);
     setInvoiceError(null);
+    let chargeTime = details.chargeTime;
+
+    // 1. PATCH booking if there are meter values to update
+    const patchBody: Record<string, unknown> = { id: booking.id };
+    if (typeof details.hobbsStart === 'number') patchBody.hobbs_start = details.hobbsStart;
+    if (typeof details.hobbsEnd === 'number') patchBody.hobbs_end = details.hobbsEnd;
+    if (typeof details.tachStart === 'number') patchBody.tach_start = details.tachStart;
+    if (typeof details.tachEnd === 'number') patchBody.tach_end = details.tachEnd;
+
+    if (Object.keys(patchBody).length > 1) { // id + at least one value
+      try {
+        const patchRes = await fetch('/api/bookings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patchBody),
+        });
+        const patchData = await patchRes.json();
+        if (patchRes.ok && patchData.booking) {
+          chargeTime = patchData.booking.flight_time ?? chargeTime;
+        } else if (patchData.error && patchData.error.includes('no valid fields to update')) {
+          // Ignore and proceed
+        } else {
+          setInvoiceError(patchData.error || 'Failed to update booking');
+          setInvoiceLoading(false);
+          return;
+        }
+      } catch {
+        setInvoiceError('Failed to update booking');
+        setInvoiceLoading(false);
+        return;
+      }
+    }
+
     try {
-      // 1. Create invoice (if not already created)
+      // 2. Create invoice (if not already created)
       let invoiceId = invoice?.id;
       if (!invoiceId) {
         const res = await fetch("/api/invoices", {
@@ -83,17 +154,17 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
         const found = invoiceData.invoices?.[0] || null;
         setInvoice(found);
       }
-      // 2. Fetch current invoice items
+      // 3. Fetch current invoice items
       const itemsRes = await fetch(`/api/invoice_items?invoice_id=${invoiceId}`);
       const itemsData = await itemsRes.json();
       const currentItems: InvoiceItem[] = itemsData.invoice_items || [];
-      // 3. Prepare line item descriptions
+      // 4. Prepare line item descriptions
       const aircraftDesc = `Aircraft (${details.chargingBy?.toUpperCase()} time)`;
       const instructorDesc = `Instructor (${details.chargingBy?.toUpperCase()} time)`;
-      // 4. Aircraft line item
-      const aircraftAmount = details.chargeTime * details.aircraftRate;
+      // 5. Aircraft line item
+      const aircraftAmount = chargeTime * details.aircraftRate;
       const aircraftRate = details.aircraftRate;
-      const aircraftQty = details.chargeTime;
+      const aircraftQty = chargeTime;
       const existingAircraft = currentItems.find(item => item.description === aircraftDesc);
       if (existingAircraft) {
         // PATCH
@@ -130,10 +201,10 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
           }),
         });
       }
-      // 5. Instructor line item
-      const instructorAmount = details.chargeTime * details.instructorRate;
+      // 6. Instructor line item
+      const instructorAmount = chargeTime * details.instructorRate;
       const instructorRate = details.instructorRate;
-      const instructorQty = details.chargeTime;
+      const instructorQty = chargeTime;
       const existingInstructor = currentItems.find(item => item.description === instructorDesc);
       if (existingInstructor) {
         // PATCH
@@ -170,7 +241,7 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
           }),
         });
       }
-      // 6. Refetch invoice items
+      // 7. Refetch invoice items
       const updatedItemsRes = await fetch(`/api/invoice_items?invoice_id=${invoiceId}`);
       const updatedItemsData = await updatedItemsRes.json();
       setInvoiceItems(updatedItemsData.invoice_items || []);
@@ -221,6 +292,12 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
       {/* Left column (Check-In Details) */}
       <div className="flex-[2] flex flex-col gap-6 min-w-0" style={{ flexBasis: '40%' }}>
         <div className="bg-white border rounded-2xl p-6 shadow-sm">
+          {checkedOutAircraftReg && (
+            <div className="mb-3 flex items-center gap-2">
+              <span className="text-xs font-semibold text-muted-foreground">Checked-Out Aircraft:</span>
+              <span className="text-base font-bold text-blue-700">{checkedOutAircraftReg}</span>
+            </div>
+          )}
           <CheckInDetails 
             aircraftId={booking?.aircraft_id}
             organizationId={orgId}
@@ -228,6 +305,10 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
             instructorId={booking?.checked_out_instructor_id}
             instructors={instructors}
             onCalculateCharges={handleCalculateCharges}
+            initialStartHobbs={checkedOutAircraftHobbs}
+            initialStartTacho={checkedOutAircraftTacho}
+            initialEndHobbs={booking?.hobbs_end}
+            initialEndTacho={booking?.tach_end}
           />
         </div>
       </div>
@@ -276,6 +357,12 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
             </div>
           ) : (
             <div className="text-muted-foreground">No invoice yet. Click Calculate Flight Charges.</div>
+          )}
+          {/* Show current flight time */}
+          {booking.flight_time !== undefined && booking.flight_time !== null && (
+            <div className="mb-2 text-sm text-muted-foreground">
+              <span className="font-semibold">Flight Time (charged):</span> {booking.flight_time} hours
+            </div>
           )}
           {/* Add Extra Charges directly below the table */}
           {invoice && (
