@@ -11,6 +11,7 @@ import BookingHistoryCollapse from "../BookingHistoryCollapse";
 import { User } from "@/types/users";
 import { Aircraft } from "@/types/aircraft";
 import BookingActions from "@/components/bookings/BookingActions";
+import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 
 interface BookingViewPageProps {
   params: Promise<{ id: string }>;
@@ -147,10 +148,17 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
       <div className="w-full max-w-6xl px-4 pt-8 pb-12 flex flex-col gap-8">
         {/* Title and actions row */}
         <div className="flex flex-row items-center w-full mb-2 gap-4">
-          <div className="flex-1 min-w-0 flex items-center gap-4">
+          <div className="flex-1 min-w-0 flex flex-col items-start gap-0">
             <h1 className="text-[3rem] font-extrabold tracking-tight text-gray-900" style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1 }}>Booking Details</h1>
-            <Badge className={STATUS_BADGE[status].color + " text-lg px-4 py-2 font-semibold"}>{STATUS_BADGE[status].label}</Badge>
+            {booking && (
+              <BookingMemberLink
+                userId={booking.user_id}
+                firstName={booking.user?.first_name || member?.first_name}
+                lastName={booking.user?.last_name || member?.last_name}
+              />
+            )}
           </div>
+          <Badge className={STATUS_BADGE[status].color + " text-lg px-4 py-2 font-semibold"}>{STATUS_BADGE[status].label}</Badge>
           <div className="flex-none flex items-center justify-end gap-3">
             {booking && booking.id && (
               <BookingActions status={status} bookingId={booking.id} />
