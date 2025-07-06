@@ -44,35 +44,10 @@ export default function AircraftViewPage() {
           </div>
         </div>
         <div className="flex flex-col md:items-end gap-2">
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <div className="text-xs text-muted-foreground">Total Hours</div>
-              <div className="text-2xl font-bold">{aircraft.total_hours}h</div>
-            </div>
-            <Badge className="bg-green-500 text-white font-semibold px-3 py-1.5 text-xs">{statusMap[aircraft.status].label}</Badge>
-          </div>
+          
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-5 flex flex-col items-center justify-center">
-          <div className="text-sm text-yellow-600 font-semibold flex items-center gap-1"><Wrench className="w-4 h-4" /> Due Soon</div>
-          <div className="text-3xl font-bold mt-2">2</div>
-        </Card>
-        <Card className="p-5 flex flex-col items-center justify-center">
-          <div className="text-sm text-blue-600 font-semibold flex items-center gap-1"><ClipboardList className="w-4 h-4" /> Upcoming</div>
-          <div className="text-3xl font-bold mt-2">4</div>
-        </Card>
-        <Card className="p-5 flex flex-col items-center justify-center">
-          <div className="text-sm text-green-600 font-semibold flex items-center gap-1"><span>$</span> Est. Cost</div>
-          <div className="text-3xl font-bold mt-2">$3,585</div>
-        </Card>
-        <Card className="p-5 flex flex-col items-center justify-center">
-          <div className="text-sm text-indigo-600 font-semibold flex items-center gap-1"><History className="w-4 h-4" /> Next Due</div>
-          <div className="text-3xl font-bold mt-2">9 <span className="text-base font-normal">days</span></div>
-        </Card>
-      </section>
 
       {/* Tabs */}
       <div className="w-full flex justify-center">
