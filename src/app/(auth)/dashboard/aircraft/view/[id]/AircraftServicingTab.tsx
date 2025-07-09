@@ -12,6 +12,21 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { AircraftComponent } from "@/types/aircraft_components";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import LogMaintenanceModal from "./LogMaintenanceModal";
 
 function isDueSoon(dueDate: string | null | undefined) {
   if (!dueDate) return false;
@@ -41,6 +56,21 @@ export default function AircraftServicingTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentHours, setCurrentHours] = useState<number | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  // Placeholder state for form fields
+  const [visitDate, setVisitDate] = useState<Date | undefined>(undefined);
+  const [visitType, setVisitType] = useState("");
+  const [description, setDescription] = useState("");
+  const [technician, setTechnician] = useState("");
+  const [hoursAtVisit, setHoursAtVisit] = useState("");
+  const [costType, setCostType] = useState("");
+  const [costDescription, setCostDescription] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [unitCost, setUnitCost] = useState("");
+  const [totalCost, setTotalCost] = useState("");
+  const [supplier, setSupplier] = useState("");
+  const [invoiceRef, setInvoiceRef] = useState("");
+  const [notes, setNotes] = useState("");
 
   useEffect(() => {
     if (!aircraft_id) return;
@@ -127,7 +157,7 @@ export default function AircraftServicingTab() {
                           <Button variant="ghost" size="icon" className="h-8 w-8 p-0"><MoreHorizontal className="w-5 h-5" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setModalOpen(true)}>
                             <ClipboardList className="w-4 h-4 mr-2" /> Log Maintenance
                           </DropdownMenuItem>
                           <DropdownMenuItem>
@@ -147,6 +177,36 @@ export default function AircraftServicingTab() {
           </tbody>
         </table>
       </div>
+      <LogMaintenanceModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        visitDate={visitDate}
+        setVisitDate={setVisitDate}
+        visitType={visitType}
+        setVisitType={setVisitType}
+        description={description}
+        setDescription={setDescription}
+        technician={technician}
+        setTechnician={setTechnician}
+        hoursAtVisit={hoursAtVisit}
+        setHoursAtVisit={setHoursAtVisit}
+        costType={costType}
+        setCostType={setCostType}
+        costDescription={costDescription}
+        setCostDescription={setCostDescription}
+        quantity={quantity}
+        setQuantity={setQuantity}
+        unitCost={unitCost}
+        setUnitCost={setUnitCost}
+        totalCost={totalCost}
+        setTotalCost={setTotalCost}
+        supplier={supplier}
+        setSupplier={setSupplier}
+        invoiceRef={invoiceRef}
+        setInvoiceRef={setInvoiceRef}
+        notes={notes}
+        setNotes={setNotes}
+      />
     </div>
   );
 } 
