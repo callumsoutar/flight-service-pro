@@ -19,6 +19,8 @@ import OrgHeaderTitle from "@/components/OrgHeaderTitle";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { Toaster } from "sonner";
+import { SpeedInsights } from "@vercel/speed-insights/next"
+import { Analytics } from "@vercel/analytics/next"
 
 const mainNavOptions = [
   { label: "Dashboard", icon: LucideHome, href: "/dashboard", tab: "dashboard" },
