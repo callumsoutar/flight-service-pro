@@ -44,6 +44,8 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
   }
   return (
     <>
+    <Analytics/>
+    <SpeedInsights/>
       <OrgContextProvider>
         <div className="flex h-screen bg-gray-50">
           {/* Sidebar */}
