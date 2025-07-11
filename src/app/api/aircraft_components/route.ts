@@ -26,3 +26,20 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json(data as AircraftComponent, { status: 201 });
 } 
+
+export async function PATCH(req: NextRequest) {
+  const supabase = await createClient();
+  const body = await req.json();
+  const { id, ...fieldsToUpdate } = body;
+  if (!id) return NextResponse.json({ error: "Missing component id" }, { status: 400 });
+
+  const { data, error } = await supabase
+    .from('aircraft_components')
+    .update(fieldsToUpdate)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json(data as AircraftComponent, { status: 200 });
+} 

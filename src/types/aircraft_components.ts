@@ -33,4 +33,6 @@ export interface AircraftComponent {
   created_at: string;
   updated_at: string;
   organization_id: string;
+  scheduled_due_hours?: number | null;
+  extension_limit_hours?: number | null;
 } 

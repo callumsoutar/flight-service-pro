@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import type { Aircraft } from "@/types/aircraft";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 const statusMap: Record<string, { label: string; color: string }> = {
   available: { label: "Available", color: "bg-green-500" },
@@ -29,8 +30,12 @@ export default function AircraftListClient() {
         }
         const data = await res.json();
         setAircraftList(data.aircrafts || []);
-      } catch (err: any) {
-        setError(err.message || "Unknown error");
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          setError(err.message || "Unknown error");
+        } else {
+          setError("Unknown error");
+        }
       } finally {
         setLoading(false);
       }
@@ -59,11 +64,14 @@ export default function AircraftListClient() {
           onClick={() => router.push(`/dashboard/aircraft/view/${ac.id}`)}
         >
           <div className="flex items-center gap-4 mb-4">
-            <img
+            <Image
               src={ac.aircraft_image_url || "/aircraft-placeholder.jpg"}
               alt={ac.registration}
+              width={64}
+              height={64}
               className="w-16 h-16 object-cover rounded-md border"
               style={{ background: '#f3f4f6' }}
+              priority={true}
             />
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">

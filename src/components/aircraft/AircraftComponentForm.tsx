@@ -1,14 +1,12 @@
 "use client";
 import { useEffect, useState, forwardRef } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, SubmitHandler } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AircraftComponent, ComponentType, IntervalType, ComponentStatus } from "@/types/aircraft_components";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { format, parseISO } from "date-fns";
 import { Info, Repeat, Calendar, Settings2, StickyNote } from "lucide-react";
 
 const PRIORITY_OPTIONS = ["LOW", "MEDIUM", "HIGH"];
@@ -16,27 +14,15 @@ const PRIORITY_OPTIONS = ["LOW", "MEDIUM", "HIGH"];
 const componentSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional().nullable(),
-  component_type: z.custom<ComponentType>(),
-  interval_type: z.custom<IntervalType>(),
-  interval_hours: z.preprocess(
-    (v) => v === "" ? null : v,
-    z.union([z.number().min(1, "Must be > 0").nullable(), z.null()])
-  ),
-  interval_days: z.preprocess(
-    (v) => v === "" ? null : v,
-    z.union([z.number().min(1, "Must be > 0").nullable(), z.null()])
-  ),
+  component_type: z.string(),
+  interval_type: z.string(),
+  interval_hours: z.number().optional().nullable(),
+  interval_days: z.number().optional().nullable(),
   current_due_date: z.string().optional().nullable(),
-  current_due_hours: z.preprocess(
-    (v) => v === "" ? null : v,
-    z.union([z.number().nullable(), z.null()])
-  ),
+  current_due_hours: z.number().optional().nullable(),
   last_completed_date: z.string().optional().nullable(),
-  last_completed_hours: z.preprocess(
-    (v) => v === "" ? null : v,
-    z.union([z.number().nullable(), z.null()])
-  ),
-  status: z.custom<ComponentStatus>(),
+  last_completed_hours: z.number().optional().nullable(),
+  status: z.string(),
   priority: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
@@ -63,14 +49,14 @@ const AircraftComponentForm = forwardRef<HTMLFormElement, AircraftComponentFormP
     watch,
     setValue,
     reset,
-    formState: { errors, isDirty },
+    formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(componentSchema),
     defaultValues: {
       name: "",
       description: "",
-      component_type: undefined,
-      interval_type: undefined,
+      component_type: "inspection",
+      interval_type: "HOURS",
       interval_hours: null,
       interval_days: null,
       current_due_date: "",
@@ -118,20 +104,21 @@ const AircraftComponentForm = forwardRef<HTMLFormElement, AircraftComponentFormP
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-    // eslint-disable-next-line
   }, [componentId, isEdit, reset, setValue]);
 
   // Watch interval_type for conditional fields
   const intervalType = watch("interval_type");
 
-  const onSubmit = async (values: FormValues) => {
-    setLoading(true);
+  const onSubmit: SubmitHandler<FormValues> = async (values) => {
     setError(null);
+    setLoading(true);
+    
     try {
       const payload = {
         ...values,
         aircraft_id: aircraftId,
       };
+      
       let res;
       if (isEdit) {
         res = await fetch(`/api/aircraft_components/${componentId}`, {
@@ -142,17 +129,23 @@ const AircraftComponentForm = forwardRef<HTMLFormElement, AircraftComponentFormP
       } else {
         res = await fetch(`/api/aircraft_components`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type" : "application/json" },
           body: JSON.stringify(payload),
         });
       }
+      
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to save component");
       }
+      
       if (onSuccess) onSuccess();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        setError(e.message);
+      } else {
+        setError("An unknown error occurred");
+      }
     } finally {
       setLoading(false);
     }

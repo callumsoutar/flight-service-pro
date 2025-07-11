@@ -1,11 +1,17 @@
+"use client";
+
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plane, Settings, Wrench, ClipboardList, History, Layers, Info } from "lucide-react";
-import AircraftMaintenanceTab from "./AircraftMaintenanceTab";
-import AircraftServicingTab from "./AircraftServicingTab";
+import { Plane, Settings, Wrench, ClipboardList, History, Layers, Info, Clock, ArrowRight } from "lucide-react";
+import AircraftMaintenanceTab from "@/components/aircraft/maintenance/AircraftMaintenanceTab";
+import AircraftServicingTab from "@/components/aircraft/maintenance/AircraftServicingTab";
+import AircraftMaintenanceHistoryTable from "@/components/aircraft/maintenance/AircraftMaintenanceHistoryTable";
+import { Button } from "@/components/ui/button";
+import { useParams } from "next/navigation";
 
 export default function AircraftViewPage() {
+  const { id } = useParams<{ id: string }>();
   // Placeholder data for now
   const aircraft = {
     registration: "ZK-ABC",
@@ -28,9 +34,9 @@ export default function AircraftViewPage() {
   };
 
   return (
-    <main className="flex flex-col h-full bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-6">
+    <main className="max-w-screen-xl mx-auto p-6 flex flex-col gap-8">
+      {/* Aircraft header and actions */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div className="flex items-center gap-4">
           <div className="bg-indigo-100 p-3 rounded-lg">
             <Plane className="w-8 h-8 text-indigo-600" />
@@ -43,7 +49,12 @@ export default function AircraftViewPage() {
             <div className="text-muted-foreground text-lg font-medium mt-1">{aircraft.type} &bull; Maintenance Management</div>
           </div>
         </div>
-        <div className="flex flex-col md:items-end gap-2">
+        <div className="flex gap-2 mt-2 md:mt-0">
+          <Button asChild variant="secondary" className="flex items-center gap-2" title="View all maintenance, services, and history for this aircraft">
+            <a href={`/dashboard/aircraft/view/${id}/maintenance`}>
+              Maintenance Overview <ArrowRight className="w-4 h-4" />
+            </a>
+          </Button>
         </div>
       </div>
 
@@ -56,6 +67,7 @@ export default function AircraftViewPage() {
             <TabsTrigger value="techlog" className="flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Tech Log</TabsTrigger>
             <TabsTrigger value="maintenance" className="flex items-center gap-2"><Layers className="w-4 h-4" /> Equipment</TabsTrigger>
             <TabsTrigger value="equipment" className="flex items-center gap-2"><Wrench className="w-4 h-4" /> Servicing</TabsTrigger>
+            <TabsTrigger value="maintenance-history" className="flex items-center gap-2"><Clock className="w-4 h-4" /> Maintenance History</TabsTrigger>
             <TabsTrigger value="settings" className="flex items-center gap-2"><Settings className="w-4 h-4" /> Settings</TabsTrigger>
           </TabsList>
           <TabsContent value="overview" className="w-full">
@@ -108,6 +120,9 @@ export default function AircraftViewPage() {
           </TabsContent>
           <TabsContent value="equipment" className="w-full">
             <AircraftServicingTab />
+          </TabsContent>
+          <TabsContent value="maintenance-history" className="w-full">
+            <AircraftMaintenanceHistoryTable />
           </TabsContent>
           <TabsContent value="settings" className="w-full">
             <Card className="p-6">Settings (Coming soon)</Card>
