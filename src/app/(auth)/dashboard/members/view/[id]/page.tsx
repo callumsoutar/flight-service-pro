@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { User } from "@/types/users";
-import MemberViewHeader from "@/components/members/MemberViewHeader";
 import MemberProfileCard from "@/components/members/MemberProfileCard";
 import MemberTabs from "@/components/members/MemberTabs";
+import { ArrowLeft } from "lucide-react";
 
 function formatJoinDate(dateString: string): string {
   const date = new Date(dateString);
@@ -43,12 +43,18 @@ export default async function MemberViewPage({ params }: { params: Promise<{ id:
   const joinDate = formatJoinDate(member.created_at);
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 min-h-screen">
-      <MemberViewHeader />
-      <div className="flex-1 p-6">
-        <MemberProfileCard member={member} joinDate={joinDate} />
+    <main className="w-full p-6 flex flex-col gap-8">
+      {/* Back link */}
+      <div className="flex items-center gap-2 text-lg font-semibold text-muted-foreground mb-2">
+        <a href="/dashboard/members" className="text-indigo-600 hover:underline text-base flex items-center gap-1">
+          <ArrowLeft className="w-4 h-4" /> Back to Members
+        </a>
+      </div>
+      {/* Member header and actions */}
+      <MemberProfileCard member={member} joinDate={joinDate} />
+      <div className="flex-1">
         <MemberTabs member={member} />
       </div>
-    </div>
+    </main>
   );
 } 

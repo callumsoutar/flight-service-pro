@@ -5,7 +5,7 @@ import { useState } from "react";
 import { User } from "@/types/users";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { User as UserIcon, Building, Users, CheckCircle2 } from "lucide-react";
+import { User as UserIcon, Building, Users } from "lucide-react";
 import {
   Select,
   SelectTrigger,
@@ -13,6 +13,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 
 const contactSchema = z.object({
   first_name: z.string().min(1, "Required"),
@@ -39,7 +40,6 @@ interface MemberContactTabProps {
 export default function MemberContactTab({ member }: MemberContactTabProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showSaved, setShowSaved] = useState(false);
   const {
     register,
     handleSubmit,
@@ -80,8 +80,7 @@ export default function MemberContactTab({ member }: MemberContactTabProps) {
         setError(err.error || "Failed to update member");
       } else {
         reset(data); // reset dirty state
-        setShowSaved(true);
-        setTimeout(() => setShowSaved(false), 2000);
+        toast.success("Contact information saved!");
       }
     } catch {
       setError("Failed to update member");
@@ -101,11 +100,6 @@ export default function MemberContactTab({ member }: MemberContactTabProps) {
           <Button type="button" variant="outline" size="sm" disabled={!isDirty || isSaving} onClick={() => reset()}>
             Undo
           </Button>
-          {showSaved && (
-            <span className="flex items-center gap-1 text-green-600 font-semibold text-sm ml-2 animate-fade-in">
-              <CheckCircle2 className="w-5 h-5" /> Saved!
-            </span>
-          )}
         </div>
       </div>
       {/* Personal Details Section */}

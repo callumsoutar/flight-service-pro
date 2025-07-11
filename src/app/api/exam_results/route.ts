@@ -43,17 +43,17 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ exam_results: data || [] });
 }
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   // Create exam result
   return NextResponse.json({ message: 'Create exam result - not implemented' });
 }
 
-export async function PUT(req: NextRequest) {
+export async function PUT() {
   // Update exam result
   return NextResponse.json({ message: 'Update exam result - not implemented' });
 }
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE() {
   // Delete exam result
   return NextResponse.json({ message: 'Delete exam result - not implemented' });
 } 

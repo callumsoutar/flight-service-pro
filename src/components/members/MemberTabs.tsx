@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Mail, Users, CreditCard, Calendar, History, GraduationCap, Clock } from "lucide-react";
+import { Mail, Users, CreditCard, Calendar, History, GraduationCap, Clock, BookOpen, FileText } from "lucide-react";
 import MemberContactTab from "./tabs/MemberContactTab";
 import { User } from "@/types/users";
 import MemberHistoryTab from "@/components/members/tabs/MemberHistoryTab";
@@ -14,7 +14,9 @@ const tabItems = [
   { id: "account", label: "Account", icon: CreditCard },
   { id: "flight", label: "Flight History", icon: History },
   { id: "bookings", label: "Bookings", icon: Calendar },
-  { id: "training", label: "Training", icon: GraduationCap },
+  { id: "exams", label: "Exams", icon: GraduationCap },
+  { id: "training-history", label: "Training History", icon: BookOpen },
+  { id: "lesson-debriefs", label: "Lesson Debriefs", icon: FileText },
   { id: "history", label: "History", icon: Clock },
 ];
 
@@ -73,7 +75,19 @@ export default function MemberTabs({ member }: { member: User }) {
             <p className="text-gray-600">Current and past bookings will be displayed here.</p>
           </div>
         )}
-        {selectedTab === "training" && <MemberTrainingTab memberId={member.id} />}
+        {selectedTab === "exams" && <MemberTrainingTab memberId={member.id} />}
+        {selectedTab === "training-history" && (
+          <div>
+            <h3 className="text-lg font-semibold mb-2">Training History</h3>
+            <p className="text-gray-600">Training history for this member will be displayed here.</p>
+          </div>
+        )}
+        {selectedTab === "lesson-debriefs" && (
+          <div>
+            <h3 className="text-lg font-semibold mb-2">Lesson Debriefs</h3>
+            <p className="text-gray-600">Lesson debriefs for this member will be displayed here.</p>
+          </div>
+        )}
         {selectedTab === "history" && <MemberHistoryTab member={member} />}
       </section>
     </div>

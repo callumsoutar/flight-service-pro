@@ -1,10 +1,32 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { GraduationCap } from "lucide-react";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 
+// Type for exam result with joined exam and syllabus
+interface ExamResultWithExamSyllabus {
+  id: string;
+  exam_id: string;
+  user_id: string;
+  score?: number | null;
+  result: 'PASS' | 'FAIL';
+  date_completed?: string | null;
+  kdrs_completed?: boolean | null;
+  kdrs_signed_by?: string | null;
+  organization_id: string;
+  created_at: string;
+  exam?: {
+    id: string;
+    name: string;
+    syllabus_id: string;
+    syllabus?: {
+      id: string;
+      name: string;
+    };
+  };
+}
+
 export default function MemberTrainingTab({ memberId }: { memberId: string }) {
-  const [examResults, setExamResults] = useState<any[]>([]);
+  const [examResults, setExamResults] = useState<ExamResultWithExamSyllabus[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +54,7 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
     <Card className="w-full">
       <CardContent className="py-4 px-2 sm:px-6 w-full">
         <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Exam Results</h3>
           <div className="mb-2">
             {loading ? (
               <div className="text-muted-foreground py-8 text-center">Loading exam results...</div>
