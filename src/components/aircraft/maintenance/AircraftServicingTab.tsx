@@ -18,6 +18,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import ComponentEditModal from "@/components/aircraft/maintenance/ComponentEditModal";
 import ComponentNewModal from "@/components/aircraft/maintenance/ComponentNewModal";
 import { toast } from "sonner";
+import { format } from 'date-fns';
 
 function getDueIn(comp: AircraftComponent, currentHours: number | null) {
   if (currentHours === null) return "N/A";
@@ -123,12 +124,12 @@ export default function AircraftServicingTab() {
         <Button className="bg-indigo-600 text-white font-semibold" onClick={() => setNewModalOpen(true)}>+ Add Service</Button>
       </div>
       <div className="overflow-x-auto rounded-lg border border-muted bg-white">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full text-xs">
           <thead className="bg-muted/60">
             <tr>
-              <th className="px-4 py-3 text-left font-semibold text-base w-56">Service Name</th>
-              <th className="px-4 py-3 text-center font-semibold text-base w-32">Due At (hrs)</th>
-              <th className="px-4 py-3 text-center font-semibold text-base w-40 flex items-center gap-1 justify-center">Extension Limit (hrs)
+              <th className="px-3 py-2 text-left font-semibold text-sm w-56">Service Name</th>
+              <th className="px-3 py-2 text-center font-semibold text-sm w-32">Due At (hrs)</th>
+              <th className="px-3 py-2 text-center font-semibold text-sm w-40 flex items-center gap-1 justify-center">Extension Limit (hrs)
                 <Popover>
                   <PopoverTrigger asChild>
                     <span className="ml-1 cursor-pointer align-middle"><Info className="w-4 h-4 text-muted-foreground" /></span>
@@ -138,20 +139,20 @@ export default function AircraftServicingTab() {
                   </PopoverContent>
                 </Popover>
               </th>
-              <th className="px-4 py-3 text-center font-semibold text-base w-40">Due At (date)</th>
-              <th className="px-4 py-3 text-center font-semibold text-base w-40">Days Until Service</th>
-              <th className="px-4 py-3 text-center font-semibold text-base w-40">Due In</th>
-              <th className="px-4 py-3 text-center font-semibold text-base w-32">Status</th>
-              <th className="px-4 py-3 text-center font-semibold text-base w-20">Actions</th>
+              <th className="px-3 py-2 text-center font-semibold text-sm w-40">Due At (date)</th>
+              <th className="px-3 py-2 text-center font-semibold text-sm w-40">Days Until Service</th>
+              <th className="px-3 py-2 text-center font-semibold text-sm w-40">Due In</th>
+              <th className="px-3 py-2 text-center font-semibold text-sm w-32">Status</th>
+              <th className="px-3 py-2 text-center font-semibold text-sm w-20">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="text-center py-8">Loading...</td></tr>
+              <tr><td colSpan={8} className="text-center py-6">Loading...</td></tr>
             ) : error ? (
-              <tr><td colSpan={8} className="text-center text-red-500 py-8">{error}</td></tr>
+              <tr><td colSpan={8} className="text-center text-red-500 py-6">{error}</td></tr>
             ) : components.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-8">No scheduled inspections found.</td></tr>
+              <tr><td colSpan={8} className="text-center py-6">No scheduled inspections found.</td></tr>
             ) : (
               components.map((comp) => {
                 let status = "Upcoming";
@@ -183,6 +184,7 @@ export default function AircraftServicingTab() {
                   const diff = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                   daysUntilService = diff >= 0 ? diff.toString() : "0";
                 }
+                // Due In logic (reuse from service tab)
                 return (
                   <tr
                     key={comp.id}
@@ -196,47 +198,47 @@ export default function AircraftServicingTab() {
                         : status === "Overdue"
                         ? "bg-red-50 border-l-4 border-red-400"
                         : "hover:bg-muted/40 transition-colors") +
-                      " text-base min-h-[56px]"
+                      " text-xs min-h-[44px]"
                     }
                   >
-                    <td className="px-4 py-3 text-left font-semibold align-middle w-56 whitespace-nowrap">
+                    <td className="px-3 py-2 text-left font-semibold align-middle w-56 whitespace-nowrap">
                       <div>{comp.name}</div>
                       {(status === "Within Extension") && (
                         <div className="mt-1">
-                          <Badge variant="secondary" className="bg-orange-200 text-orange-800 border-orange-300 text-xs px-2 py-0.5">Within Extension</Badge>
+                          <Badge variant="secondary" className="bg-orange-200 text-orange-800 border-orange-300 text-[10px] px-1.5 py-0.5">Within Extension</Badge>
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center font-semibold align-middle w-32">{comp.current_due_hours !== null && comp.current_due_hours !== undefined ? `${comp.current_due_hours}h` : "N/A"}</td>
-                    <td className="px-4 py-3 text-center font-semibold align-middle w-40">{comp.extension_limit_hours !== null && comp.extension_limit_hours !== undefined ? `${comp.extension_limit_hours}h` : <span className="text-muted-foreground">N/A</span>}</td>
-                    <td className="px-4 py-3 text-center font-semibold align-middle w-40">{comp.current_due_date ? new Date(comp.current_due_date).toLocaleDateString() : "N/A"}</td>
-                    <td className="px-4 py-3 text-center font-semibold align-middle w-40">{daysUntilService}</td>
-                    <td className="px-4 py-3 text-center font-semibold align-middle w-40">
+                    <td className="px-3 py-2 text-center font-semibold align-middle w-32">{comp.current_due_hours !== null && comp.current_due_hours !== undefined ? `${comp.current_due_hours}h` : "N/A"}</td>
+                    <td className="px-3 py-2 text-center font-semibold align-middle w-40">{comp.extension_limit_hours !== null && comp.extension_limit_hours !== undefined ? `${comp.extension_limit_hours}h` : <span className="text-muted-foreground">N/A</span>}</td>
+                    <td className="px-3 py-2 text-center font-semibold align-middle w-40">{comp.current_due_date ? format(new Date(comp.current_due_date), 'yyyy-MM-dd') : "N/A"}</td>
+                    <td className="px-3 py-2 text-center font-semibold align-middle w-40">{daysUntilService}</td>
+                    <td className="px-3 py-2 text-center font-semibold align-middle w-40">
                       {getDueIn(comp, currentHours)}
                     </td>
-                    <td className="px-4 py-3 text-center align-middle w-32">
+                    <td className="px-3 py-2 text-center align-middle w-32">
                       <span className="flex items-center justify-center gap-2">
                         {status === "Due Soon" && (
-                          <Badge variant="secondary" className="capitalize px-2 py-0.5 text-xs font-medium">Due Soon</Badge>
+                          <Badge variant="secondary" className="capitalize px-2 py-0.5 text-[10px] font-medium">Due Soon</Badge>
                         )}
                         {status === "Overdue" && (
-                          <Badge variant="destructive" className="capitalize px-2 py-0.5 text-xs font-medium">Overdue</Badge>
+                          <Badge variant="destructive" className="capitalize px-2 py-0.5 text-[10px] font-medium">Overdue</Badge>
                         )}
                         {status === "Overdue (after extension)" && (
-                          <Badge variant="destructive" className="capitalize px-2 py-0.5 text-xs font-medium">Overdue (after extension)</Badge>
+                          <Badge variant="destructive" className="capitalize px-2 py-0.5 text-[10px] font-medium">Overdue (after extension)</Badge>
                         )}
                         {status === "Within Extension" && (
-                          <Badge variant="secondary" className="capitalize px-2 py-0.5 text-xs font-medium">Extension</Badge>
+                          <Badge variant="secondary" className="capitalize px-2 py-0.5 text-[10px] font-medium">Extension</Badge>
                         )}
                         {status === "Upcoming" && (
-                          <Badge className="capitalize px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 border-green-300">OK</Badge>
+                          <Badge className="capitalize px-2 py-0.5 text-[10px] font-medium bg-green-100 text-green-800 border-green-300">OK</Badge>
                         )}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center align-middle w-20">
+                    <td className="px-3 py-2 text-center align-middle w-20">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 p-0"><MoreHorizontal className="w-5 h-5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 p-0"><MoreHorizontal className="w-4 h-4" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => { setSelectedComponentId(comp.id); setModalOpen(true); }}>

@@ -1,14 +1,24 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plane, Settings, Wrench, ClipboardList, History, Layers, Info, Clock, ArrowRight } from "lucide-react";
+import { Plane, Settings, Wrench, ClipboardList, History, Layers, Info, Clock, ArrowLeft } from "lucide-react";
 import AircraftMaintenanceTab from "@/components/aircraft/maintenance/AircraftMaintenanceTab";
 import AircraftServicingTab from "@/components/aircraft/maintenance/AircraftServicingTab";
 import AircraftMaintenanceHistoryTable from "@/components/aircraft/maintenance/AircraftMaintenanceHistoryTable";
 import { Button } from "@/components/ui/button";
 import { useParams } from "next/navigation";
+import AircraftHeader from "@/components/aircraft/AircraftHeader";
+
+const tabItems = [
+  { id: "overview", label: "Overview", icon: Info },
+  { id: "flight", label: "Flight History", icon: History },
+  { id: "techlog", label: "Tech Log", icon: ClipboardList },
+  { id: "equipment", label: "Equipment", icon: Layers },
+  { id: "servicing", label: "Servicing", icon: Wrench },
+  { id: "maintenance-history", label: "Maintenance History", icon: Clock },
+  { id: "settings", label: "Settings", icon: Settings },
+];
 
 export default function AircraftViewPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,52 +37,52 @@ export default function AircraftViewPage() {
     last_flight: "2024-07-01",
   };
 
-  const statusMap: Record<string, { label: string; color: string }> = {
-    available: { label: "Available", color: "bg-green-500" },
-    in_use: { label: "In Use", color: "bg-blue-600" },
-    maintenance: { label: "Maintenance", color: "bg-red-500" },
-  };
+  const [selectedTab, setSelectedTab] = useState("overview");
 
   return (
-    <main className="max-w-screen-xl mx-auto p-6 flex flex-col gap-8">
-      {/* Aircraft header and actions */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <div className="flex items-center gap-4">
-          <div className="bg-indigo-100 p-3 rounded-lg">
-            <Plane className="w-8 h-8 text-indigo-600" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-              {aircraft.registration}
-              <Badge className={`${statusMap[aircraft.status].color} text-white font-semibold px-3 py-1.5 text-xs`}>{statusMap[aircraft.status].label}</Badge>
-            </h1>
-            <div className="text-muted-foreground text-lg font-medium mt-1">{aircraft.type} &bull; Maintenance Management</div>
-          </div>
-        </div>
-        <div className="flex gap-2 mt-2 md:mt-0">
-          <Button asChild variant="secondary" className="flex items-center gap-2" title="View all maintenance, services, and history for this aircraft">
-            <a href={`/dashboard/aircraft/view/${id}/maintenance`}>
-              Maintenance Overview <ArrowRight className="w-4 h-4" />
-            </a>
-          </Button>
-        </div>
+    <main className="w-full p-6 flex flex-col gap-8">
+      {/* Back link */}
+      <div className="flex items-center gap-2 text-lg font-semibold text-muted-foreground mb-2">
+        <a href="/dashboard/aircraft" className="text-indigo-600 hover:underline text-base flex items-center gap-1">
+          <ArrowLeft className="w-4 h-4" /> Back to Aircraft
+        </a>
       </div>
-
-      {/* Tabs */}
-      <div className="flex-1 p-6">
-        <Tabs defaultValue="overview" className="w-full mt-2">
-          <TabsList className="mb-4 w-full flex flex-wrap gap-2">
-            <TabsTrigger value="overview" className="flex items-center gap-2"><Info className="w-4 h-4" /> Overview</TabsTrigger>
-            <TabsTrigger value="flight" className="flex items-center gap-2"><History className="w-4 h-4" /> Flight History</TabsTrigger>
-            <TabsTrigger value="techlog" className="flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Tech Log</TabsTrigger>
-            <TabsTrigger value="maintenance" className="flex items-center gap-2"><Layers className="w-4 h-4" /> Equipment</TabsTrigger>
-            <TabsTrigger value="equipment" className="flex items-center gap-2"><Wrench className="w-4 h-4" /> Servicing</TabsTrigger>
-            <TabsTrigger value="maintenance-history" className="flex items-center gap-2"><Clock className="w-4 h-4" /> Maintenance History</TabsTrigger>
-            <TabsTrigger value="settings" className="flex items-center gap-2"><Settings className="w-4 h-4" /> Settings</TabsTrigger>
-          </TabsList>
-          <TabsContent value="overview" className="w-full">
-            {/* Aircraft Overview Section */}
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      {/* Aircraft header and actions */}
+      <AircraftHeader aircraft={aircraft}>
+        <Button asChild variant="secondary" className="flex items-center gap-2" title="View all maintenance, services, and history for this aircraft">
+          <a href={`/dashboard/aircraft/view/${id}/maintenance`}>
+            Maintenance Overview <span><Plane className="w-4 h-4" /></span>
+          </a>
+        </Button>
+      </AircraftHeader>
+      {/* Sidebar + Content Layout */}
+      <div className="flex w-full h-[600px] min-h-[600px] bg-white rounded-2xl shadow border border-gray-200 overflow-hidden">
+        {/* Sidebar */}
+        <aside className="flex-shrink-0 h-full min-w-[210px] max-w-[240px] border-r border-gray-300 p-6 flex flex-col gap-2 bg-gray-50 z-10">
+          <div className="text-lg font-semibold mb-2 pl-1">Aircraft</div>
+          {tabItems.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = selectedTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setSelectedTab(tab.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-left transition font-medium text-base
+                  ${isActive ? "bg-primary text-primary-foreground shadow" : "hover:bg-accent hover:text-accent-foreground text-muted-foreground"}
+                `}
+                type="button"
+                aria-current={isActive}
+              >
+                <Icon className="w-5 h-5" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </aside>
+        {/* Main Content */}
+        <section className="flex-1 min-w-0 p-8 h-full overflow-y-auto">
+          {selectedTab === "overview" && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <Card className="p-6 flex flex-col items-center">
                 <div className="text-3xl font-bold text-indigo-700">{aircraft.total_hours}</div>
                 <div className="text-muted-foreground mt-1">Total Hours</div>
@@ -85,7 +95,9 @@ export default function AircraftViewPage() {
                 <div className="text-2xl font-bold text-orange-700">{aircraft.next_maintenance_date}</div>
                 <div className="text-muted-foreground mt-1">Next Scheduled</div>
               </Card>
-            </section>
+            </div>
+          )}
+          {selectedTab === "overview" && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Aircraft Details */}
               <Card className="p-6">
@@ -108,26 +120,26 @@ export default function AircraftViewPage() {
                 </div>
               </Card>
             </div>
-          </TabsContent>
-          <TabsContent value="flight" className="w-full">
+          )}
+          {selectedTab === "flight" && (
             <Card className="p-6">Flight History (Coming soon)</Card>
-          </TabsContent>
-          <TabsContent value="techlog" className="w-full">
+          )}
+          {selectedTab === "techlog" && (
             <Card className="p-6">Tech Log (Coming soon)</Card>
-          </TabsContent>
-          <TabsContent value="maintenance" className="w-full">
+          )}
+          {selectedTab === "equipment" && (
             <AircraftMaintenanceTab />
-          </TabsContent>
-          <TabsContent value="equipment" className="w-full">
+          )}
+          {selectedTab === "servicing" && (
             <AircraftServicingTab />
-          </TabsContent>
-          <TabsContent value="maintenance-history" className="w-full">
+          )}
+          {selectedTab === "maintenance-history" && (
             <AircraftMaintenanceHistoryTable />
-          </TabsContent>
-          <TabsContent value="settings" className="w-full">
+          )}
+          {selectedTab === "settings" && (
             <Card className="p-6">Settings (Coming soon)</Card>
-          </TabsContent>
-        </Tabs>
+          )}
+        </section>
       </div>
     </main>
   );
