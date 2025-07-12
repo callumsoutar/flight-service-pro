@@ -35,7 +35,7 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
         setLessons(lessonsData);
         // Collect unique instructor_ids
         const instructorIds = Array.from(new Set(progressData.map((r: LessonProgress) => r.instructor_id).filter(Boolean)));
-        let instructorMap: Record<string, User> = {};
+        const instructorMap: Record<string, User> = {};
         if (instructorIds.length > 0) {
           const usersRes = await fetch(`/api/users?ids=${instructorIds.join(",")}`);
           const usersData = await usersRes.json();

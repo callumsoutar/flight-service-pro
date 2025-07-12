@@ -9,7 +9,6 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { useOrgContext } from "@/components/OrgContextProvider";
 import { format } from "date-fns";
-import { useRef } from "react";
 import Progress from "@/components/ui/progress";
 import type { Syllabus } from "@/types/syllabus";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -137,8 +136,9 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
       // Reset modal state
       setSelectedSyllabus(""); setSelectedExam(""); setResult(""); setScore(""); setDateCompleted(undefined); setKdrsCompleted(null); setKdrsSignedBy("");
       refreshResults();
-    } catch (err: any) {
-      setModalError(err.message || "Failed to log exam result");
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to log exam result";
+      setModalError(errorMsg);
     } finally {
       setSubmitting(false);
     }

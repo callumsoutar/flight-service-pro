@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { User } from "@/types/users";
 import { Transaction } from "@/types/transactions";
 import { useOrgContext } from "@/components/OrgContextProvider";
 import { Loader2, DollarSign, FileText, CreditCard } from "lucide-react";

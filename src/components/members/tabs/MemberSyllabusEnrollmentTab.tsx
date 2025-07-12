@@ -12,10 +12,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { Syllabus } from "@/types/syllabus";
 import type { StudentSyllabusEnrollment } from "@/types/student_syllabus_enrollment";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
-import { Check, Loader2, User as UserIcon, Info } from "lucide-react";
+import { Command, CommandInput, CommandList, CommandEmpty } from "@/components/ui/command";
+import { Loader2, Info } from "lucide-react";
 import { toast } from "sonner";
 
 const enrollSchema = z.object({
@@ -74,7 +74,7 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
             });
         }
       })
-      .catch((e) => setError(e.message || "Failed to load syllabus enrollments"))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to load syllabus enrollments"))
       .finally(() => setLoading(false));
   }, [memberId, currentOrgId]);
 
@@ -102,35 +102,10 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
       const enrollmentsData = await enrollmentsRes.json();
       setEnrollments(Array.isArray(enrollmentsData.data) ? enrollmentsData.data : []);
       toast.success("Student enrolled in syllabus successfully!");
-    } catch (e: any) {
-      setError(e.message || "Failed to enroll student");
-      toast.error(e.message || "Failed to enroll student");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Change instructor for an enrollment
-  const handleInstructorChange = async (enrollmentId: string, instructor: UserResult | null) => {
-    if (!instructor) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/student_syllabus_enrollment", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: enrollmentId, primary_instructor_id: instructor.id }),
-      });
-      if (!res.ok) throw new Error("Failed to update instructor");
-      setInstructorMap((prev) => ({ ...prev, [instructor.id]: instructor }));
-      // Refresh enrollments
-      const enrollmentsRes = await fetch(`/api/student_syllabus_enrollment?user_id=${memberId}`);
-      const enrollmentsData = await enrollmentsRes.json();
-      setEnrollments(Array.isArray(enrollmentsData.data) ? enrollmentsData.data : []);
-      toast.success("Instructor changed successfully!");
-    } catch (e: any) {
-      setError(e.message || "Failed to update instructor");
-      toast.error(e.message || "Failed to update instructor");
+    } catch (e: unknown) {
+      const errorMsg = e instanceof Error ? e.message : "Failed to enroll student";
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setSubmitting(false);
     }

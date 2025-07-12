@@ -8,30 +8,14 @@ import type { LessonProgress } from "@/types/lesson_progress";
 import type { Lesson } from "@/types/lessons";
 import LessonProgressComments from "../LessonProgressComments";
 
-function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
-  return typeof (value as any)?.then === "function";
-}
-
-// Utility to strip HTML tags for SSR-safe rendering
-function htmlToPlainText(html: string): string {
-  if (!html) return "";
-  // Simple regex to remove tags (not perfect, but safe for display)
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
-
-export default async function DebriefViewPage({ params }: { params: { id: string } } | { params: Promise<{ id: string }> }) {
-  let resolvedParams: { id: string };
-  if (isPromise(params)) {
-    resolvedParams = await params;
-  } else {
-    resolvedParams = params;
-  }
-  const bookingId = resolvedParams.id;
+export default async function DebriefViewPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: bookingId } = await params;
   const supabase = await createClient();
   const cookiesList = await cookies();
   const orgId = cookiesList.get("current_org_id")?.value;
 
-  let booking: any = null;
+  // TODO: Type 'booking' properly based on the joined booking/user/lesson/aircraft structure from Supabase
+  let booking: unknown = null;
   if (orgId) {
     const { data: bookingData } = await supabase
       .from("bookings")
@@ -42,7 +26,30 @@ export default async function DebriefViewPage({ params }: { params: { id: string
     booking = bookingData;
   }
 
-  if (!booking || !booking.user) {
+  // Type guard for booking object
+  function hasProp<T extends object>(obj: unknown, prop: string): obj is T {
+    return typeof obj === "object" && obj !== null && prop in obj;
+  }
+
+  function isBooking(obj: unknown): obj is {
+    id: string;
+    user: { first_name: string; last_name: string };
+    status?: string;
+    lesson?: { name: string };
+    aircraft?: { registration: string; type?: string };
+    flight_time?: number;
+    flight_hours_logged?: number;
+  } {
+    if (typeof obj !== "object" || obj === null) return false;
+    if (!hasProp<{ user: unknown }>(obj, "user")) return false;
+    const user = (obj as { user: unknown }).user;
+    if (typeof user !== "object" || user === null) return false;
+    if (!hasProp<{ first_name: unknown }>(user, "first_name")) return false;
+    if (!hasProp<{ last_name: unknown }>(user, "last_name")) return false;
+    return true;
+  }
+
+  if (!isBooking(booking)) {
     return (
       <div className="w-full min-h-screen flex flex-col items-center justify-center">
         <div className="max-w-xl w-full p-8 text-center">
