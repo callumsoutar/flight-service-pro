@@ -18,6 +18,8 @@ export type LessonProgress = {
   areas_for_improvement: string | null;
   airmanship: string | null;
   focus_next_lesson: string | null;
+  weather_conditions: string | null;
+  safety_concerns: string | null;
 };
 
 export type LessonProgressInsert = {
@@ -38,6 +40,8 @@ export type LessonProgressInsert = {
   areas_for_improvement?: string | null;
   airmanship?: string | null;
   focus_next_lesson?: string | null;
+  weather_conditions?: string | null;
+  safety_concerns?: string | null;
 };
 
 export type LessonProgressUpdate = {
@@ -58,4 +62,6 @@ export type LessonProgressUpdate = {
   areas_for_improvement?: string | null;
   airmanship?: string | null;
   focus_next_lesson?: string | null;
+  weather_conditions?: string | null;
+  safety_concerns?: string | null;
 }; 
