@@ -43,9 +43,47 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ exam_results: data || [] });
 }
 
-export async function POST() {
-  // Create exam result
-  return NextResponse.json({ message: 'Create exam result - not implemented' });
+export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+  const {
+    exam_id,
+    user_id,
+    organization_id,
+    result,
+    score,
+    date_completed,
+    kdrs_completed,
+    kdrs_signed_by,
+  } = body;
+  if (!exam_id || !user_id || !organization_id || !result || !date_completed) {
+    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  }
+  const { data, error } = await supabase
+    .from('exam_results')
+    .insert([
+      {
+        exam_id,
+        user_id,
+        organization_id,
+        result,
+        score,
+        date_completed,
+        kdrs_completed,
+        kdrs_signed_by,
+      },
+    ])
+    .select()
+    .single();
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ exam_result: data });
 }
 
 export async function PUT() {

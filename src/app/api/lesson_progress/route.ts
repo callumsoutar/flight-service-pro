@@ -19,6 +19,8 @@ const insertSchema = z.object({
   areas_for_improvement: z.string().nullable().optional(),
   airmanship: z.string().nullable().optional(),
   focus_next_lesson: z.string().nullable().optional(),
+  weather_conditions: z.string().nullable().optional(),
+  safety_concerns: z.string().nullable().optional(),
 });
 
 const updateSchema = insertSchema.partial();

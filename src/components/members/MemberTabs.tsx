@@ -1,11 +1,14 @@
 "use client";
 import { useState } from "react";
-import { Mail, Users, CreditCard, Calendar, History, GraduationCap, Clock, BookOpen, FileText } from "lucide-react";
+import { Mail, Users, CreditCard, Calendar, History, GraduationCap, Clock, BookOpen } from "lucide-react";
 import MemberContactTab from "./tabs/MemberContactTab";
 import { User } from "@/types/users";
 import MemberHistoryTab from "@/components/members/tabs/MemberHistoryTab";
 import MemberMembershipsTab from "@/components/members/tabs/MemberMembershipsTab";
 import MemberTrainingTab from "./tabs/MemberTrainingTab";
+import MemberSyllabusEnrollmentTab from "./tabs/MemberSyllabusEnrollmentTab";
+import MemberTrainingHistoryTab from "./tabs/MemberTrainingHistoryTab";
+import MemberAccountTab from "./tabs/MemberAccountTab";
 
 const tabItems = [
   { id: "contact", label: "Contact", icon: Mail },
@@ -14,9 +17,9 @@ const tabItems = [
   { id: "account", label: "Account", icon: CreditCard },
   { id: "flight", label: "Flight History", icon: History },
   { id: "bookings", label: "Bookings", icon: Calendar },
-  { id: "exams", label: "Exams", icon: GraduationCap },
-  { id: "training-history", label: "Training History", icon: BookOpen },
-  { id: "lesson-debriefs", label: "Lesson Debriefs", icon: FileText },
+  { id: "exams", label: "Theory", icon: GraduationCap },
+  { id: "syllabus-enrollment", label: "Syllabus", icon: BookOpen },
+  { id: "training-history", label: "Progress", icon: BookOpen },
   { id: "history", label: "History", icon: Clock },
 ];
 
@@ -24,7 +27,7 @@ export default function MemberTabs({ member }: { member: User }) {
   const [selectedTab, setSelectedTab] = useState("contact");
 
   return (
-    <div className="flex w-full h-[600px] min-h-[600px] bg-white rounded-2xl shadow border border-gray-200 overflow-hidden">
+    <div className="flex w-full h-full min-h-0 bg-white rounded-2xl shadow border border-gray-200 overflow-hidden">
       {/* Sidebar */}
       <aside className="flex-shrink-0 h-full min-w-[210px] max-w-[240px] border-r border-gray-300 p-6 flex flex-col gap-2 bg-gray-50 z-10">
         <div className="text-lg font-semibold mb-2 pl-1">Member</div>
@@ -48,7 +51,7 @@ export default function MemberTabs({ member }: { member: User }) {
         })}
       </aside>
       {/* Main Content */}
-      <section className="flex-1 min-w-0 p-8 h-full overflow-y-auto">
+      <section className="flex-1 min-w-0 p-8 h-full min-h-0 overflow-y-auto">
         {selectedTab === "contact" && <MemberContactTab member={member} />}
         {selectedTab === "pilot" && (
           <div>
@@ -58,10 +61,7 @@ export default function MemberTabs({ member }: { member: User }) {
         )}
         {selectedTab === "memberships" && <MemberMembershipsTab memberId={member.id} />}
         {selectedTab === "account" && (
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Account Information</h3>
-            <p className="text-gray-600">Account settings and preferences will be displayed here.</p>
-          </div>
+          <MemberAccountTab memberId={member.id} />
         )}
         {selectedTab === "flight" && (
           <div>
@@ -76,17 +76,9 @@ export default function MemberTabs({ member }: { member: User }) {
           </div>
         )}
         {selectedTab === "exams" && <MemberTrainingTab memberId={member.id} />}
+        {selectedTab === "syllabus-enrollment" && <MemberSyllabusEnrollmentTab memberId={member.id} />}
         {selectedTab === "training-history" && (
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Training History</h3>
-            <p className="text-gray-600">Training history for this member will be displayed here.</p>
-          </div>
-        )}
-        {selectedTab === "lesson-debriefs" && (
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Lesson Debriefs</h3>
-            <p className="text-gray-600">Lesson debriefs for this member will be displayed here.</p>
-          </div>
+          <MemberTrainingHistoryTab memberId={member.id} />
         )}
         {selectedTab === "history" && <MemberHistoryTab member={member} />}
       </section>

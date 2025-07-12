@@ -43,17 +43,20 @@ export default async function MemberViewPage({ params }: { params: Promise<{ id:
   const joinDate = formatJoinDate(member.created_at);
 
   return (
-    <main className="w-full p-6 flex flex-col gap-8">
-      {/* Back link */}
-      <div className="flex items-center gap-2 text-lg font-semibold text-muted-foreground mb-2">
-        <a href="/dashboard/members" className="text-indigo-600 hover:underline text-base flex items-center gap-1">
-          <ArrowLeft className="w-4 h-4" /> Back to Members
-        </a>
-      </div>
-      {/* Member header and actions */}
-      <MemberProfileCard member={member} joinDate={joinDate} />
-      <div className="flex-1">
-        <MemberTabs member={member} />
+    <main className="w-full min-h-screen flex flex-col p-6 gap-8">
+      <div className="w-full max-w-6xl mx-auto flex flex-col gap-8">
+        {/* Back link */}
+        <div className="flex items-center gap-2 text-lg font-semibold text-muted-foreground mb-2">
+          <a href="/dashboard/members" className="text-indigo-600 hover:underline text-base flex items-center gap-1">
+            <ArrowLeft className="w-4 h-4" /> Back to Members
+          </a>
+        </div>
+        {/* Member header and actions */}
+        <MemberProfileCard member={member} joinDate={joinDate} />
+        {/* Tabs area: fixed height so parent never grows taller than viewport */}
+        <div className="w-full" style={{ height: 'calc(100vh - 200px)' }}>
+          <MemberTabs member={member} />
+        </div>
       </div>
     </main>
   );
