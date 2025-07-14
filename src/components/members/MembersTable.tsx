@@ -41,39 +41,22 @@ export default function MembersTable({ initialData }: MembersTableProps) {
   }, [initialData.members, search, roleFilter]);
 
   // Stats
-  const totalMembers = initialData.members.length;
-  const activeMembers = initialData.members.filter((m) => (m.status ?? "active") === "active").length;
-  const pendingInvites = initialData.members.filter((m) => (m.status ?? "active") === "pending").length;
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white dark:bg-zinc-950 rounded-xl shadow p-6">
-          <h3 className="text-zinc-600 dark:text-zinc-300 font-medium mb-2">Total Members</h3>
-          <p className="text-3xl font-bold text-indigo-600">{totalMembers}</p>
-        </div>
-        <div className="bg-white dark:bg-zinc-950 rounded-xl shadow p-6">
-          <h3 className="text-zinc-600 dark:text-zinc-300 font-medium mb-2">Active Members</h3>
-          <p className="text-3xl font-bold text-indigo-600">{activeMembers}</p>
-        </div>
-        <div className="bg-white dark:bg-zinc-950 rounded-xl shadow p-6">
-          <h3 className="text-zinc-600 dark:text-zinc-300 font-medium mb-2">Pending Invites</h3>
-          <p className="text-3xl font-bold text-indigo-600">{pendingInvites}</p>
-        </div>
-      </div>
-      {/* Search, Filter, Invite */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-2 mb-2">
-        <div className="flex gap-2 items-center w-full md:w-auto">
+    <div className="bg-white rounded-xl shadow p-6 flex flex-col gap-6">
+      {/* Controls Row */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-2">
+        <h2 className="text-xl font-bold">Member Directory</h2>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:items-center justify-end">
           <Input
             placeholder="Search members..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm"
+            className="w-full sm:w-56"
           />
           <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="All" />
+            <SelectTrigger className="w-full sm:w-36">
+              <SelectValue placeholder="Role" />
             </SelectTrigger>
             <SelectContent>
               {roles.map((role) => (
@@ -83,11 +66,11 @@ export default function MembersTable({ initialData }: MembersTableProps) {
               ))}
             </SelectContent>
           </Select>
+          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg shadow text-base flex items-center gap-2">
+            <UserPlus className="h-4 w-4" />
+            New Member
+          </Button>
         </div>
-        <Button className="flex items-center gap-2 ml-auto" variant="default">
-          <UserPlus className="h-4 w-4" />
-          Invite Member
-        </Button>
       </div>
       {/* Data Table */}
       <DataTable columns={columns} data={filteredMembers} />

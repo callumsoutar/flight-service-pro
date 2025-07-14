@@ -1,0 +1,107 @@
+# Aero Safety Financial Data Model & Flow (2024 Migration)
+
+## Overview
+This document explains the relationships and business logic between the following tables:
+- `users` (with `account_balance` column)
+- `invoices`
+- `invoice_items`
+- `transactions`
+- `payments`
+
+This reflects the 2024 migration where user balances are tracked directly on the `users.account_balance` column, and the legacy `account_balances` table has been removed.
+
+---
+
+## Table Summaries
+
+### 1. `users`
+- **Key fields:** `id`, `first_name`, `last_name`, `email`, ... , `account_balance`
+- **Purpose:** Represents each member/customer. The `account_balance` column tracks the user's current financial position (negative = owes money, positive = credit).
+
+### 2. `invoices`
+- **Key fields:** `id`, `user_id`, `invoice_number`, `status`, `subtotal`, `tax_rate`, `tax_amount`, `total_amount`, `paid`, `balance_due`, ...
+- **Purpose:** Represents a bill issued to a user. Tracks total, tax, amount paid, and remaining balance.
+- **Status:** Can be `draft`, `pending`, `paid`, `overdue`, `cancelled`, `refunded`.
+
+### 3. `invoice_items`
+- **Key fields:** `id`, `invoice_id`, `description`, `quantity`, `rate`, `amount`, `tax_rate`, `tax_amount`, `total_amount`
+- **Purpose:** Line items for each invoice. Each item has its own price, tax, and total.
+
+### 4. `transactions`
+- **Key fields:** `id`, `user_id`, `organization_id`, `type`, `status`, `amount`, `description`, `reference_number`, `created_at`
+- **Purpose:** General ledger of all financial events. Types include `debit` (charges), `payment` (credits), `refund`, `credit`, `adjustment`.
+- **Note:** All changes to user balances are reflected here for audit/history.
+
+### 5. `payments`
+- **Key fields:** `id`, `invoice_id`, `transaction_id`, `amount`, `payment_method`, `payment_reference`, `created_at`
+- **Purpose:** Records payments made against invoices. Each payment is linked to a transaction and an invoice.
+- **Note:**
+  - `payment_method` is an enum (`payment_method`). The API and process_payment function accept a string and cast it to the enum. Allowed values: `cash`, `credit_card`, `bank_transfer`, `direct_debit`, `cheque`, `other`. If you add new payment methods, update the enum in the database and document them here.
+
+---
+
+## Data Flow & Business Logic
+
+### 1. **Invoice Creation**
+- An invoice is created for a user, with one or more `invoice_items`.
+- Triggers/functions automatically sum up item amounts, tax, and total on the invoice.
+
+### 2. **Making a Payment**
+- When a payment is made:
+  1. The `process_payment` function is called.
+  2. A `transaction` of type `payment` is created (positive amount).
+  3. A `payment` record is created, linked to the invoice and transaction.
+  4. The user's `account_balance` is **decreased** by the payment amount (i.e., they owe less).
+  5. If the payment covers the invoice, the invoice status is set to `paid`.
+
+### 3. **Invoice Charges (Debits)**
+- When an invoice is finalized, a `transaction` of type `debit` is created (negative amount) to represent the charge to the user.
+- The user's `account_balance` is **increased** (i.e., they owe more).
+- This is typically handled by business logic outside the payment/refund functions.
+
+### 4. **Refunds**
+- When a refund is processed:
+  1. The `process_refund` function is called.
+  2. A `transaction` of type `refund` is created (negative amount).
+  3. The user's `account_balance` is **increased** by the refund amount (i.e., they are credited back).
+  4. The invoice status may be set to `refunded` if fully refunded.
+
+### 5. **Balance Calculation**
+- The user's current balance is always available in `users.account_balance`.
+- All changes to this value are made atomically in the relevant business logic functions (e.g., `process_payment`, `process_refund`).
+- The `transactions` table provides a full audit trail of all changes for reconciliation and reporting.
+
+---
+
+## Example Flow
+1. **Invoice issued:**
+   - Invoice for $100 + $15 tax = $115 total.
+   - `debit` transaction for -$115 created.
+   - `users.account_balance` increases by $115 (user owes money).
+2. **User pays $115:**
+   - `payment` transaction for $115 created.
+   - `payment` record created.
+   - `users.account_balance` decreases by $115 (balance returns to $0).
+3. **Refund $15:**
+   - `refund` transaction for -$15 created.
+   - `users.account_balance` increases by $15 (user is in credit).
+
+---
+
+## Triggers & Functions
+- Triggers on `invoice_items` and `payments` keep invoice totals and paid/balance_due fields up to date.
+- All balance changes are handled in the main business logic functions, not by triggers.
+- The `transactions` table is the source of truth for all financial events.
+
+---
+
+## Best Practices
+- Always use the provided functions (`process_payment`, `process_refund`, etc.) to update balances.
+- Use the `transactions` table for reporting, auditing, and reconciliation.
+- The `users.account_balance` column is the real-time balance for each user.
+- If you add new payment methods, update the `payment_method` enum in the database and document them in this file and the API docs.
+
+---
+
+## Migration Note
+This model replaces the legacy `account_balances` table with a single column on `users`, simplifying the schema and reducing the risk of data drift or race conditions.

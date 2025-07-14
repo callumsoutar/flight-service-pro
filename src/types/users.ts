@@ -22,4 +22,5 @@ export interface User {
   occupation?: string;
   employer?: string;
   notes?: string;
+  account_balance?: number;
 } 

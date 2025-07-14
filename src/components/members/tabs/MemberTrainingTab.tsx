@@ -13,6 +13,7 @@ import Progress from "@/components/ui/progress";
 import type { Syllabus } from "@/types/syllabus";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import React from "react";
+import { Badge } from "@/components/ui/badge";
 
 // Type for exam result with joined exam and syllabus
 interface ExamResultWithExamSyllabus {
@@ -35,6 +36,23 @@ interface ExamResultWithExamSyllabus {
       name: string;
     };
   };
+}
+
+// Helper: result to badge color
+function ResultBadge({ result }: { result?: string | null }) {
+  const normalized = (result || "").toLowerCase();
+  let color: "default" | "destructive" | "secondary" = "secondary";
+  let label = result || "-";
+  let customClass = "";
+  switch (normalized) {
+    case "pass":
+      color = "default"; label = "PASS"; customClass = "bg-green-100 text-green-800 border-green-200"; break;
+    case "fail":
+      color = "destructive"; label = "FAIL"; break;
+    default:
+      color = "secondary";
+  }
+  return <Badge variant={color} className={customClass}>{label}</Badge>;
 }
 
 export default function MemberTrainingTab({ memberId }: { memberId: string }) {
@@ -336,24 +354,24 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
                                 <div className="overflow-x-auto">
                                   <Table className="w-full min-w-[600px] border-none">
                                     <TableHeader>
-                                      <TableRow>
-                                        <TableHead>Exam</TableHead>
-                                        <TableHead>Score</TableHead>
-                                        <TableHead>Result</TableHead>
-                                        <TableHead>Date Completed</TableHead>
+                                      <TableRow className="bg-muted/40">
+                                        <TableHead className="py-3 px-4 font-semibold text-gray-700">Exam</TableHead>
+                                        <TableHead className="py-3 px-4 font-semibold text-gray-700">Score</TableHead>
+                                        <TableHead className="py-3 px-4 font-semibold text-gray-700">Result</TableHead>
+                                        <TableHead className="py-3 px-4 font-semibold text-gray-700">Date Completed</TableHead>
+                                        <TableHead className="py-3 px-4 font-semibold text-gray-700">KDRs</TableHead>
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                       {exams.map((row, i) => (
                                         <TableRow key={row.id || i} className={row.result === "FAIL" ? "bg-red-50" : ""}>
-                                          <TableCell>{row.exam?.name || "-"}</TableCell>
-                                          <TableCell>{row.score != null ? `${row.score}%` : "-"}</TableCell>
-                                          <TableCell>
-                                            <span className={row.result === "PASS" ? "text-green-700 font-semibold" : "text-red-700 font-semibold"}>
-                                              {row.result}
-                                            </span>
+                                          <TableCell className="py-3 px-4">{row.exam?.name || "-"}</TableCell>
+                                          <TableCell className="py-3 px-4">{row.score != null ? `${row.score}%` : "-"}</TableCell>
+                                          <TableCell className="py-3 px-4"><ResultBadge result={row.result} /></TableCell>
+                                          <TableCell className="py-3 px-4">{row.date_completed || "-"}</TableCell>
+                                          <TableCell className="py-3 px-4">
+                                            {row.kdrs_completed === true ? <Badge variant="default">KDRs ✓</Badge> : row.kdrs_completed === false ? <Badge variant="secondary">No</Badge> : "-"}
                                           </TableCell>
-                                          <TableCell>{row.date_completed || "-"}</TableCell>
                                         </TableRow>
                                       ))}
                                     </TableBody>

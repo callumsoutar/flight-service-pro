@@ -12,7 +12,6 @@ import {
   ColumnFiltersState,
   VisibilityState,
 } from "@tanstack/react-table";
-import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import {
   Table,
@@ -22,8 +21,6 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "../ui/dropdown-menu";
-import { ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface DataTableProps<TData extends { id?: string }, TValue> {
@@ -31,7 +28,14 @@ interface DataTableProps<TData extends { id?: string }, TValue> {
   data: TData[];
 }
 
-export function DataTable<TData extends { id?: string }, TValue>({ columns, data }: DataTableProps<TData, TValue>) {
+interface MemberLike {
+  id?: string;
+  first_name?: string;
+  last_name?: string;
+  email: string;
+}
+
+export function DataTable<TData extends MemberLike, TValue>({ columns, data }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
@@ -39,7 +43,7 @@ export function DataTable<TData extends { id?: string }, TValue>({ columns, data
   const router = useRouter();
 
   const table = useReactTable({
-    data,
+    data: data, // Use unfiltered data since search is handled in MembersTable
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -60,31 +64,6 @@ export function DataTable<TData extends { id?: string }, TValue>({ columns, data
   return (
     <div className="w-full">
       <div className="flex items-center py-4 gap-2">
-        <Input
-          placeholder="Search members..."
-          value={(table.getColumn("email")?.getFilterValue() as string) ?? ""}
-          onChange={(event) => table.getColumn("email")?.setFilterValue(event.target.value)}
-          className="max-w-sm"
-        />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto">
-              Columns <ChevronDown className="ml-2 h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {table.getAllColumns().filter((column) => column.getCanHide()).map((column) => (
-              <DropdownMenuCheckboxItem
-                key={column.id}
-                className="capitalize"
-                checked={column.getIsVisible()}
-                onCheckedChange={(value) => column.toggleVisibility(!!value)}
-              >
-                {column.id}
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
       <div className="rounded-md border">
         <Table>

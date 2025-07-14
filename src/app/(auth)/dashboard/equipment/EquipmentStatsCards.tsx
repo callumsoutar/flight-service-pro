@@ -1,6 +1,5 @@
 "use client";
 import React from "react";
-import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Wrench, Users, CheckCircle, XCircle } from "lucide-react";
 import type { Equipment } from '@/types/equipment';
 
@@ -18,42 +17,26 @@ export default function EquipmentStatsCards({ equipment }: EquipmentStatsCardsPr
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-      <Card className="shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base font-medium text-gray-700">Total Equipment</CardTitle>
-          <span className="rounded-full p-2 bg-indigo-100 text-indigo-700"><Wrench className="w-5 h-5" /></span>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-gray-900">{total}</div>
-        </CardContent>
-      </Card>
-      <Card className="shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base font-medium text-gray-700">Issued</CardTitle>
-          <span className="rounded-full p-2 bg-yellow-100 text-yellow-700"><Users className="w-5 h-5" /></span>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-gray-900">{issued}</div>
-        </CardContent>
-      </Card>
-      <Card className="shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base font-medium text-gray-700">Available</CardTitle>
-          <span className="rounded-full p-2 bg-green-100 text-green-700"><CheckCircle className="w-5 h-5" /></span>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-gray-900">{available}</div>
-        </CardContent>
-      </Card>
-      <Card className="shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base font-medium text-gray-700">Lost</CardTitle>
-          <span className="rounded-full p-2 bg-red-100 text-red-700"><XCircle className="w-5 h-5" /></span>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-gray-900">{lost}</div>
-        </CardContent>
-      </Card>
+      <div className="bg-white rounded-xl shadow p-6 flex flex-col items-start">
+        <span className="mb-2"><Wrench className="w-6 h-6 text-indigo-600" /></span>
+        <h3 className="text-zinc-600 font-medium mb-2">Total Equipment</h3>
+        <p className="text-3xl font-bold text-indigo-600">{total}</p>
+      </div>
+      <div className="bg-white rounded-xl shadow p-6 flex flex-col items-start">
+        <span className="mb-2"><Users className="w-6 h-6 text-yellow-500" /></span>
+        <h3 className="text-zinc-600 font-medium mb-2">Issued</h3>
+        <p className="text-3xl font-bold text-yellow-500">{issued}</p>
+      </div>
+      <div className="bg-white rounded-xl shadow p-6 flex flex-col items-start">
+        <span className="mb-2"><CheckCircle className="w-6 h-6 text-green-500" /></span>
+        <h3 className="text-zinc-600 font-medium mb-2">Available</h3>
+        <p className="text-3xl font-bold text-green-500">{available}</p>
+      </div>
+      <div className="bg-white rounded-xl shadow p-6 flex flex-col items-start">
+        <span className="mb-2"><XCircle className="w-6 h-6 text-red-500" /></span>
+        <h3 className="text-zinc-600 font-medium mb-2">Lost</h3>
+        <p className="text-3xl font-bold text-red-500">{lost}</p>
+      </div>
     </div>
   );
 } 

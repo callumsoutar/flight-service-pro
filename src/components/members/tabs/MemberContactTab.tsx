@@ -103,34 +103,44 @@ export default function MemberContactTab({ member }: MemberContactTabProps) {
         </div>
       </div>
       {/* Personal Details Section */}
-      <div className="mb-6">
-        <h4 className="flex items-center gap-2 text-base font-semibold mb-2 text-gray-900">
-          <UserIcon className="w-5 h-5 text-gray-500" />
+      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
+        <h4 className="flex items-center gap-2 text-base font-semibold mb-4 text-gray-900 tracking-tight">
+          <UserIcon className="w-5 h-5 text-indigo-500" />
           Personal Details
         </h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="max-w-md">
             <label className="block text-sm font-medium mb-1 text-gray-700">First Name</label>
-            <Input {...register("first_name")}/>
+            <Input {...register("first_name")}
+              className="bg-white"
+            />
             {errors.first_name && <p className="text-xs text-red-500 mt-1">{errors.first_name.message}</p>}
           </div>
           <div className="max-w-md">
             <label className="block text-sm font-medium mb-1 text-gray-700">Last Name</label>
-            <Input {...register("last_name")}/>
+            <Input {...register("last_name")}
+              className="bg-white"
+            />
             {errors.last_name && <p className="text-xs text-red-500 mt-1">{errors.last_name.message}</p>}
           </div>
           <div className="max-w-md">
             <label className="block text-sm font-medium mb-1 text-gray-700">Email</label>
-            <Input {...register("email")}/>
+            <Input {...register("email")}
+              className="bg-white"
+            />
             {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>}
           </div>
           <div className="max-w-md">
             <label className="block text-sm font-medium mb-1 text-gray-700">Phone</label>
-            <Input {...register("phone")}/>
+            <Input {...register("phone")}
+              className="bg-white"
+            />
           </div>
           <div className="max-w-md">
             <label className="block text-sm font-medium mb-1 text-gray-700">Street Address</label>
-            <Input {...register("street_address")}/>
+            <Input {...register("street_address")}
+              className="bg-white"
+            />
           </div>
           <div className="max-w-md flex gap-4">
             <div className="w-1/2 min-w-0">
@@ -162,48 +172,60 @@ export default function MemberContactTab({ member }: MemberContactTabProps) {
         </div>
       </div>
       {/* Company Details Section */}
-      <div className="mb-6">
-        <h4 className="flex items-center gap-2 text-base font-semibold mb-2 text-gray-900">
-          <Building className="w-5 h-5 text-gray-500" />
+      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
+        <h4 className="flex items-center gap-2 text-base font-semibold mb-4 text-gray-900 tracking-tight">
+          <Building className="w-5 h-5 text-indigo-500" />
           Company Details
         </h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="max-w-md">
             <label className="block text-sm font-medium mb-1 text-gray-700">Company</label>
-            <Input {...register("company_name")}/>
+            <Input {...register("company_name")}
+              className="bg-white"
+            />
           </div>
           <div className="max-w-md">
             <label className="block text-sm font-medium mb-1 text-gray-700">Occupation</label>
-            <Input {...register("occupation")}/>
+            <Input {...register("occupation")}
+              className="bg-white"
+            />
           </div>
           <div className="max-w-md">
             <label className="block text-sm font-medium mb-1 text-gray-700">Employer</label>
-            <Input {...register("employer")}/>
+            <Input {...register("employer")}
+              className="bg-white"
+            />
           </div>
         </div>
       </div>
       {/* Next of Kin Section */}
-      <div className="mb-6">
-        <h4 className="flex items-center gap-2 text-base font-semibold mb-2 text-gray-900">
-          <Users className="w-5 h-5 text-gray-500" />
+      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
+        <h4 className="flex items-center gap-2 text-base font-semibold mb-4 text-gray-900 tracking-tight">
+          <Users className="w-5 h-5 text-indigo-500" />
           Next of Kin
         </h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="max-w-md">
             <label className="block text-sm font-medium mb-1 text-gray-700">Next of Kin Name</label>
-            <Input {...register("next_of_kin_name")}/>
+            <Input {...register("next_of_kin_name")}
+              className="bg-white"
+            />
           </div>
           <div className="max-w-md">
             <label className="block text-sm font-medium mb-1 text-gray-700">Next of Kin Phone</label>
-            <Input {...register("next_of_kin_phone")}/>
+            <Input {...register("next_of_kin_phone")}
+              className="bg-white"
+            />
           </div>
         </div>
       </div>
       {/* Notes Section */}
-      <div className="mb-2">
-        <h4 className="text-base font-semibold mb-2 text-gray-900">Notes</h4>
+      <div className="mb-2 bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
+        <h4 className="text-base font-semibold mb-4 text-gray-900 tracking-tight">Notes</h4>
         <div className="max-w-md">
-          <Input {...register("notes")}/>
+          <Input {...register("notes")}
+            className="bg-white"
+          />
         </div>
       </div>
       {error && <p className="text-xs text-red-500 mt-2">{error}</p>}

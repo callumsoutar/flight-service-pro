@@ -26,46 +26,52 @@ The Aero Safety invoicing system is designed for robust, auditable, and secure f
   - `amount`, `tax_rate`, `tax_amount`, `total_amount`
   - `created_at`, `updated_at`
 
+### 3. `transactions`
+- **Purpose:** General ledger of all financial events (debits, payments, refunds, adjustments).
+- **Key Fields:**
+  - `id`, `organization_id`, `user_id`, `type`, `status`, `amount`, `description`, `metadata`, `reference_number`, `created_at`, `completed_at`
+
+### 4. `payments`
+- **Purpose:** Records payments made against invoices, linked to both the invoice and a transaction.
+- **Key Fields:**
+  - `id`, `organization_id`, `invoice_id`, `transaction_id`, `amount`, `payment_method`, `payment_reference`, `created_at`, `updated_at`
+- **Note:**
+  - `payment_method` is an enum (`payment_method`). The API and process_payment function accept a string and cast it to the enum. Allowed values: `cash`, `credit_card`, `bank_transfer`, `direct_debit`, `cheque`, `other`. If you add new payment methods, update the enum in the database and document them here.
+
+### 5. `users`
+- **Purpose:** Stores user/member info and their real-time `account_balance`.
+- **Key Fields:**
+  - `id`, `account_balance`, ...
+
 ---
 
 ## Triggers & Functions (Database Logic)
 
 ### `invoice_items` Table
-
-#### 1. `calculate_invoice_item_amounts_trigger`
-- **Events:** `INSERT`, `UPDATE`
-- **Function:** `calculate_invoice_item_amounts()`
-- **Logic:**
-  - Sets `tax_rate` to 0.15 (15%)
-  - Calculates `amount` (tax-exclusive): `rate * quantity`
-  - Calculates `tax_amount`: `amount * tax_rate` (rounded to 2 decimals)
-  - Calculates `total_amount`: `amount + tax_amount`
-
-#### 2. `update_invoice_totals_on_item_change`
-- **Events:** `INSERT`, `UPDATE`, `DELETE`
-- **Function:** `update_invoice_totals()`
-- **Logic:**
-  - Sums all `amount`, `tax_amount`, and `total_amount` for the invoice's items
-  - Updates the parent invoice's `subtotal`, `tax_amount`, `total_amount`, and `tax_rate` (always 0.15)
-  - Updates `updated_at` timestamp
+- **calculate_invoice_item_amounts_trigger**: On `INSERT`/`UPDATE`, calculates amounts/tax/total.
+- **update_invoice_totals_on_item_change**: On `INSERT`/`UPDATE`/`DELETE`, updates parent invoice totals.
 
 ### `invoices` Table
+- **ensure_invoice_number**: On `INSERT`, sets invoice number.
+- **trg_update_invoice_balance_due**: On `UPDATE`, updates `balance_due`.
+- **update_invoice_status_on_payment**: On `UPDATE`, updates status based on payment.
+- **trg_invoice_approval**: On `UPDATE`, when status changes from `draft` to `pending`, calls `process_invoice_approval()` to create a debit transaction and update the user's account balance.
+- **trg_invoice_sync_debit**: On `UPDATE`, if an approved invoice's total changes, calls `sync_invoice_debit_transaction()` to update the transaction and balance.
+- **trg_invoice_reverse_debit**: On `UPDATE` or `DELETE`, if an approved invoice is cancelled or deleted, calls `reverse_invoice_debit_transaction()` to reverse the transaction and balance.
 
-#### 1. `ensure_invoice_number`
-- **Event:** `INSERT`
-- **Function:** `set_invoice_number()`
-- **Logic:** Ensures every invoice has a unique, generated invoice number if not provided.
+### `payments` Table
+- **trg_update_invoice_payment_totals**: On `INSERT`/`UPDATE`/`DELETE`, updates invoice paid/balance_due.
 
-#### 2. `update_invoice_status_on_payment`
-- **Event:** `UPDATE`
-- **Function:** `update_invoice_status()`
-- **Logic:**
-  - If `paid_date` is set, status becomes `paid`.
-  - If `paid_date` is unset, status is `overdue` if `due_date` is past, otherwise `pending`.
+### `transactions` Table
+- **transaction_status_update**: On `UPDATE`, updates transaction status.
+
+### `users` Table
+- **set_updated_at_users**: On `UPDATE`, updates timestamp.
+- **on_auth_user_created**: On `INSERT`, handles new user creation.
 
 ---
 
-## Application Workflow
+## Application Workflow (Updated)
 
 ### 1. **Invoice Creation (Client-Side Draft)**
 - **Initial State:**  
@@ -84,21 +90,29 @@ The Aero Safety invoicing system is designed for robust, auditable, and secure f
   - All calculations (amounts, tax, totals) are performed in the database via triggers.
   - The UI displays real-time calculated totals (subtotal, tax, total).
 
-### 3. **Invoice Items**
-- **Adding Items:**
-  - User selects a chargeable and quantity.
-  - Client calculates a preview, but the database recalculates and stores the canonical values.
-  - On add, a POST to `/api/invoice_items` creates the item and triggers recalculation of invoice totals.
-- **Editing/Deleting Items:**
-  - Any change triggers recalculation of the parent invoice's totals in the database.
+### 3. **Invoice Approval (Draft → Pending)**
+- **When the invoice is approved (status changes from `draft` to `pending`):**
+  - A `debit` transaction is created in the `transactions` table for the invoice total (negative amount).
+  - The user's `account_balance` is increased by the invoice total (they now owe this amount).
+  - This is handled by the `process_invoice_approval()` function and trigger.
 
-### 4. **Invoice Status & Payment**
+### 4. **Invoice Total Update (After Approval)**
+- **If the invoice total is updated after approval:**
+  - The corresponding `debit` transaction and the user's `account_balance` are updated to reflect the new amount.
+  - This is handled by the `sync_invoice_debit_transaction()` function and trigger.
+
+### 5. **Invoice Cancellation/Deletion**
+- **If an approved invoice is cancelled or deleted:**
+  - The `debit` transaction is reversed (status set to `reversed`), and the user's `account_balance` is updated accordingly.
+  - This is handled by the `reverse_invoice_debit_transaction()` function and triggers.
+
+### 6. **Invoice Status & Payment**
 - **Status Transitions:**
   - When `paid_date` is set (via PATCH to `/api/invoices`), the status is set to `paid`.
   - If `paid_date` is unset, status is `pending` or `overdue` based on `due_date`.
 - **All status logic is enforced in the database.**
 
-### 5. **Invoice Listing & Viewing**
+### 7. **Invoice Listing & Viewing**
 - **Route:** `/dashboard/invoices`
   - Lists all invoices for the current organization.
   - Fetches joined user/member info for display.
@@ -112,14 +126,17 @@ The Aero Safety invoicing system is designed for robust, auditable, and secure f
 ### `/api/invoices`
 - **GET:** List all invoices for the current organization (with user info).
 - **POST:** Create a new draft invoice (requires `organization_id` and `user_id`).
-- **PATCH:** (Planned) Update invoice fields (dates, reference, status, etc.).
-- **DELETE:** (Planned) Delete an invoice.
+- **PATCH:** Update invoice fields (dates, reference, status, etc.).
+- **DELETE:** Delete an invoice.
 
 ### `/api/invoice_items`
 - **GET:** List all items for a given invoice.
 - **POST:** Add a new item to an invoice.
-- **PATCH:** (Planned) Update an invoice item.
-- **DELETE:** (Planned) Delete an invoice item.
+- **PATCH:** Update an invoice item.
+- **DELETE:** Delete an invoice item.
+
+### `/api/payments`
+- **POST:** Create a new payment. Accepts `payment_method` as a string (must match the enum values in the database).
 
 ---
 
@@ -129,16 +146,17 @@ The Aero Safety invoicing system is designed for robust, auditable, and secure f
 - **Tax rate is stored per item and invoice** to ensure historical rates are preserved.
 - **Never recalculate historical values on the client.**
 - **Triggers ensure that all totals and statuses are always correct and up-to-date.**
-- **All business logic for calculations and status is enforced at the database level for security and consistency.**
+- **All business logic for calculations, status, and account balances is enforced at the database level for security and consistency.**
 - **The system is designed for immutability and auditability, critical for financial data.**
 - **Client-side logic** is used for draft creation and UI feedback, but all financial and status logic is enforced in the database.
 - **API endpoints** are RESTful and secure, requiring authentication and organization context.
 - **All calculations and status transitions** are immutable and auditable, supporting aviation compliance needs.
 - **Extensibility:** The system is designed to support future features like refunds, credit notes, and multi-currency.
+- **If you add new payment methods, update the `payment_method` enum in the database and document them in this file and the API docs.**
 
 ---
 
-## Sequence Diagram: Invoice Workflow
+## Sequence Diagram: Invoice Workflow (Updated)
 
 ```
 sequenceDiagram
@@ -159,25 +177,47 @@ sequenceDiagram
     API->>DB: INSERT invoice_items
     DB->>DB: calculate_invoice_item_amounts()
     DB->>DB: update_invoice_totals()
-    User->>Client: Update/Delete Invoice Item
-    Client->>API: PATCH/DELETE /api/invoice_items
-    API->>DB: UPDATE/DELETE invoice_items
-    DB->>DB: calculate_invoice_item_amounts()/update_invoice_totals()
+    User->>Client: Approve Invoice
+    Client->>API: PATCH /api/invoices (set status=pending)
+    API->>DB: UPDATE invoices
+    DB->>DB: process_invoice_approval()
+    DB->>DB: INSERT transactions (debit)
+    DB->>DB: UPDATE users.account_balance
+    User->>Client: Update Invoice Total
+    Client->>API: PATCH /api/invoices (update total)
+    API->>DB: UPDATE invoices
+    DB->>DB: sync_invoice_debit_transaction()
+    DB->>DB: UPDATE transactions (debit)
+    DB->>DB: UPDATE users.account_balance
+    User->>Client: Cancel/Delete Invoice
+    Client->>API: PATCH/DELETE /api/invoices
+    API->>DB: UPDATE/DELETE invoices
+    DB->>DB: reverse_invoice_debit_transaction()
+    DB->>DB: UPDATE transactions (debit status=reversed)
+    DB->>DB: UPDATE users.account_balance
     User->>Client: Mark Invoice Paid
     Client->>API: PATCH /api/invoices (set paid_date)
     API->>DB: UPDATE invoices
     DB->>DB: update_invoice_status()
+    User->>Client: Make Payment
+    Client->>API: POST /api/payments
+    API->>DB: process_payment()
+    DB->>DB: INSERT transactions (payment)
+    DB->>DB: UPDATE users.account_balance
 ```
 
 ---
 
-## Summary Table: Key Flows
+## Summary Table: Key Flows (Updated)
 
 | Action                | Where Performed | DB Trigger/Function         | API Route                | Notes                                  |
 |-----------------------|-----------------|----------------------------|--------------------------|----------------------------------------|
 | Create Invoice        | Client → API    | set_invoice_number()       | POST /api/invoices       | Only after member is selected          |
 | Add Invoice Item      | Client → API    | calculate_invoice_item_amounts(), update_invoice_totals() | POST /api/invoice_items | All calculations in DB                 |
 | Edit/Delete Item      | Client → API    | update_invoice_totals()    | PATCH/DELETE /api/invoice_items | Always recalculates parent invoice     |
+| Approve Invoice       | Client → API    | process_invoice_approval() | PATCH /api/invoices      | Creates debit transaction, updates balance |
+| Update Invoice Total  | Client → API    | sync_invoice_debit_transaction() | PATCH /api/invoices      | Keeps transaction and balance in sync  |
+| Cancel/Delete Invoice | Client → API    | reverse_invoice_debit_transaction() | PATCH/DELETE /api/invoices | Reverses transaction and balance       |
 | Mark as Paid          | Client → API    | update_invoice_status()    | PATCH /api/invoices      | Sets status to paid, or overdue/pending|
 | List Invoices         | API             |                            | GET /api/invoices        | Joins user info                        |
 | List Invoice Items    | API             |                            | GET /api/invoice_items   | For a given invoice                    |
