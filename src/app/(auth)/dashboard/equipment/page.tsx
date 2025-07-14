@@ -1,5 +1,3 @@
-import { Button } from "@/components/ui/button";
-import { PackagePlus } from "lucide-react";
 import EquipmentStatsCards from "./EquipmentStatsCards";
 import EquipmentTable from "./EquipmentTable";
 import { cookies } from 'next/headers';
@@ -23,9 +21,6 @@ export default async function EquipmentPage() {
           <h1 className="text-3xl font-bold tracking-tight">Equipment</h1>
           <p className="text-muted-foreground mt-2">Manage your equipment inventory and issuance</p>
         </div>
-        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-lg shadow text-base flex items-center gap-2">
-          <PackagePlus className="w-5 h-5" /> Add Equipment
-        </Button>
       </div>
       <EquipmentStatsCards equipment={equipment} />
       <EquipmentTable equipment={equipment} />
