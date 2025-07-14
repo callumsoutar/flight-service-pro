@@ -1,11 +1,9 @@
 import React from "react";
-import InvoicesTable from "@/components/invoices/InvoicesTable";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-
-// Move InvoiceSummaryCards to a client wrapper
+import { Button } from "@/components/ui/button";
 import InvoiceSummaryCardsClient from "@/components/invoices/InvoiceSummaryCardsClient";
+import InvoicesClientView from "@/components/invoices/InvoicesClientView";
 
 export default function InvoicesPage() {
   return (
@@ -18,14 +16,13 @@ export default function InvoicesPage() {
           </p>
         </div>
         <Link href="/dashboard/invoices/new">
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg shadow text-base flex items-center gap-2">
+          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-lg shadow text-base flex items-center gap-2">
             <Plus className="w-5 h-5" /> New Invoice
           </Button>
         </Link>
       </div>
-      {/* Render summary cards via client wrapper */}
       <InvoiceSummaryCardsClient />
-      <InvoicesTable />
+      <InvoicesClientView />
     </main>
   );
 } 

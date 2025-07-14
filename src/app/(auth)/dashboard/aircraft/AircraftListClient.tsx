@@ -17,6 +17,20 @@ export default function AircraftListClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const [search, setSearch] = React.useState("");
+
+  // Custom filter for registration, type, or status
+  const filteredAircraft = React.useMemo(() => {
+    if (!search) return aircraftList;
+    const q = search.toLowerCase();
+    return aircraftList.filter((ac) => {
+      return (
+        (ac.registration && ac.registration.toLowerCase().includes(q)) ||
+        (ac.type && ac.type.toLowerCase().includes(q)) ||
+        (ac.status && ac.status.toLowerCase().includes(q))
+      );
+    });
+  }, [aircraftList, search]);
 
   useEffect(() => {
     async function fetchAircraft() {
@@ -54,45 +68,72 @@ export default function AircraftListClient() {
   }
 
   return (
-    <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {aircraftList.map((ac) => (
-        <div
-          key={ac.id}
-          className="rounded-xl border bg-white p-6 flex flex-col shadow-sm hover:shadow-lg transition cursor-pointer group"
-          tabIndex={0}
-          role="button"
-          onClick={() => router.push(`/dashboard/aircraft/view/${ac.id}`)}
-        >
-          <div className="flex items-center gap-4 mb-4">
-            <Image
-              src={ac.aircraft_image_url || "/aircraft-placeholder.jpg"}
-              alt={ac.registration}
-              width={64}
-              height={64}
-              className="w-16 h-16 object-cover rounded-md border"
-              style={{ background: '#f3f4f6' }}
-              priority={true}
-            />
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl font-extrabold tracking-wide font-mono">{ac.registration}</span>
-                <Badge className={`${statusMap[ac.status ?? "available"]?.color || "bg-gray-400"} text-white font-semibold px-3 py-1.5 text-xs`}>
-                  {statusMap[ac.status ?? "available"]?.label || ac.status || "Unknown"}
-                </Badge>
-              </div>
-              <div className="text-muted-foreground text-base font-medium">{ac.type}</div>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1 text-sm mb-2">
-            <div className="flex justify-between"><span>Total Hours:</span> <span className="font-bold">{ac.total_hours}h</span></div>
-            <div className="flex justify-between"><span>Last Maintenance:</span> <span className="font-bold">{ac.last_maintenance_date ? ac.last_maintenance_date.split("T")[0] : "-"}</span></div>
-            <div className="flex justify-between"><span>Next Due:</span> <span className="font-bold">{ac.next_maintenance_date ? ac.next_maintenance_date.split("T")[0] : "-"}</span></div>
-          </div>
-          <div className="mt-4 pt-2 border-t text-xs text-muted-foreground flex items-center gap-1 group-hover:text-indigo-600">
-            Click to view maintenance details <span aria-hidden>→</span>
-          </div>
-        </div>
-      ))}
-    </section>
+    <div className="w-full">
+      <div className="flex items-center py-4 gap-2">
+        <input
+          type="text"
+          placeholder="Search aircraft..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-sm border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+      <div className="rounded-md border overflow-x-auto">
+        <table className="min-w-full bg-white rounded-xl">
+          <thead>
+            <tr className="text-left text-zinc-600 text-sm border-b">
+              <th className="py-3 px-4">Image</th>
+              <th className="py-3 px-4">Registration</th>
+              <th className="py-3 px-4">Type</th>
+              <th className="py-3 px-4">Status</th>
+              <th className="py-3 px-4">Total Hours</th>
+              <th className="py-3 px-4">Last Maintenance</th>
+              <th className="py-3 px-4">Next Due</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredAircraft.length ? (
+              filteredAircraft.map((ac) => (
+                <tr
+                  key={ac.id}
+                  className="hover:bg-indigo-50 transition cursor-pointer border-b"
+                  tabIndex={0}
+                  role="button"
+                  onClick={() => router.push(`/dashboard/aircraft/view/${ac.id}`)}
+                >
+                  <td className="py-3 px-4">
+                    <Image
+                      src={ac.aircraft_image_url || "/aircraft-placeholder.jpg"}
+                      alt={ac.registration}
+                      width={48}
+                      height={48}
+                      className="w-12 h-12 object-cover rounded border"
+                      style={{ background: '#f3f4f6' }}
+                      priority={true}
+                    />
+                  </td>
+                  <td className="py-3 px-4 font-mono font-bold text-base">{ac.registration}</td>
+                  <td className="py-3 px-4">{ac.type}</td>
+                  <td className="py-3 px-4">
+                    <Badge className={`${statusMap[ac.status ?? "available"]?.color || "bg-gray-400"} text-white font-semibold px-3 py-1.5 text-xs`}>
+                      {statusMap[ac.status ?? "available"]?.label || ac.status || "Unknown"}
+                    </Badge>
+                  </td>
+                  <td className="py-3 px-4">{ac.total_hours}h</td>
+                  <td className="py-3 px-4">{ac.last_maintenance_date ? ac.last_maintenance_date.split("T")[0] : "-"}</td>
+                  <td className="py-3 px-4">{ac.next_maintenance_date ? ac.next_maintenance_date.split("T")[0] : "-"}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={7} className="h-24 text-center text-muted-foreground">
+                  No results.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 } 

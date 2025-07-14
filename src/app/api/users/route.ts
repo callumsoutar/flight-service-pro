@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   // Fetch all users in the org (as in BookingDetails.tsx)
   const { data, error } = await supabase
     .from("user_organizations")
-    .select("user_id, users(first_name, last_name, email)")
+    .select("user_id, users(first_name, last_name, email, account_balance)")
     .eq("organization_id", currentOrgId);
 
   if (error) {
@@ -38,13 +38,14 @@ export async function GET(req: NextRequest) {
   console.log("[API /users] Raw data:", JSON.stringify(data));
 
   // Map and filter in JS
-  let users = (data || []).map((row: { user_id: string; users: { first_name?: string; last_name?: string; email?: string } | { first_name?: string; last_name?: string; email?: string }[] }) => {
+  let users = (data || []).map((row: { user_id: string; users: { first_name?: string; last_name?: string; email?: string; account_balance?: number } | { first_name?: string; last_name?: string; email?: string; account_balance?: number }[] }) => {
     const userObj = Array.isArray(row.users) ? row.users[0] : row.users;
     return {
       id: row.user_id,
       first_name: userObj?.first_name || "",
       last_name: userObj?.last_name || "",
       email: userObj?.email || "",
+      account_balance: userObj?.account_balance ?? 0,
     };
   });
 

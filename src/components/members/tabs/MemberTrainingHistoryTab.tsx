@@ -6,6 +6,8 @@ import { useOrgContext } from "@/components/OrgContextProvider";
 import type { LessonProgress } from "@/types/lesson_progress";
 import type { Lesson } from "@/types/lessons";
 import type { User } from "@/types/users";
+import { useRouter } from "next/navigation";
+import { Badge } from "@/components/ui/badge";
 
 interface MemberTrainingHistoryTabProps {
   memberId: string;
@@ -13,6 +15,7 @@ interface MemberTrainingHistoryTabProps {
 
 export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHistoryTabProps) {
   const { currentOrgId } = useOrgContext();
+  const router = useRouter();
   const [records, setRecords] = useState<LessonProgress[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [instructors, setInstructors] = useState<Record<string, User>>({});
@@ -63,6 +66,32 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
     return [u.first_name, u.last_name].filter(Boolean).join(" ") || u.email || id;
   }
 
+  // Helper: status to badge color
+  function StatusBadge({ status }: { status?: string | null }) {
+    const normalized = (status || "").toLowerCase();
+    let color: "default" | "secondary" | "destructive" | "outline" = "secondary";
+    let label = status || "-";
+    let customClass = "";
+    switch (normalized) {
+      case "pass":
+      case "passed":
+        color = "default"; label = label.charAt(0).toUpperCase() + label.slice(1); customClass = "bg-green-100 text-green-800 border-green-200"; break;
+      case "complete":
+        color = "default"; label = label.charAt(0).toUpperCase() + label.slice(1); break;
+      case "fail":
+      case "failed":
+        color = "destructive"; label = label.charAt(0).toUpperCase() + label.slice(1); break;
+      case "in progress":
+      case "progress":
+        color = "outline"; label = "In Progress"; break;
+      case "unattempted":
+        color = "secondary"; label = "Unattempted"; break;
+      default:
+        color = "secondary";
+    }
+    return <Badge variant={color} className={customClass}>{label}</Badge>;
+  }
+
   return (
     <Card className="w-full">
       <CardContent className="py-4 px-2 sm:px-6 w-full">
@@ -79,24 +108,35 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
               <div className="overflow-x-auto">
                 <Table className="min-w-[600px]">
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Lesson</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Attempt</TableHead>
-                      <TableHead>Instructor</TableHead>
+                    <TableRow className="bg-muted/40">
+                      <TableHead className="py-3 px-4 font-semibold text-gray-700">Date</TableHead>
+                      <TableHead className="py-3 px-4 font-semibold text-gray-700">Lesson</TableHead>
+                      <TableHead className="py-3 px-4 font-semibold text-gray-700">Status</TableHead>
+                      <TableHead className="py-3 px-4 font-semibold text-gray-700">Attempt</TableHead>
+                      <TableHead className="py-3 px-4 font-semibold text-gray-700">Instructor</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {records.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.date ? new Date(row.date).toLocaleDateString() : "-"}</TableCell>
-                        <TableCell>{row.lesson_id ? lessonNameMap[row.lesson_id] || row.lesson_id : "-"}</TableCell>
-                        <TableCell>{row.status || "-"}</TableCell>
-                        <TableCell>{row.attempt != null ? row.attempt : "-"}</TableCell>
-                        <TableCell>{getInstructorName(row.instructor_id)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {records.map((row) => {
+                      const isClickable = !!row.booking_id;
+                      return (
+                        <TableRow
+                          key={row.id}
+                          className={
+                            (isClickable ? "cursor-pointer hover:bg-blue-50 transition" : "") +
+                            " group border-b last:border-0 hover:shadow-sm hover:z-10"
+                          }
+                          onClick={isClickable ? () => router.push(`/dashboard/bookings/debrief/view/${row.booking_id}`) : undefined}
+                          style={{ height: 56 }}
+                        >
+                          <TableCell className="py-3 px-4">{row.date ? new Date(row.date).toLocaleDateString() : "-"}</TableCell>
+                          <TableCell className="py-3 px-4">{row.lesson_id ? lessonNameMap[row.lesson_id] || row.lesson_id : "-"}</TableCell>
+                          <TableCell className="py-3 px-4"><StatusBadge status={row.status} /></TableCell>
+                          <TableCell className="py-3 px-4">{row.attempt != null ? row.attempt : "-"}</TableCell>
+                          <TableCell className="py-3 px-4">{getInstructorName(row.instructor_id)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

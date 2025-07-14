@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/SupabaseServerClient";
 import BookingsTable from "./BookingsTable";
 import type { Booking } from "@/types/bookings";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { CalendarDays, Clock, AlertCircle, Send } from "lucide-react";
 
 function getStatusCounts(bookings: Booking[]) {
   const counts = { total: bookings.length, today: 0, unconfirmed: 0, confirmed: 0, flying: 0 };
@@ -22,13 +22,12 @@ export default async function BookingsPage() {
   const supabase = await createClient();
   const cookieStore = await cookies();
   const orgId = cookieStore.get("current_org_id")?.value;
-  console.log("[BookingsPage] orgId:", orgId);
   let bookings: Booking[] = [];
   let members: { id: string; name: string }[] = [];
   let instructors: { id: string; name: string }[] = [];
   let aircraftList: { id: string; registration: string; type: string }[] = [];
   if (orgId) {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("bookings")
       .select(`
         id,
@@ -57,8 +56,6 @@ export default async function BookingsPage() {
       `)
       .eq("organization_id", orgId)
       .order("start_time", { ascending: false });
-    if (error) console.log("[BookingsPage] Supabase error:", error);
-    console.log("[BookingsPage] Raw bookings data:", data);
     bookings = (data ?? []) as Booking[];
 
     // Fetch all members (users in org)
@@ -111,40 +108,41 @@ export default async function BookingsPage() {
   const statusCounts = getStatusCounts(bookings);
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900 mb-1">Bookings</h1>
+    <main className="flex flex-col gap-8 p-6 md:p-10">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Bookings</h1>
+          <p className="text-muted-foreground mt-2">Manage and track all your flight bookings</p>
+        </div>
         <Link href="/dashboard/bookings/new">
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg shadow">+ New Booking</Button>
+          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-lg shadow text-base flex items-center gap-2">
+            <Send className="w-5 h-5" /> New Booking
+          </Button>
         </Link>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">Total</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">{statusCounts.total}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">Today</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">{statusCounts.today}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">Unconfirmed</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">{statusCounts.unconfirmed}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">Flying</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">{statusCounts.flying}</CardContent>
-        </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+        <div className="bg-white rounded-xl shadow p-6 flex flex-col items-start">
+          <span className="mb-2"><CalendarDays className="w-6 h-6 text-indigo-600" /></span>
+          <h3 className="text-zinc-600 font-medium mb-2">Total</h3>
+          <p className="text-3xl font-bold text-indigo-600">{statusCounts.total}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow p-6 flex flex-col items-start">
+          <span className="mb-2"><Clock className="w-6 h-6 text-green-600" /></span>
+          <h3 className="text-zinc-600 font-medium mb-2">Today</h3>
+          <p className="text-3xl font-bold text-green-600">{statusCounts.today}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow p-6 flex flex-col items-start">
+          <span className="mb-2"><AlertCircle className="w-6 h-6 text-yellow-600" /></span>
+          <h3 className="text-zinc-600 font-medium mb-2">Unconfirmed</h3>
+          <p className="text-3xl font-bold text-yellow-600">{statusCounts.unconfirmed}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow p-6 flex flex-col items-start">
+          <span className="mb-2"><Send className="w-6 h-6 text-blue-600" /></span>
+          <h3 className="text-zinc-600 font-medium mb-2">Flying</h3>
+          <p className="text-3xl font-bold text-blue-600">{statusCounts.flying}</p>
+        </div>
       </div>
       <BookingsTable bookings={bookings} members={members} instructors={instructors} aircraftList={aircraftList} />
-    </div>
+    </main>
   );
 } 

@@ -54,7 +54,7 @@ export default async function MemberViewPage({ params }: { params: Promise<{ id:
         {/* Member header and actions */}
         <MemberProfileCard member={member} joinDate={joinDate} />
         {/* Tabs area: fixed height so parent never grows taller than viewport */}
-        <div className="w-full" style={{ height: 'calc(100vh - 200px)' }}>
+        <div className="w-full">
           <MemberTabs member={member} />
         </div>
       </div>
