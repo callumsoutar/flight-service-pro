@@ -24,6 +24,7 @@ import type { UserResult } from '@/components/invoices/MemberSelect';
 
 interface EquipmentTableProps {
   equipment: Equipment[];
+  openIssuanceByEquipmentId: Record<string, EquipmentIssuance>;
 }
 
 const EQUIPMENT_TYPE_OPTIONS: { value: EquipmentType; label: string }[] = [
@@ -41,32 +42,17 @@ const EQUIPMENT_TYPE_OPTIONS: { value: EquipmentType; label: string }[] = [
   { value: 'Other', label: 'Other' },
 ];
 
-export default function EquipmentTable({ equipment }: EquipmentTableProps) {
+export default function EquipmentTable({ equipment, openIssuanceByEquipmentId }: EquipmentTableProps) {
   // Use state for equipment list so we can update it on add
   const [equipmentList, setEquipmentList] = useState<Equipment[]>(Array.isArray(equipment) ? equipment : []);
 
   // Tabs state
   const [tab, setTab] = useState<string>('all');
 
-  // State for open issuances (map by equipment_id)
-  const [openIssuanceByEquipmentId, setOpenIssuanceByEquipmentId] = useState<Record<string, EquipmentIssuance>>({});
-  const [loadingOpenIssuances, setLoadingOpenIssuances] = useState(false);
+  // Remove local openIssuanceByEquipmentId and loadingOpenIssuances state and fetching logic
+  // Keep issuedUsers and loadingUsers logic as is, but depend on the prop
   const [issuedUsers, setIssuedUsers] = useState<Record<string, UserResult>>({});
   const [loadingUsers, setLoadingUsers] = useState(false);
-
-  // Fetch all open issuances for the org on mount
-  useEffect(() => {
-    setLoadingOpenIssuances(true);
-    fetch('/api/equipment_issuance?open_only=true')
-      .then(res => res.json())
-      .then(data => {
-        const arr = Array.isArray(data.issuances) ? data.issuances : [];
-        const map: Record<string, EquipmentIssuance> = {};
-        arr.forEach((i: EquipmentIssuance) => { map[i.equipment_id] = i; });
-        setOpenIssuanceByEquipmentId(map);
-      })
-      .finally(() => setLoadingOpenIssuances(false));
-  }, []);
 
   // Fetch users for issued_to when openIssuanceByEquipmentId changes
   useEffect(() => {
@@ -127,10 +113,20 @@ export default function EquipmentTable({ equipment }: EquipmentTableProps) {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const router = useRouter();
 
+  // Helper: get effective status for badge (open issuance takes precedence)
+  function getEffectiveStatus(item: Equipment) {
+    if (openIssuanceByEquipmentId[item.id]) {
+      return 'Issued';
+    }
+    return item.status;
+  }
+
   // Helper: get status badge color
   function statusColor(status: string) {
     switch (status?.toLowerCase()) {
-      case "available": return "bg-green-100 text-green-800";
+      case "available":
+      case "active":
+        return "bg-green-100 text-green-800";
       case "issued": return "bg-blue-100 text-blue-800";
       case "lost":
       case "stolen":
@@ -358,7 +354,7 @@ export default function EquipmentTable({ equipment }: EquipmentTableProps) {
         </div>
       </div>
       {/* Data Table */}
-      {loadingOpenIssuances ? (
+      {loadingUsers ? (
         <div className="p-6 text-center text-muted-foreground">Loading issued equipment...</div>
       ) : (
         <Table>
@@ -394,7 +390,7 @@ export default function EquipmentTable({ equipment }: EquipmentTableProps) {
                   <TableCell>{item.serial_number || '—'}</TableCell>
                   <TableCell>{item.type || '—'}</TableCell>
                   <TableCell>
-                    <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${statusColor(item.status)}`}>{item.status}</span>
+                    <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${statusColor(getEffectiveStatus(item))}`}>{getEffectiveStatus(item)}</span>
                   </TableCell>
                   <TableCell>{getIssuedTo(item)}</TableCell>
                   <TableCell>{getExpectedReturn(item)}</TableCell>
@@ -407,15 +403,15 @@ export default function EquipmentTable({ equipment }: EquipmentTableProps) {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {openIssuanceByEquipmentId[item.id] ? (
-                          <DropdownMenuItem onClick={() => { setSelectedEquipment(item); setModalType("return"); }}>
+                          <DropdownMenuItem onClick={e => { e.stopPropagation(); setSelectedEquipment(item); setModalType("return"); }}>
                             <LogOut className="w-4 h-4 mr-2" /> Return
                           </DropdownMenuItem>
                         ) : (
-                          <DropdownMenuItem onClick={() => { setSelectedEquipment(item); setModalType("issue"); }}>
+                          <DropdownMenuItem onClick={e => { e.stopPropagation(); setSelectedEquipment(item); setModalType("issue"); }}>
                             <LogIn className="w-4 h-4 mr-2" /> Issue
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem onClick={() => { setSelectedEquipment(item); setModalType("note"); }}>
+                        <DropdownMenuItem onClick={e => { e.stopPropagation(); setSelectedEquipment(item); setModalType("note"); }}>
                           <StickyNote className="w-4 h-4 mr-2" /> Log Update
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -457,16 +453,16 @@ export default function EquipmentTable({ equipment }: EquipmentTableProps) {
             issuedBy={issuedBy}
             refreshIssuances={() => {
               // Re-fetch open issuances after return
-              setLoadingOpenIssuances(true);
-              fetch('/api/equipment_issuance?open_only=true')
-                .then(res => res.json())
-                .then(data => {
-                  const arr = Array.isArray(data.issuances) ? data.issuances : [];
-                  const map: Record<string, EquipmentIssuance> = {};
-                  arr.forEach((i: EquipmentIssuance) => { map[i.equipment_id] = i; });
-                  setOpenIssuanceByEquipmentId(map);
-                })
-                .finally(() => setLoadingOpenIssuances(false));
+              // setLoadingOpenIssuances(true); // This line is removed
+              // fetch('/api/equipment_issuance?open_only=true') // This line is removed
+              //   .then(res => res.json()) // This line is removed
+              //   .then(data => { // This line is removed
+              //     const arr = Array.isArray(data.issuances) ? data.issuances : []; // This line is removed
+              //     const map: Record<string, EquipmentIssuance> = {}; // This line is removed
+              //     arr.forEach((i: EquipmentIssuance) => { map[i.equipment_id] = i; }); // This line is removed
+              //     setOpenIssuanceByEquipmentId(map); // This line is removed
+              //   }) // This line is removed
+              //   .finally(() => setLoadingOpenIssuances(false)); // This line is removed
             }}
           />
         );

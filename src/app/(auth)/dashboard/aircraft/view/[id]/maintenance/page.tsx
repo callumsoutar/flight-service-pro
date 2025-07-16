@@ -3,7 +3,6 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, CalendarCheck2, History, GaugeCircle } from "lucide-react";
-import AircraftServicingTab from "@/components/aircraft/maintenance/AircraftServicingTab";
 import AircraftMaintenanceTab from "@/components/aircraft/maintenance/AircraftMaintenanceTab";
 import AircraftMaintenanceHistoryTable from "@/components/aircraft/maintenance/AircraftMaintenanceHistoryTable";
 import { AircraftComponent } from '@/types/aircraft_components';
@@ -101,7 +100,6 @@ export default function AircraftMaintenancePage() {
           </div>
         </div>
       </div>
-      {/* Removed divider for minimal spacing */}
 
       {/* Aircraft highlights */}
       <div className="flex flex-row gap-4 mb-0 w-full bg-muted/40 rounded-xl px-4 py-3">
@@ -139,12 +137,6 @@ export default function AircraftMaintenancePage() {
           </div>
         </Card>
       </div>
-
-      {/* Scheduled Services Section */}
-      <Card className="p-6 mb-8 rounded-xl shadow-sm">
-        <AircraftServicingTab />
-      </Card>
-
       {/* Equipment & Components Section */}
       <Card className="p-6 mb-8 rounded-xl shadow-sm">
         <AircraftMaintenanceTab />

@@ -11,7 +11,7 @@ interface BookingMemberLinkProps {
 export default function BookingMemberLink({ userId, firstName, lastName, roleLabel = "Member" }: BookingMemberLinkProps) {
   const name = [firstName, lastName].filter(Boolean).join(" ") || userId;
   return (
-    <div className="mt-2 mb-4 flex items-center gap-2 border-b border-gray-200 pb-2">
+    <div className="mt-2 mb-4 flex items-center gap-2">
       <Link
         href={`/dashboard/members/view/${userId}`}
         className="text-blue-700 underline font-semibold text-lg hover:text-blue-900 transition-colors"

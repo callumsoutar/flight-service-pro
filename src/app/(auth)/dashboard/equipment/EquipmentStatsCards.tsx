@@ -5,15 +5,15 @@ import type { Equipment } from '@/types/equipment';
 
 interface EquipmentStatsCardsProps {
   equipment: Equipment[] | undefined | null;
+  openIssuanceByEquipmentId: Record<string, unknown>;
 }
 
-export default function EquipmentStatsCards({ equipment }: EquipmentStatsCardsProps) {
+export default function EquipmentStatsCards({ equipment, openIssuanceByEquipmentId }: EquipmentStatsCardsProps) {
   const safeEquipment = Array.isArray(equipment) ? equipment : [];
   const total = safeEquipment.length;
-  // If you have issuance info, adjust this logic accordingly
-  const issued = safeEquipment.filter(eq => typeof (eq as { current_issuance?: unknown }).current_issuance !== 'undefined' && (eq as { current_issuance?: unknown }).current_issuance !== null).length;
+  const issued = safeEquipment.filter(eq => openIssuanceByEquipmentId[eq.id]).length;
   const lost = safeEquipment.filter(eq => eq.status === "lost").length;
-  const available = total - issued - lost;
+  const available = safeEquipment.filter(eq => !openIssuanceByEquipmentId[eq.id] && eq.status !== "lost").length;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">

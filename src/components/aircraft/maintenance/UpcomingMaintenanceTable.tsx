@@ -1,6 +1,4 @@
-"use client";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal, ClipboardList, CalendarCheck, Eye, Info } from "lucide-react";
@@ -11,18 +9,16 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { AircraftComponent } from "@/types/aircraft_components";
-import LogMaintenanceModal from "@/components/aircraft/maintenance/LogMaintenanceModal";
-import { useOrgContext } from "@/components/OrgContextProvider";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import ComponentEditModal from "@/components/aircraft/maintenance/ComponentEditModal";
-import ComponentNewModal from "@/components/aircraft/maintenance/ComponentNewModal";
-import { toast } from "sonner";
+import { AircraftComponent } from "@/types/aircraft_components";
 import { format } from 'date-fns';
+
+interface UpcomingMaintenanceTableProps {
+  aircraft_id: string;
+}
 
 function getDueIn(comp: AircraftComponent, currentHours: number | null) {
   if (currentHours === null) return "N/A";
-  // Use extension limit if in effect
   if (
     comp.extension_limit_hours !== null &&
     comp.extension_limit_hours !== undefined &&
@@ -44,37 +40,20 @@ function getDueIn(comp: AircraftComponent, currentHours: number | null) {
   return "N/A";
 }
 
-export default function AircraftServicingTab() {
-  const { id: aircraft_id } = useParams<{ id: string }>();
-  const { currentOrgId } = useOrgContext();
-  const organization_id = currentOrgId || "";
+export default function UpcomingMaintenanceTable({ aircraft_id }: UpcomingMaintenanceTableProps) {
   const [components, setComponents] = useState<AircraftComponent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentHours, setCurrentHours] = useState<number | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [selectedComponent, setSelectedComponent] = useState<AircraftComponent | null>(null);
-  // Placeholder state for form fields
-  const [visitDate, setVisitDate] = useState<Date | undefined>(undefined);
-  const [visitType, setVisitType] = useState("");
-  const [description, setDescription] = useState("");
-  const [totalCost, setTotalCost] = useState("");
-  const [hoursAtVisit, setHoursAtVisit] = useState("");
-  const [notes] = useState("");
-  const [dateOutOfMaintenance, setDateOutOfMaintenance] = useState<Date | undefined>(undefined);
-  const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
-  const [newModalOpen, setNewModalOpen] = useState(false);
 
   useEffect(() => {
     if (!aircraft_id) return;
     setLoading(true);
     setError(null);
-    // Fetch components
     fetch(`/api/aircraft_components?aircraft_id=${aircraft_id}`)
       .then((res) => res.json())
       .then((data: AircraftComponent[]) => {
-        setComponents(data.filter((c) => c.component_type === "inspection"));
+        setComponents(data);
       })
       .catch(() => {
         setError("Failed to fetch components");
@@ -91,43 +70,30 @@ export default function AircraftServicingTab() {
       .catch(() => {});
   }, [aircraft_id]);
 
-  const handleEditSave = async (updated: Partial<AircraftComponent>) => {
-    console.log('AircraftServicingTab handleEditSave called', { selectedComponent, updated });
-    if (!selectedComponent) return;
-    // Convert empty string dates to null
-    const cleanUpdate = { ...updated };
-    if (cleanUpdate.current_due_date === "") cleanUpdate.current_due_date = null;
-    if (cleanUpdate.last_completed_date === "") cleanUpdate.last_completed_date = null;
-    try {
-      const res = await fetch(`/api/aircraft_components`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: selectedComponent.id, ...cleanUpdate }),
-      });
-      if (!res.ok) {
-        await res.json(); // consume body, but do not assign
-        // Optionally set error state here
-        return;
+  // Sort by soonest due (hours or date)
+  const sortedComponents = [...components].sort((a, b) => {
+    function dueScore(comp: AircraftComponent): number {
+      if (comp.current_due_hours !== null && comp.current_due_hours !== undefined && currentHours !== null) {
+        return comp.current_due_hours - currentHours;
       }
-      const updatedComponent = await res.json();
-      setComponents((prev) => prev.map((c) => c.id === selectedComponent.id ? updatedComponent : c));
-    setEditModalOpen(false);
-    } catch {
-      // Optionally set error state here
+      if (comp.current_due_date) {
+        return new Date(comp.current_due_date).getTime() - Date.now();
+      }
+      return Infinity;
     }
-  };
+    return dueScore(a) - dueScore(b);
+  });
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 mt-8">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold">Scheduled Services</h2>
-        <Button className="bg-indigo-600 text-white font-semibold" onClick={() => setNewModalOpen(true)}>+ Add Service</Button>
+        <h2 className="text-2xl font-bold">Upcoming Maintenance</h2>
       </div>
       <div className="overflow-x-auto rounded-lg border border-muted bg-white">
         <table className="min-w-full text-sm">
           <thead className="bg-muted/60">
             <tr>
-              <th className="px-3 py-2 text-left font-semibold text-sm w-56">Service Name</th>
+              <th className="px-3 py-2 text-left font-semibold text-sm w-56">Component Name</th>
               <th className="px-3 py-2 text-center font-semibold text-sm w-32">Due At (hrs)</th>
               <th className="px-3 py-2 text-center font-semibold text-sm w-40 flex items-center gap-1 justify-center">Extension Limit (hrs)
                 <Popover>
@@ -151,10 +117,10 @@ export default function AircraftServicingTab() {
               <tr><td colSpan={8} className="text-center py-6">Loading...</td></tr>
             ) : error ? (
               <tr><td colSpan={8} className="text-center text-red-500 py-6">{error}</td></tr>
-            ) : components.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-6">No scheduled inspections found.</td></tr>
+            ) : sortedComponents.length === 0 ? (
+              <tr><td colSpan={8} className="text-center py-6">No components found.</td></tr>
             ) : (
-              components.map((comp) => {
+              sortedComponents.map((comp) => {
                 let status = "Upcoming";
                 if (
                   typeof comp.current_due_hours === "number" && currentHours !== null && comp.current_due_hours - currentHours <= 0
@@ -185,37 +151,28 @@ export default function AircraftServicingTab() {
                   daysUntilService = diff >= 0 ? diff.toString() : "0";
                 }
                 // Due In logic (reuse from service tab)
+                const dueIn = getDueIn(comp, currentHours);
+                const rowClass =
+                  (status === "Due Soon"
+                    ? "bg-yellow-50 border-l-4 border-yellow-400"
+                    : status === "Within Extension"
+                    ? "bg-orange-50 border-l-4 border-orange-400"
+                    : status === "Overdue (after extension)"
+                    ? "bg-red-100 border-l-4 border-red-500"
+                    : status === "Overdue"
+                    ? "bg-red-50 border-l-4 border-red-400"
+                    : "hover:bg-muted/40 transition-colors");
                 return (
                   <tr
                     key={comp.id}
-                    className={
-                      (status === "Due Soon"
-                        ? "bg-yellow-50 border-l-4 border-yellow-400"
-                        : status === "Within Extension"
-                        ? "bg-orange-50 border-l-4 border-orange-400"
-                        : status === "Overdue (after extension)"
-                        ? "bg-red-100 border-l-4 border-red-500"
-                        : status === "Overdue"
-                        ? "bg-red-50 border-l-4 border-red-400"
-                        : "hover:bg-muted/40 transition-colors") +
-                      " min-h-[44px]"
-                    }
+                    className={rowClass + " min-h-[44px]"}
                   >
-                    <td className="px-3 py-2 text-left font-semibold align-middle w-56 whitespace-nowrap text-sm">
-                      <div>{comp.name}</div>
-                      {(status === "Within Extension") && (
-                        <div className="mt-1">
-                          <Badge variant="secondary" className="bg-orange-200 text-orange-800 border-orange-300 text-[10px] px-1.5 py-0.5">Within Extension</Badge>
-                        </div>
-                      )}
-                    </td>
+                    <td className="px-3 py-2 text-left font-semibold align-middle w-56 whitespace-nowrap text-sm">{comp.name}</td>
                     <td className="px-3 py-2 text-center font-semibold align-middle w-32 text-sm">{comp.current_due_hours !== null && comp.current_due_hours !== undefined ? `${comp.current_due_hours}h` : "N/A"}</td>
                     <td className="px-3 py-2 text-center font-semibold align-middle w-40 text-sm">{comp.extension_limit_hours !== null && comp.extension_limit_hours !== undefined ? `${comp.extension_limit_hours}h` : <span className="text-muted-foreground">N/A</span>}</td>
                     <td className="px-3 py-2 text-center font-semibold align-middle w-40 text-sm">{comp.current_due_date ? format(new Date(comp.current_due_date), 'yyyy-MM-dd') : "N/A"}</td>
                     <td className="px-3 py-2 text-center font-semibold align-middle w-40 text-sm">{daysUntilService}</td>
-                    <td className="px-3 py-2 text-center font-semibold align-middle w-40 text-sm">
-                      {getDueIn(comp, currentHours)}
-                    </td>
+                    <td className="px-3 py-2 text-center font-semibold align-middle w-40 text-sm">{dueIn}</td>
                     <td className="px-3 py-2 text-center align-middle w-32 text-sm">
                       <span className="flex items-center justify-center gap-2">
                         {status === "Due Soon" && (
@@ -241,14 +198,14 @@ export default function AircraftServicingTab() {
                           <Button variant="ghost" size="icon" className="h-7 w-7 p-0"><MoreHorizontal className="w-4 h-4" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setSelectedComponentId(comp.id); setModalOpen(true); }}>
+                          <DropdownMenuItem>
                             <ClipboardList className="w-4 h-4 mr-2" /> Log Maintenance
                           </DropdownMenuItem>
                           <DropdownMenuItem>
                             <CalendarCheck className="w-4 h-4 mr-2" /> Schedule Maintenance
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => { setSelectedComponent(comp); setEditModalOpen(true); }}>
+                          <DropdownMenuItem>
                             <Eye className="w-4 h-4 mr-2" /> View Details
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -261,66 +218,6 @@ export default function AircraftServicingTab() {
           </tbody>
         </table>
       </div>
-      <ComponentEditModal
-        open={editModalOpen}
-        onOpenChange={setEditModalOpen}
-        component={selectedComponent}
-        onSave={handleEditSave}
-      />
-      <ComponentNewModal
-        open={newModalOpen}
-        onOpenChange={setNewModalOpen}
-        onSave={async (newComponent) => {
-          const newComp = {
-            ...newComponent,
-            aircraft_id: aircraft_id,
-            organization_id: currentOrgId || "",
-            current_due_date: newComponent.current_due_date === "" ? null : newComponent.current_due_date,
-            last_completed_date: newComponent.last_completed_date === "" ? null : newComponent.last_completed_date,
-          };
-          try {
-            const res = await fetch("/api/aircraft_components", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(newComp),
-            });
-            if (!res.ok) {
-              const errorData = await res.json();
-              toast.error(errorData.error || "Failed to create component");
-              return;
-            }
-            const created = await res.json();
-            setComponents(prev => [...prev, created]);
-            toast.success("Component created");
-          } catch (e: unknown) {
-            if (e instanceof Error) {
-              toast.error(e.message || "Failed to create component");
-            } else {
-              toast.error("Failed to create component");
-            }
-          }
-        }}
-      />
-      <LogMaintenanceModal
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        visitDate={visitDate}
-        setVisitDate={setVisitDate}
-        visitType={visitType}
-        setVisitType={setVisitType}
-        description={description}
-        setDescription={setDescription}
-        totalCost={totalCost}
-        setTotalCost={setTotalCost}
-        hoursAtVisit={hoursAtVisit}
-        setHoursAtVisit={setHoursAtVisit}
-        notes={notes}
-        dateOutOfMaintenance={dateOutOfMaintenance}
-        setDateOutOfMaintenance={setDateOutOfMaintenance}
-        aircraft_id={aircraft_id}
-        component_id={selectedComponentId}
-        organization_id={organization_id}
-      />
     </div>
   );
 } 

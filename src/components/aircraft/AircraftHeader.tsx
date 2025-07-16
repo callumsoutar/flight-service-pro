@@ -12,6 +12,8 @@ interface AircraftHeaderProps {
 }
 
 const statusMap: Record<string, { label: string; color: string }> = {
+  active: { label: "Active", color: "bg-green-500" },
+  inactive: { label: "Inactive", color: "bg-gray-400" },
   available: { label: "Available", color: "bg-green-500" },
   in_use: { label: "In Use", color: "bg-blue-600" },
   maintenance: { label: "Maintenance", color: "bg-red-500" },

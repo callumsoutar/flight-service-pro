@@ -5,6 +5,8 @@ import { Badge } from "../ui/badge";
 
 export type Member = {
   id: string;
+  instructor_id?: string; // add for instructor navigation
+  user_id?: string; // explicit
   first_name?: string;
   last_name?: string;
   email: string;
