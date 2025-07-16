@@ -6,6 +6,8 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { UserPlus } from "lucide-react";
+import { AddMemberModal } from "./AddMemberModal";
+import { useOrgContext } from "@/components/OrgContextProvider";
 
 interface MembersTableProps {
   initialData: {
@@ -21,6 +23,9 @@ const roles = ["All", "Owner", "Admin", "Instructor", "Member", "Student"];
 export default function MembersTable({ initialData }: MembersTableProps) {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
+  const [modalOpen, setModalOpen] = useState(false);
+  const { currentOrgId } = useOrgContext();
+  const organizationId = currentOrgId;
 
   // In-memory filtering for search and role
   const filteredMembers = useMemo(() => {
@@ -66,7 +71,10 @@ export default function MembersTable({ initialData }: MembersTableProps) {
               ))}
             </SelectContent>
           </Select>
-          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg shadow text-base flex items-center gap-2">
+          <Button
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg shadow text-base flex items-center gap-2"
+            onClick={() => setModalOpen(true)}
+          >
             <UserPlus className="h-4 w-4" />
             New Member
           </Button>
@@ -74,6 +82,11 @@ export default function MembersTable({ initialData }: MembersTableProps) {
       </div>
       {/* Data Table */}
       <DataTable columns={columns} data={filteredMembers} />
+      <AddMemberModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        orgId={organizationId || ""}
+      />
     </div>
   );
 } 

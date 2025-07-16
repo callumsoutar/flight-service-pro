@@ -64,7 +64,10 @@ export default function StaffTable({ initialData }: StaffTableProps) {
               ))}
             </SelectContent>
           </Select>
-          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg shadow text-base flex items-center gap-2">
+          <Button
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg shadow text-base flex items-center gap-2"
+            onClick={() => {}}
+          >
             <UserPlus className="h-4 w-4" />
             New Staff
           </Button>
