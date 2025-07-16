@@ -1,0 +1,257 @@
+# Permissions & Role-Based Access Control (RBAC) System
+
+## Overview
+This document describes the permissions and role-based access control (RBAC) system implemented in this project. It enables fine-grained, per-organization, per-user, and per-role permission management, supporting both classic RBAC and direct user permission assignments for exceptions.
+
+---
+
+## Table Structure
+
+### 1. `permissions`
+- **Purpose:** Stores all possible actions that can be controlled (e.g., `can_delete_aircraft`).
+- **Columns:**
+  - `id` (uuid, PK)
+  - `name` (text, unique, e.g., 'can_delete_aircraft')
+  - `description` (text)
+
+### 2. `role_permissions`
+- **Purpose:** Maps each role (from the `user_role` enum) to a set of permissions.
+- **Columns:**
+  - `id` (uuid, PK)
+  - `role` (user_role enum, e.g., 'admin', 'instructor')
+  - `permission_id` (uuid, FK to `permissions.id`)
+  - **Unique:** (`role`, `permission_id`)
+
+### 3. `user_organizations`
+- **Purpose:** Associates users with organizations and assigns a role per org.
+- **Columns:**
+  - `id` (uuid, PK)
+  - `user_id` (uuid, FK to `users.id`)
+  - `organization_id` (uuid, FK to `organizations.id`)
+  - `role` (user_role enum)
+  - ...
+
+### 4. `user_permissions`
+- **Purpose:** Directly assigns or denies a permission to a specific user in a specific organization, regardless of their role.
+- **Columns:**
+  - `id` (uuid, PK)
+  - `user_organization_id` (uuid, FK to `user_organizations.id`)
+  - `permission_id` (uuid, FK to `permissions.id`)
+  - `allowed` (boolean)
+  - **Unique:** (`user_organization_id`, `permission_id`)
+
+---
+
+## Permission Resolution Logic
+
+When checking if a user can perform an action (e.g., delete an aircraft) in a given organization:
+
+1. **Direct User Permission:**
+   - Check `user_permissions` for a row matching the user's `user_organization_id` and the `permission_id`.
+   - If found, use the value of `allowed` (true = allow, false = deny).
+2. **Role-Based Permission:**
+   - If no direct user permission exists, look up the user's role in `user_organizations` for the org.
+   - Check if that role has the permission in `role_permissions`.
+   - If found, allow the action.
+3. **Default:**
+   - If neither exists, deny the action by default.
+
+---
+
+## Example: Can User Delete Aircraft?
+
+Suppose User A and User B are both 'admin' in Org X. By default, both can delete aircraft if the 'admin' role has that permission. If you want only User A to have this permission:
+
+- Add a row to `user_permissions` for User B's `user_organization_id`, the `can_delete_aircraft` permission, and set `allowed = false`.
+- Now, User B is denied, while User A is allowed (via their role).
+
+---
+
+## Example SQL Queries
+
+### 1. Check if a user has a permission in an org
+```sql
+-- Replace :user_id, :org_id, :permission_name as needed
+WITH user_org AS (
+  SELECT id, role FROM user_organizations
+  WHERE user_id = :user_id AND organization_id = :org_id
+), perm AS (
+  SELECT id FROM permissions WHERE name = :permission_name
+)
+SELECT
+  COALESCE(up.allowed,
+    CASE WHEN rp.permission_id IS NOT NULL THEN true ELSE false END
+  ) AS is_allowed
+FROM user_org uo
+CROSS JOIN perm p
+LEFT JOIN user_permissions up
+  ON up.user_organization_id = uo.id AND up.permission_id = p.id
+LEFT JOIN role_permissions rp
+  ON rp.role = uo.role AND rp.permission_id = p.id
+LIMIT 1;
+```
+
+### 2. Grant a permission to a role
+```sql
+INSERT INTO role_permissions (role, permission_id)
+SELECT 'admin', id FROM permissions WHERE name = 'can_delete_aircraft';
+```
+
+### 3. Grant or deny a permission to a specific user in an org
+```sql
+-- Allow
+INSERT INTO user_permissions (user_organization_id, permission_id, allowed)
+VALUES (:user_org_id, :permission_id, true)
+ON CONFLICT (user_organization_id, permission_id) DO UPDATE SET allowed = true;
+
+-- Deny
+INSERT INTO user_permissions (user_organization_id, permission_id, allowed)
+VALUES (:user_org_id, :permission_id, false)
+ON CONFLICT (user_organization_id, permission_id) DO UPDATE SET allowed = false;
+```
+
+---
+
+## Best Practices
+- Use roles and `role_permissions` for most users—this is scalable and easy to manage.
+- Use `user_permissions` only for exceptions (special grants or denials).
+- Always check direct user permissions first, then fall back to role permissions.
+- Deny by default if no permission is found.
+- Keep permission names consistent and descriptive (e.g., `can_edit_invoice`, `can_view_reports`).
+
+---
+
+## RLS (Row Level Security) Policy Guidance
+- Use RLS policies to enforce these checks at the database level for maximum security.
+- Example: Only allow DELETE on `aircraft` if the user has `can_delete_aircraft` in the current org.
+
+---
+
+## Aircraft Permissions, Roles, and RLS Policies
+
+### Aircraft Permissions
+- `can_create_aircraft`: Allows creating new aircraft records.
+- `can_update_aircraft`: Allows updating aircraft details.
+- `can_delete_aircraft`: Allows deleting aircraft records.
+- `can_view_aircraft`: Allows viewing aircraft records.
+
+### Default Role Permissions (for Aircraft)
+| Role        | can_create_aircraft | can_update_aircraft | can_delete_aircraft | can_view_aircraft |
+|------------|---------------------|---------------------|---------------------|-------------------|
+| admin      |         ✅          |         ✅          |         ✅          |        ✅         |
+| instructor |         ❌          |         ❌          |         ❌          |        ✅         |
+| student    |         ❌          |         ❌          |         ❌          |        ✅         |
+
+- **Admin**: Full CRUD access to aircraft.
+- **Instructor**: Can view aircraft, but cannot create, update, or delete.
+- **Student**: Can view aircraft only.
+
+### RLS Policy Examples for Aircraft Table
+
+Assuming the aircraft table has an `organization_id` column and all access is scoped to the current org.
+
+#### 1. Enable RLS
+```sql
+ALTER TABLE aircraft ENABLE ROW LEVEL SECURITY;
+```
+
+#### 2. Policy: View Aircraft
+```sql
+CREATE POLICY "Allow view if user has can_view_aircraft in org" ON aircraft
+  FOR SELECT
+  USING (
+    auth.uid() IS NOT NULL
+    AND (
+      EXISTS (
+        SELECT 1 FROM user_organizations uo
+        JOIN permissions p ON p.name = 'can_view_aircraft'
+        LEFT JOIN user_permissions up ON up.user_organization_id = uo.id AND up.permission_id = p.id
+        LEFT JOIN role_permissions rp ON rp.role = uo.role AND rp.permission_id = p.id
+        WHERE uo.user_id = auth.uid() AND uo.organization_id = aircraft.organization_id
+        AND (
+          COALESCE(up.allowed, CASE WHEN rp.permission_id IS NOT NULL THEN true ELSE false END)
+        )
+      )
+    )
+  );
+```
+
+#### 3. Policy: Create Aircraft
+```sql
+CREATE POLICY "Allow insert if user has can_create_aircraft in org" ON aircraft
+  FOR INSERT
+  WITH CHECK (
+    auth.uid() IS NOT NULL
+    AND (
+      EXISTS (
+        SELECT 1 FROM user_organizations uo
+        JOIN permissions p ON p.name = 'can_create_aircraft'
+        LEFT JOIN user_permissions up ON up.user_organization_id = uo.id AND up.permission_id = p.id
+        LEFT JOIN role_permissions rp ON rp.role = uo.role AND rp.permission_id = p.id
+        WHERE uo.user_id = auth.uid() AND uo.organization_id = aircraft.organization_id
+        AND (
+          COALESCE(up.allowed, CASE WHEN rp.permission_id IS NOT NULL THEN true ELSE false END)
+        )
+      )
+    )
+  );
+```
+
+#### 4. Policy: Update Aircraft
+```sql
+CREATE POLICY "Allow update if user has can_update_aircraft in org" ON aircraft
+  FOR UPDATE
+  USING (
+    auth.uid() IS NOT NULL
+    AND (
+      EXISTS (
+        SELECT 1 FROM user_organizations uo
+        JOIN permissions p ON p.name = 'can_update_aircraft'
+        LEFT JOIN user_permissions up ON up.user_organization_id = uo.id AND up.permission_id = p.id
+        LEFT JOIN role_permissions rp ON rp.role = uo.role AND rp.permission_id = p.id
+        WHERE uo.user_id = auth.uid() AND uo.organization_id = aircraft.organization_id
+        AND (
+          COALESCE(up.allowed, CASE WHEN rp.permission_id IS NOT NULL THEN true ELSE false END)
+        )
+      )
+    )
+  );
+```
+
+#### 5. Policy: Delete Aircraft
+```sql
+CREATE POLICY "Allow delete if user has can_delete_aircraft in org" ON aircraft
+  FOR DELETE
+  USING (
+    auth.uid() IS NOT NULL
+    AND (
+      EXISTS (
+        SELECT 1 FROM user_organizations uo
+        JOIN permissions p ON p.name = 'can_delete_aircraft'
+        LEFT JOIN user_permissions up ON up.user_organization_id = uo.id AND up.permission_id = p.id
+        LEFT JOIN role_permissions rp ON rp.role = uo.role AND rp.permission_id = p.id
+        WHERE uo.user_id = auth.uid() AND uo.organization_id = aircraft.organization_id
+        AND (
+          COALESCE(up.allowed, CASE WHEN rp.permission_id IS NOT NULL THEN true ELSE false END)
+        )
+      )
+    )
+  );
+```
+
+---
+
+These policies ensure that all aircraft access is enforced at the database level, using the same permission resolution logic described above. You can use this section as a template for other resources (e.g., equipment, bookings) by substituting the relevant permission names and table names.
+
+---
+
+## Extending the System
+- Add new permissions to the `permissions` table as needed.
+- Assign them to roles via `role_permissions`.
+- Use `user_permissions` for per-user exceptions.
+- You can add more granularity (e.g., resource-level permissions) by extending the schema if needed.
+
+---
+
+## Questions?
+For further details or help, see the codebase or contact the system architect.

@@ -1,4 +1,3 @@
-// This file has been moved to src/components/bookings/BookingStages.tsx
 
 import React from 'react';
 import clsx from 'clsx';

@@ -1,3 +1,12 @@
+export type TotalTimeMethod =
+  | 'airswitch'
+  | 'hobbs'
+  | 'hobbs less 5%'
+  | 'hobbs less 10%'
+  | 'tacho'
+  | 'tacho less 5%'
+  | 'tacho less 10%';
+
 export interface Aircraft {
   id: string;
   organization_id: string;
@@ -23,5 +32,6 @@ export interface Aircraft {
   engine_count: number;
   prioritise_scheduling: boolean;
   aircraft_image_url?: string | null;
+  total_time_method?: TotalTimeMethod | null;
   // Add other fields as needed
 } 

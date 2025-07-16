@@ -1,8 +1,7 @@
-import EquipmentStatsCards from "./EquipmentStatsCards";
-import EquipmentTable from "./EquipmentTable";
+import EquipmentClientPage from "./EquipmentClientPage";
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/SupabaseServerClient';
-import { Equipment } from '@/types/equipment';
+import type { Equipment } from '@/types/equipment';
 
 export default async function EquipmentPage() {
   const cookieStore = await cookies();
@@ -14,16 +13,5 @@ export default async function EquipmentPage() {
     equipment = data || [];
   }
 
-  return (
-    <main className="flex flex-col gap-8 p-6 md:p-10">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Equipment</h1>
-          <p className="text-muted-foreground mt-2">Manage your equipment inventory and issuance</p>
-        </div>
-      </div>
-      <EquipmentStatsCards equipment={equipment} />
-      <EquipmentTable equipment={equipment} />
-    </main>
-  );
+  return <EquipmentClientPage equipment={equipment} />;
 } 

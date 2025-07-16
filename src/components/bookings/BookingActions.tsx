@@ -1,4 +1,3 @@
-// This file has been moved to src/components/bookings/BookingActions.tsx
 
 "use client";
 import { Button } from "@/components/ui/button";

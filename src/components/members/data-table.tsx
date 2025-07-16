@@ -30,6 +30,8 @@ interface DataTableProps<TData extends { id?: string }, TValue> {
 
 interface MemberLike {
   id?: string;
+  instructor_id?: string;
+  user_id?: string;
   first_name?: string;
   last_name?: string;
   email: string;
@@ -87,7 +89,11 @@ export function DataTable<TData extends MemberLike, TValue>({ columns, data }: D
                     key={row.id}
                     data-state={row.getIsSelected() && "selected"}
                     className={id ? "cursor-pointer hover:bg-indigo-50 transition" : undefined}
-                    onClick={id ? () => router.push(`/dashboard/members/view/${id}`) : undefined}
+                    onClick={row.original.instructor_id
+                      ? () => router.push(`/dashboard/instructors/view/${row.original.instructor_id}`)
+                      : id
+                      ? () => router.push(`/dashboard/members/view/${id}`)
+                      : undefined}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>

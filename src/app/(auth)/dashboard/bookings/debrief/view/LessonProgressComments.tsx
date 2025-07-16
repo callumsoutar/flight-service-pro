@@ -8,12 +8,11 @@ export default function LessonProgressComments({ comments }: { comments?: string
   }
   const sanitized = sanitizeHtml(comments, {
     allowedTags: [
-      'b', 'i', 'em', 'strong', 'u', 'p', 'ul', 'ol', 'li', 'br', 'h3', 'h4', 'h5', 'h6', 'span', 'div', 'a'
+      'b', 'i', 'em', 'strong', 'u', 'p', 'ul', 'ol', 'li', 'br', 'h3', 'h4', 'h5', 'h6', 'span', 'a'
     ],
     allowedAttributes: {
       a: ['href', 'target', 'rel'],
       span: ['style'],
-      div: ['style'],
     },
     allowedSchemes: ['http', 'https', 'mailto'],
   });

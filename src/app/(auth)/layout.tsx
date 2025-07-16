@@ -10,7 +10,6 @@ import {
   UserCog as LucideUserCog,
   FileText as LucideFileText,
   GraduationCap as LucideGraduationCap,
-  Shield as LucideShield,
   Wrench as LucideWrench,
   Settings as LucideSettings,
 } from "lucide-react";
@@ -29,11 +28,10 @@ const mainNavOptions = [
   { label: "Bookings", icon: LucideBookOpen, href: "/dashboard/bookings", tab: "bookings" },
   { label: "Aircraft", icon: LucidePlane, href: "/dashboard/aircraft", tab: "aircraft" },
   { label: "Members", icon: LucideUsers, href: "/dashboard/members", tab: "members" },
-  { label: "Staff", icon: LucideUserCog, href: "/staff", tab: "staff" },
+  { label: "Staff", icon: LucideUserCog, href: "/dashboard/instructors", tab: "staff" },
   { label: "Invoicing", icon: LucideFileText, href: "/dashboard/invoices", tab: "invoices" },
   { label: "Training", icon: LucideGraduationCap, href: "/training", tab: "training" },
   { label: "Equipment", icon: LucideWrench, href: "/dashboard/equipment", tab: "equipment" },
-  { label: "Safety", icon: LucideShield, href: "/safety", tab: "safety" },
 ];
 
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -58,7 +56,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
                 <Link
                   key={item.label}
                   href={item.href}
-                  className="flex items-center gap-4 px-4 py-3 rounded-lg text-white/90 font-semibold tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link"
+                  className="flex items-center gap-4 px-4 py-3 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link"
                   style={{
                     fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
                     textShadow: '0 2px 8px rgba(60,0,120,0.10)',
@@ -66,21 +64,28 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
                   }}
                 >
                   <item.icon className="w-6 h-6" />
-                  <span className="sidebar-link-label">
+                  <span className="sidebar-link-label" style={{ fontSize: '1.6rem', fontWeight: 500 }}>
                     {item.label}
                   </span>
                 </Link>
               ))}
             </nav>
             <div className="mt-auto mb-4 px-4">
-              <a
+              <div className="w-full h-px mb-3" style={{ background: 'rgba(255,255,255,0.10)' }} />
+              <Link
                 href="/settings"
-                className="flex items-center gap-4 px-4 py-3 rounded-lg text-white/90 font-semibold tracking-wide text-[1.18rem] shadow-sm transition-all duration-200 sidebar-link mt-auto mb-2"
-                style={{ fontFamily: 'Inter, ui-rounded, system-ui, sans-serif' }}
+                className="flex items-center gap-4 px-4 py-3 rounded-lg text-white/90 font-medium tracking-wide text-xl shadow-sm transition-all duration-200 sidebar-link mb-2"
+                style={{
+                  fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
+                  textShadow: '0 2px 8px rgba(60,0,120,0.10)',
+                  letterSpacing: '0.02em',
+                }}
               >
-                <LucideSettings className="w-5 h-5" />
-                <span>Settings</span>
-              </a>
+                <LucideSettings className="w-6 h-6" />
+                <span className="sidebar-link-label" style={{ fontSize: '1.6rem', fontWeight: 500 }}>
+                  Settings
+                </span>
+              </Link>
             </div>
           </aside>
           {/* Main content area */}
