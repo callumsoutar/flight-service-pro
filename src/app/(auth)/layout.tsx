@@ -55,15 +55,15 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
                 <Link
                   key={item.label}
                   href={item.href}
-                  className="flex items-center gap-4 px-4 py-3 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link"
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link"
                   style={{
                     fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
                     textShadow: '0 2px 8px rgba(60,0,120,0.10)',
                     letterSpacing: '0.02em',
                   }}
                 >
-                  <item.icon className="w-6 h-6" />
-                  <span className="sidebar-link-label" style={{ fontSize: '1.6rem', fontWeight: 500 }}>
+                  <item.icon className="w-5 h-5" />
+                  <span className="sidebar-link-label" style={{ fontSize: '1.25rem', fontWeight: 500 }}>
                     {item.label}
                   </span>
                 </Link>
@@ -73,15 +73,15 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
               <div className="w-full h-px mb-3" style={{ background: 'rgba(255,255,255,0.10)' }} />
               <Link
                 href="/settings"
-                className="flex items-center gap-4 px-4 py-3 rounded-lg text-white/90 font-medium tracking-wide text-xl shadow-sm transition-all duration-200 sidebar-link mb-2"
+                className="flex items-center gap-3 px-3 py-2 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link mb-2"
                 style={{
                   fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
                   textShadow: '0 2px 8px rgba(60,0,120,0.10)',
                   letterSpacing: '0.02em',
                 }}
               >
-                <LucideSettings className="w-6 h-6" />
-                <span className="sidebar-link-label" style={{ fontSize: '1.6rem', fontWeight: 500 }}>
+                <LucideSettings className="w-5 h-5" />
+                <span className="sidebar-link-label" style={{ fontSize: '1.25rem', fontWeight: 500 }}>
                   Settings
                 </span>
               </Link>

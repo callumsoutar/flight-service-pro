@@ -6,7 +6,7 @@ import type { EquipmentType } from '@/types/equipment';
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { MoreVertical, Edit, LogIn, LogOut, StickyNote, FileText, AlertCircle } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { useOrgContext } from "@/components/OrgContextProvider";
@@ -25,6 +25,7 @@ import type { UserResult } from '@/components/invoices/MemberSelect';
 interface EquipmentTableProps {
   equipment: Equipment[];
   openIssuanceByEquipmentId: Record<string, EquipmentIssuance>;
+  issuedUsers: Record<string, UserResult>;
 }
 
 const EQUIPMENT_TYPE_OPTIONS: { value: EquipmentType; label: string }[] = [
@@ -42,7 +43,7 @@ const EQUIPMENT_TYPE_OPTIONS: { value: EquipmentType; label: string }[] = [
   { value: 'Other', label: 'Other' },
 ];
 
-export default function EquipmentTable({ equipment, openIssuanceByEquipmentId }: EquipmentTableProps) {
+export default function EquipmentTable({ equipment, openIssuanceByEquipmentId, issuedUsers }: EquipmentTableProps) {
   // Use state for equipment list so we can update it on add
   const [equipmentList, setEquipmentList] = useState<Equipment[]>(Array.isArray(equipment) ? equipment : []);
 
@@ -50,25 +51,7 @@ export default function EquipmentTable({ equipment, openIssuanceByEquipmentId }:
   const [tab, setTab] = useState<string>('all');
 
   // Remove local openIssuanceByEquipmentId and loadingOpenIssuances state and fetching logic
-  // Keep issuedUsers and loadingUsers logic as is, but depend on the prop
-  const [issuedUsers, setIssuedUsers] = useState<Record<string, UserResult>>({});
-  const [loadingUsers, setLoadingUsers] = useState(false);
-
-  // Fetch users for issued_to when openIssuanceByEquipmentId changes
-  useEffect(() => {
-    const userIds = Array.from(new Set(Object.values(openIssuanceByEquipmentId).map(i => i.issued_to)));
-    if (userIds.length === 0) return;
-    setLoadingUsers(true);
-    fetch(`/api/users?ids=${userIds.join(',')}`)
-      .then(res => res.json())
-      .then(data => {
-        const usersArr = Array.isArray(data.users) ? data.users : [];
-        const userMap: Record<string, UserResult> = {};
-        usersArr.forEach((u: UserResult) => { userMap[u.id] = u; });
-        setIssuedUsers(userMap);
-      })
-      .finally(() => setLoadingUsers(false));
-  }, [openIssuanceByEquipmentId]);
+  // Remove issuedUsers and loadingUsers state and fetching logic
 
   // Dropdown filter state
   const [selectedType, setSelectedType] = useState<string>('All');
@@ -146,7 +129,7 @@ export default function EquipmentTable({ equipment, openIssuanceByEquipmentId }:
           ? `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim()
           : user.email;
       }
-      return loadingUsers ? 'Loading...' : 'Unknown';
+      return 'Unknown';
     }
     return '—';
   }
@@ -354,9 +337,10 @@ export default function EquipmentTable({ equipment, openIssuanceByEquipmentId }:
         </div>
       </div>
       {/* Data Table */}
-      {loadingUsers ? (
+      {/* loadingUsers is removed, so this block is removed */}
+      {/* loadingUsers ? (
         <div className="p-6 text-center text-muted-foreground">Loading issued equipment...</div>
-      ) : (
+      ) : ( */}
         <Table>
           <TableHeader>
             <TableRow>
@@ -428,7 +412,7 @@ export default function EquipmentTable({ equipment, openIssuanceByEquipmentId }:
             )}
           </TableBody>
         </Table>
-      )}
+      {/* ) */}
 
       {selectedEquipment && modalType === "issue" && (
         <IssueEquipmentModal
