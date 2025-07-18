@@ -10,18 +10,11 @@ import CheckOutForm from "@/components/bookings/CheckOutForm";
 import { BookingDetails } from "@/types/booking_details";
 import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
+import { STATUS_BADGE } from "@/components/bookings/statusBadge";
 
 interface BookingCheckOutPageProps {
   params: Promise<{ id: string }>;
 }
-
-const STATUS_BADGE: Record<Booking["status"], { label: string; color: string }> = {
-  confirmed: { label: "Confirmed", color: "bg-green-100 text-green-800" },
-  unconfirmed: { label: "Unconfirmed", color: "bg-gray-100 text-gray-800" },
-  briefing: { label: "Briefing", color: "bg-yellow-100 text-yellow-800" },
-  flying: { label: "Flying", color: "bg-blue-100 text-blue-800" },
-  complete: { label: "Complete", color: "bg-violet-100 text-violet-800" },
-};
 
 export default async function BookingCheckOutPage({ params }: BookingCheckOutPageProps) {
   const { id: bookingId } = await params;

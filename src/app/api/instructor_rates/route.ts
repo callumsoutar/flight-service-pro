@@ -5,17 +5,17 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const searchParams = req.nextUrl.searchParams;
   const organizationId = searchParams.get("organization_id");
-  const userId = searchParams.get("user_id");
+  const instructorId = searchParams.get("instructor_id");
 
-  if (!organizationId || !userId) {
-    return NextResponse.json({ error: "Missing organization_id or user_id" }, { status: 400 });
+  if (!organizationId || !instructorId) {
+    return NextResponse.json({ error: "Missing organization_id or instructor_id" }, { status: 400 });
   }
 
   const { data, error } = await supabase
     .from("instructor_rates")
-    .select("id, organization_id, user_id, rate, currency")
+    .select("id, organization_id, instructor_id, rate, currency, effective_from, created_at, updated_at")
     .eq("organization_id", organizationId)
-    .eq("user_id", userId)
+    .eq("instructor_id", instructorId)
     .single();
 
   if (error) {

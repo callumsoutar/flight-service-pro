@@ -30,7 +30,7 @@ export default async function InstructorViewPage({ params }: { params: Promise<{
     email: user?.email ?? "",
     profile_image_url: user?.profile_image_url ?? "/public/file.svg",
     // Optionally, add status logic if needed
-    status: instructor.expires_at && new Date(instructor.expires_at) < new Date() ? "expired" : "active",
+    status: instructor.status,
   };
 
   return (

@@ -1,7 +1,8 @@
-export interface InstructorRate {
+export interface InstructorFlightTypeRate {
   id: string;
-  organization_id: string;
   instructor_id: string;
+  flight_type_id: string;
+  organization_id: string;
   rate: number;
   currency: string;
   effective_from: string; // ISO date string

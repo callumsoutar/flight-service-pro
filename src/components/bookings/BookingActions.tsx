@@ -31,16 +31,11 @@ export default function BookingActions({ status, bookingId, hideCheckOutButton =
         </Button>
       )}
       {mode === 'check-in' && status === 'flying' && (
-        <>
-          <Button className="h-10 px-6 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-blue-300">
-            Confirm and Save
-          </Button>
-          <Button asChild className="h-10 px-6 text-base font-bold bg-green-600 hover:bg-green-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-green-300">
-            <Link href={`/dashboard/bookings/debrief/${bookingId}`}>
-              Debrief
-            </Link>
-          </Button>
-        </>
+        <Button asChild className="h-10 px-6 text-base font-bold bg-green-600 hover:bg-green-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-green-300">
+          <Link href={`/dashboard/bookings/debrief/${bookingId}`}>
+            Debrief
+          </Link>
+        </Button>
       )}
     </div>
   );

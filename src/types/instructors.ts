@@ -17,6 +17,8 @@ export interface Instructor {
   instrument_check_due_date?: string | null;
   /** Whether the instructor is actively instructing */
   is_actively_instructing: boolean;
+  /** Status of the instructor: 'active', 'inactive', 'deactivated', 'suspended' */
+  status: 'active' | 'inactive' | 'deactivated' | 'suspended';
   /** Date when class 1 medical is due (optional) */
   class_1_medical_due_date?: string | null;
   /** Freeform notes about the instructor (optional) */

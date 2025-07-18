@@ -4,6 +4,7 @@ import { User } from "@/types/users";
 import MemberProfileCard from "@/components/members/MemberProfileCard";
 import MemberTabs from "@/components/members/MemberTabs";
 import { ArrowLeft } from "lucide-react";
+import { cookies } from "next/headers";
 
 function formatJoinDate(dateString: string): string {
   const date = new Date(dateString);
@@ -13,8 +14,15 @@ function formatJoinDate(dateString: string): string {
 export default async function MemberViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  // Fetch the currently logged-in user
 
+  // Get current org from cookie
+  const cookieStore = await cookies();
+  const currentOrgId = cookieStore.get("current_org_id")?.value;
+  if (!currentOrgId) {
+    notFound();
+  }
+
+  // Fetch the currently logged-in user
   const { data: authUserData, error: authUserError } = await supabase.auth.getUser();
   if (authUserError || !authUserData?.user) {
     console.log('No logged-in user found or error:', authUserError);
@@ -29,17 +37,21 @@ export default async function MemberViewPage({ params }: { params: Promise<{ id:
     });
   }
 
+  // Enforce org membership: join user_organizations and filter by org and user id
   const { data, error } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", id)
+    .from("user_organizations")
+    .select(`user:users(*)`)
+    .eq("user_id", id)
+    .eq("organization_id", currentOrgId)
+    .limit(1)
     .single();
 
-  if (error || !data) {
+  if (error || !data?.user) {
     notFound();
   }
 
-  const member: User = data;
+  // Defensive: if data.user is an array, take the first element
+  const member: User = Array.isArray(data.user) ? data.user[0] : data.user;
   const joinDate = formatJoinDate(member.created_at);
 
   return (

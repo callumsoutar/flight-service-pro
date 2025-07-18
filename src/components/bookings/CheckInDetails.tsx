@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { ClipboardList, Clock, Plane } from "lucide-react";
@@ -12,6 +12,8 @@ interface CheckInDetailsProps {
   selectedFlightTypeId?: string | null;
   instructorId?: string | null;
   instructors: { id: string; name: string }[];
+  instructorRate?: { rate: number; currency: string | null } | null;
+  instructorRateLoading?: boolean;
   onCalculateCharges?: (details: {
     chargeTime: number;
     aircraftRate: number;
@@ -24,16 +26,21 @@ interface CheckInDetailsProps {
     tachStart?: number;
     tachEnd?: number;
   }) => void;
-  initialStartHobbs?: number | null;
-  initialStartTacho?: number | null;
+  // Use booking start values (from check-out) instead of aircraft current values
+  bookingStartHobbs?: number | null;
+  bookingStartTacho?: number | null;
   initialEndHobbs?: number | null;
   initialEndTacho?: number | null;
+  onFormValuesChange?: (values: {
+    endHobbs: string;
+    endTacho: string;
+  }) => void;
 }
 
-export default function CheckInDetails({ aircraftId, organizationId, selectedFlightTypeId, instructorId, instructors, onCalculateCharges, initialStartHobbs, initialStartTacho, initialEndHobbs, initialEndTacho }: CheckInDetailsProps) {
-  // Start values: ONLY from props
-  const [startHobbs, setStartHobbs] = useState(initialStartHobbs !== undefined && initialStartHobbs !== null ? String(initialStartHobbs) : "");
-  const [startTacho, setStartTacho] = useState(initialStartTacho !== undefined && initialStartTacho !== null ? String(initialStartTacho) : "");
+export default function CheckInDetails({ aircraftId, organizationId, selectedFlightTypeId, instructorId, instructors, instructorRate, instructorRateLoading, onCalculateCharges, bookingStartHobbs, bookingStartTacho, initialEndHobbs, initialEndTacho, onFormValuesChange }: CheckInDetailsProps) {
+  // Start values: ONLY from booking start values (from check-out)
+  const [startHobbs, setStartHobbs] = useState(bookingStartHobbs !== undefined && bookingStartHobbs !== null ? String(bookingStartHobbs) : "");
+  const [startTacho, setStartTacho] = useState(bookingStartTacho !== undefined && bookingStartTacho !== null ? String(bookingStartTacho) : "");
   // End values: ONLY from props
   const [endHobbs, setEndHobbs] = useState(initialEndHobbs !== undefined && initialEndHobbs !== null ? String(initialEndHobbs) : "");
   const [endTacho, setEndTacho] = useState(initialEndTacho !== undefined && initialEndTacho !== null ? String(initialEndTacho) : "");
@@ -42,28 +49,28 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
   const [chargeRate, setChargeRate] = useState<string | null>(null);
   const [chargeHobbs, setChargeHobbs] = useState<boolean | null>(null);
   const [chargeTacho, setChargeTacho] = useState<boolean | null>(null);
-  const [instructorRate, setInstructorRate] = useState<{ rate: number; currency: string | null } | null>(null);
+  // Remove all local instructorRate state and logic
   const [selectedInstructor, setSelectedInstructor] = useState<string>(instructorId || "");
 
   // Get org tax rate from context
   const { taxRate } = useOrgContext();
 
-  // Sync start values with props ONLY when those props change
+  // Sync start values with booking start values (from check-out) ONLY when those props change
   useEffect(() => {
-    if (initialStartHobbs !== undefined && initialStartHobbs !== null) {
-      setStartHobbs(String(initialStartHobbs));
+    if (bookingStartHobbs !== undefined && bookingStartHobbs !== null) {
+      setStartHobbs(String(bookingStartHobbs));
     } else {
       setStartHobbs("");
     }
-  }, [initialStartHobbs]);
+  }, [bookingStartHobbs]);
 
   useEffect(() => {
-    if (initialStartTacho !== undefined && initialStartTacho !== null) {
-      setStartTacho(String(initialStartTacho));
+    if (bookingStartTacho !== undefined && bookingStartTacho !== null) {
+      setStartTacho(String(bookingStartTacho));
     } else {
       setStartTacho("");
     }
-  }, [initialStartTacho]);
+  }, [bookingStartTacho]);
 
   // Sync end values with props ONLY when those props change
   useEffect(() => {
@@ -81,6 +88,21 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
       setEndTacho("");
     }
   }, [initialEndTacho]);
+
+  // Track previous values to avoid unnecessary callbacks
+  const prevValuesRef = useRef({ endHobbs: "", endTacho: "" });
+
+  // Notify parent of form value changes
+  useEffect(() => {
+    const currentValues = { endHobbs, endTacho };
+    const prevValues = prevValuesRef.current;
+    
+    // Only call callback if values actually changed
+    if (onFormValuesChange && (currentValues.endHobbs !== prevValues.endHobbs || currentValues.endTacho !== prevValues.endTacho)) {
+      onFormValuesChange(currentValues);
+      prevValuesRef.current = currentValues;
+    }
+  }, [endHobbs, endTacho, onFormValuesChange]);
 
   useEffect(() => {
     if (!organizationId) return;
@@ -124,21 +146,9 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
     setSelectedInstructor(instructorId || "");
   }, [instructorId]);
 
-  useEffect(() => {
-    if (!organizationId || !selectedInstructor) {
-      setInstructorRate(null);
-      return;
-    }
-    fetch(`/api/instructor_rates?organization_id=${organizationId}&user_id=${selectedInstructor}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.instructor_rate && typeof data.instructor_rate.rate === "number") {
-          setInstructorRate({ rate: data.instructor_rate.rate, currency: data.instructor_rate.currency });
-        } else {
-          setInstructorRate(null);
-        }
-      });
-  }, [organizationId, selectedInstructor]);
+  // Remove or refactor this fetch:
+  // fetch(`/api/instructor_rates?organization_id=${organizationId}&user_id=${selectedInstructor}`)
+  // Instead, parent should pass the instructor rate as a prop, or use the two-step lookup pattern in the parent and pass the result down.
 
   // Calculate totals
   const tachoTotal = (parseFloat(endTacho) - parseFloat(startTacho)).toFixed(2);
@@ -223,7 +233,9 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
               ))}
             </SelectContent>
           </Select>
-          {instructorRateInclusive != null ? (
+          {instructorRateLoading ? (
+            <div className="text-xs text-muted-foreground mt-1">Loading instructor rate...</div>
+          ) : instructorRateInclusive != null ? (
             <div className="text-xs text-muted-foreground mt-1">
               Rate: <span className="font-semibold">${instructorRateInclusive.toFixed(2)} / hour</span>
             </div>

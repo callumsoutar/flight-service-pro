@@ -16,7 +16,11 @@ export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
   const lessonId = searchParams.get("id");
 
-  let query = supabase.from("lessons").select("*").eq("organization_id", orgId);
+  let query = supabase
+    .from("lessons")
+    .select("*")
+    .eq("organization_id", orgId);
+
   if (lessonId) {
     query = query.eq("id", lessonId);
     const { data, error } = await query.single();
@@ -25,6 +29,7 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json({ lesson: data });
   }
+
   const { data, error } = await query;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

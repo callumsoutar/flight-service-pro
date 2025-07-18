@@ -14,17 +14,30 @@ const InstructorSchema = z.object({
   class_1_medical_due_date: z.string().date().nullable().optional(),
   notes: z.string().nullable().optional(),
   employment_type: z.enum(["full_time", "part_time", "casual", "contractor"]).nullable().optional(),
+  status: z.enum(["active", "inactive", "deactivated", "suspended"]).optional(),
 });
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { searchParams } = new URL(req.url);
   const orgId = searchParams.get('organization_id');
+  const userId = searchParams.get('user_id');
+
   let query = supabase.from('instructors').select('*');
   if (orgId) query = query.eq('organization_id', orgId);
-  const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ instructors: data }, { status: 200 });
+  if (userId) query = query.eq('user_id', userId);
+
+  if (userId) {
+    // Return a single instructor for this user (optionally scoped to org)
+    const { data, error } = await query.single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 404 });
+    return NextResponse.json({ instructor: data }, { status: 200 });
+  } else {
+    // Return all instructors (optionally scoped to org)
+    const { data, error } = await query;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ instructors: data }, { status: 200 });
+  }
 }
 
 export async function POST(req: NextRequest) {
