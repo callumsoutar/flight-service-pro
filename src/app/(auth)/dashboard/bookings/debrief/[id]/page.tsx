@@ -7,18 +7,11 @@ import { Button } from "@/components/ui/button";
 import React from "react";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 import DebriefFormClient from "./DebriefFormClient";
+import { STATUS_BADGE } from "@/components/bookings/statusBadge";
 
 interface BookingDebriefPageProps {
   params: Promise<{ id: string }>;
 }
-
-const STATUS_BADGE: Record<Booking["status"], { label: string; color: string }> = {
-  confirmed: { label: "Confirmed", color: "bg-green-100 text-green-800" },
-  unconfirmed: { label: "Unconfirmed", color: "bg-gray-100 text-gray-800" },
-  briefing: { label: "Briefing", color: "bg-yellow-100 text-yellow-800" },
-  flying: { label: "Flying", color: "bg-blue-100 text-blue-800" },
-  complete: { label: "Complete", color: "bg-violet-100 text-violet-800" },
-};
 
 export default async function BookingDebriefPage({ params }: BookingDebriefPageProps) {
   const { id: bookingId } = await params;

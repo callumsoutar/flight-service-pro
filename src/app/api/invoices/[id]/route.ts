@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "../../../../lib/SupabaseServerClient";
+import { createClient } from "@/lib/SupabaseServerClient";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function PATCH(req: NextRequest, context: any) {
+// PATCH: Update invoice
+export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const supabase = await createClient();
+  // Auth check
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Org check
+  const orgId = req.cookies.get("current_org_id")?.value;
+  if (!orgId) {
+    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
+  }
   const body = await req.json();
 
   // Allow updating these fields
@@ -25,6 +35,7 @@ export async function PATCH(req: NextRequest, context: any) {
     .from("invoices")
     .update(updateData)
     .eq("id", id)
+    .eq("organization_id", orgId)
     .select()
     .single();
 
@@ -34,14 +45,25 @@ export async function PATCH(req: NextRequest, context: any) {
   return NextResponse.json({ invoice: data });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function DELETE(req: NextRequest, context: any) {
+// DELETE: Delete invoice
+export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const supabase = await createClient();
+  // Auth check
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Org check
+  const orgId = req.cookies.get("current_org_id")?.value;
+  if (!orgId) {
+    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
+  }
   const { error } = await supabase
     .from("invoices")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("organization_id", orgId);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

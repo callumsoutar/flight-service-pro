@@ -11,6 +11,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Booking } from "@/types/bookings";
+import MemberSelect, { UserResult } from "@/components/invoices/MemberSelect";
 
 interface BookingDetailsFormData {
   start_date: string;
@@ -43,6 +44,16 @@ const TIME_OPTIONS = Array.from({ length: ((23 - 7) * 2) + 3 }, (_, i) => {
   return `${hour.toString().padStart(2, "0")}:${minute}`;
 });
 
+// Helper to combine date and time strings into a UTC ISO string
+function getUtcIsoString(dateStr: string, timeStr: string): string | null {
+  if (!dateStr || !timeStr) return null;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  // JS Date months are 0-based
+  const local = new Date(year, month - 1, day, hours, minutes, 0, 0);
+  return local.toISOString();
+}
+
 export default function BookingDetails({ booking, members, instructors, aircraft, lessons, flightTypes }: BookingDetailsProps) {
   const { control, handleSubmit, reset, formState } = useForm<BookingDetailsFormData>({
     defaultValues: {
@@ -67,9 +78,9 @@ export default function BookingDetails({ booking, members, instructors, aircraft
     setSaving(true);
     setSaveSuccess(false);
     try {
-      // Compose ISO strings for start_time and end_time
-      const start_time = data.start_date && data.start_time ? `${data.start_date}T${data.start_time}:00` : null;
-      const end_time = data.end_date && data.end_time ? `${data.end_date}T${data.end_time}:00` : null;
+      // Compose ISO strings for start_time and end_time (robust local-to-UTC conversion)
+      const start_time = getUtcIsoString(data.start_date, data.start_time);
+      const end_time = getUtcIsoString(data.end_date, data.end_time);
       const payload = {
         id: booking.id,
         start_time,
@@ -256,18 +267,33 @@ export default function BookingDetails({ booking, members, instructors, aircraft
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Member</label>
-              <Controller name="member" control={control} render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {members.map(m => (
-                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )} />
+              <Controller
+                name="member"
+                control={control}
+                render={({ field }) => {
+                  // Find the selected member's details for display
+                  const selectedMember = field.value
+                    ? members.find(m => m.id === field.value)
+                    : null;
+                  // Adapt to MemberSelect's expected value shape
+                  const memberValue: UserResult | null = selectedMember
+                    ? {
+                        id: selectedMember.id,
+                        first_name: selectedMember.name.split(" ")[0] || "",
+                        last_name: selectedMember.name.split(" ").slice(1).join(" ") || "",
+                        email: "",
+                      }
+                    : null;
+                  return (
+                    <MemberSelect
+                      value={memberValue}
+                      onSelect={user => {
+                        field.onChange(user ? user.id : "");
+                      }}
+                    />
+                  );
+                }}
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Instructor</label>

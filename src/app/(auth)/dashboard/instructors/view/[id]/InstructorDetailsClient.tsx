@@ -21,12 +21,15 @@ import { Calendar } from "@/components/ui/calendar";
 import { Controller } from "react-hook-form";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import dynamic from "next/dynamic";
+const InstructorFlightTypeRatesTable = dynamic(() => import("@/components/InstructorFlightTypeRatesTable"), { ssr: false });
 
 const tabItems = [
   { id: "license", label: "Details", icon: Award },
   { id: "uploads", label: "Uploads", icon: Upload },
   { id: "history", label: "History", icon: Clock },
   { id: "notes", label: "Notes", icon: FileText },
+  { id: "settings", label: "Settings", icon: Settings }, // <-- Added settings tab
 ];
 
 const licenseSchema = z.object({
@@ -60,12 +63,20 @@ type LicenseFormValues = z.infer<typeof licenseSchema>;
 
 export default function InstructorDetailsClient({ instructor }: { instructor: InstructorWithUser }) {
   const [selectedTab, setSelectedTab] = useState("license");
+  const [status, setStatus] = useState<string>(instructor.status);
 
   const employmentTypes = [
     { value: "full_time", label: "Full Time" },
     { value: "part_time", label: "Part Time" },
     { value: "casual", label: "Casual" },
     { value: "contractor", label: "Contractor" },
+  ];
+
+  const statusOptions = [
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+    { value: "deactivated", label: "Deactivated" },
+    { value: "suspended", label: "Suspended" },
   ];
 
   const {
@@ -321,41 +332,6 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
                     <RatingsTab instructorId={instructor.id} organizationId={instructor.organization_id} />
                   </Card>
                 </div>
-                {/* Employment Section */}
-                <div className="flex flex-col gap-4 mt-4">
-                  <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
-                    <Settings className="w-5 h-5 text-indigo-500" /> Settings
-                  </h3>
-                  <div className="flex flex-col md:flex-row gap-4 md:items-center">
-                    <div className="flex flex-col gap-2 md:w-1/2">
-                      <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-                        <Activity className="w-4 h-4" /> Actively Instructing
-                      </label>
-                      <Switch checked={watch("is_actively_instructing")}
-                        onCheckedChange={val => setValue("is_actively_instructing", val, { shouldDirty: true })}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2 md:w-1/2">
-                      <label className="block text-sm font-medium mb-1 text-gray-700 flex items-center gap-1">
-                        <Briefcase className="w-4 h-4 text-indigo-500" /> Employment Type
-                      </label>
-                      <Select
-                        value={watch("employment_type")}
-                        onValueChange={val => setValue("employment_type", val as LicenseFormValues["employment_type"], { shouldDirty: true })}
-                      >
-                        <SelectTrigger className="w-48">
-                          <SelectValue placeholder="Select employment type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {employmentTypes.map((type) => (
-                            <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {errors.employment_type && <p className="text-xs text-red-500 mt-1">{errors.employment_type.message}</p>}
-                    </div>
-                  </div>
-                </div>
               </Card>
             </form>
           </Tabs.Content>
@@ -433,6 +409,99 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
                 </div>
               </form>
             </Card>
+          </Tabs.Content>
+          {/* Settings Tab */}
+          <Tabs.Content value="settings" className="w-full">
+            <form onSubmit={handleSubmit(onSave)}>
+              <Card className="p-6 flex flex-col gap-6">
+                <div className="flex flex-row items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-indigo-600" />
+                    Settings
+                  </h2>
+                  <div className="flex gap-2 items-center">
+                    <Button type="submit" disabled={!isDirty} size="sm" className="min-w-[100px] font-semibold">
+                      Save
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" disabled={!isDirty} onClick={() => reset()}>
+                      Undo
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex flex-col md:flex-row gap-6">
+                  <div className="flex flex-col gap-2 md:w-1/3">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                      <Activity className="w-4 h-4" /> Actively Instructing
+                    </label>
+                    <Switch checked={watch("is_actively_instructing")}
+                      onCheckedChange={val => setValue("is_actively_instructing", val, { shouldDirty: true })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2 md:w-1/3">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                      <Settings className="w-4 h-4 text-indigo-500" /> Status
+                    </label>
+                    <Select
+                      value={status}
+                      onValueChange={val => {
+                        if (val !== status) {
+                          fetch("/api/instructors", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ id: instructor.id, status: val }),
+                          })
+                            .then(async res => {
+                              if (!res.ok) {
+                                const err = await res.json();
+                                throw new Error(err.error || "Failed to update status");
+                              }
+                              setStatus(val);
+                              toast.success("Status updated");
+                            })
+                            .catch(err => {
+                              toast.error(err.message || "Failed to update status");
+                            });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-40">
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-2 md:w-1/3">
+                    <label className="block text-sm font-medium mb-1 text-gray-700 flex items-center gap-1">
+                      <Briefcase className="w-4 h-4 text-indigo-500" /> Employment Type
+                    </label>
+                    <Select
+                      value={watch("employment_type")}
+                      onValueChange={val => setValue("employment_type", val as LicenseFormValues["employment_type"], { shouldDirty: true })}
+                    >
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Select employment type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {employmentTypes.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.employment_type && <p className="text-xs text-red-500 mt-1">{errors.employment_type.message}</p>}
+                  </div>
+                </div>
+                <div className="mt-8">
+                  <h3 className="text-base font-semibold mb-2 flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-indigo-600" /> Instructor Rates by Flight Type
+                  </h3>
+                  <InstructorFlightTypeRatesTable instructorId={instructor.id} organizationId={instructor.organization_id} />
+                </div>
+              </Card>
+            </form>
           </Tabs.Content>
         </div>
       </Tabs.Root>

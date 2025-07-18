@@ -1,0 +1,78 @@
+# Double-Booking Prevention Plan for Aero Safety
+
+## 1. Database Layer: Exclusion Constraints
+
+**Constraints Added (2024-06):**
+- **Aircraft double-booking prevention:**
+  - No two bookings for the same aircraft can overlap in time (for statuses 'confirmed' or 'flying').
+  - Enforced by a PostgreSQL exclusion constraint:
+    ```sql
+    ALTER TABLE bookings ADD CONSTRAINT no_aircraft_overlap
+      EXCLUDE USING gist (
+        aircraft_id WITH =,
+        tstzrange(start_time, end_time) WITH &&
+      )
+      WHERE (aircraft_id IS NOT NULL AND status IN ('confirmed', 'flying'));
+    ```
+- **Instructor double-booking prevention:**
+  - No two bookings for the same instructor can overlap in time (for statuses 'confirmed' or 'flying').
+  - Enforced by a PostgreSQL exclusion constraint:
+    ```sql
+    ALTER TABLE bookings ADD CONSTRAINT no_instructor_overlap
+      EXCLUDE USING gist (
+        instructor_id WITH =,
+        tstzrange(start_time, end_time) WITH &&
+      )
+      WHERE (instructor_id IS NOT NULL AND status IN ('confirmed', 'flying'));
+    ```
+- **Extensions required:** `btree_gist` (enabled)
+- **Why this matters:**
+  - Guarantees no double-booking at the database level, even if the frontend or API fails to check.
+  - Handles race conditions and concurrent requests safely.
+
+## 2. Backend/API Enforcement
+
+- **On booking creation or update:**
+  - If a booking overlaps with an existing booking (for the same aircraft or instructor), the database will reject the insert/update.
+  - The API must catch this error and return a clear, user-friendly message (e.g., "Aircraft is already booked for this time.").
+- **Best practice:**
+  - Do not rely solely on frontend checks—always enforce at the DB level.
+  - Optionally, pre-check for conflicts in the API and warn the user before attempting the insert.
+
+## 3. Frontend UX
+
+- **Dynamic dropdown filtering:**
+  - When a user selects a date/time range in the New Booking modal, the frontend queries the API for overlapping bookings.
+  - Aircraft and instructors that are already booked for the selected time are removed or disabled in the dropdowns.
+  - Optionally, show a label (e.g., "(booked)") for unavailable resources.
+- **On submit:**
+  - If the user tries to book a resource that has become unavailable (e.g., due to a race condition), the API will return an error and the frontend will display a clear message.
+- **Best practice:**
+  - Always provide immediate feedback in the UI, but rely on the backend for final enforcement.
+
+## 4. Example User Flow
+
+1. **User A** books Aircraft A and Instructor Bob from 10:30am to 12:30pm (status: confirmed).
+2. **User B** opens the New Booking modal for the same time range:
+   - Aircraft A and Instructor Bob are not available in the dropdowns.
+   - User B selects Aircraft B and Instructor Alice instead.
+3. **User C** tries to book Aircraft A and Instructor Bob for 11:00am to 12:00pm (overlapping):
+   - The frontend may warn them, but if they proceed, the API/database will reject the booking with a clear error message.
+
+## 5. Summary Table
+
+| Layer      | Enforcement/UX                | How it works                                  |
+|------------|------------------------------|------------------------------------------------|
+| Database   | Exclusion constraints         | No double-booking possible (hard guarantee)    |
+| API        | Error handling                | Catches constraint errors, returns messages    |
+| Frontend   | Dynamic filtering, feedback   | Prevents selection, shows errors if needed     |
+
+## 6. Next Steps
+
+- [ ] Ensure API error handling is robust and user-friendly.
+- [ ] Implement frontend filtering and feedback for unavailable resources.
+- [ ] Test the full flow (including race conditions and edge cases).
+
+---
+
+**This document should be kept up to date as the double-booking logic evolves.**

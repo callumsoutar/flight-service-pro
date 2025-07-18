@@ -2,7 +2,7 @@
 import { Plane, CalendarIcon, UserIcon, BadgeCheck, ClipboardList as ClipboardListIcon, StickyNote, AlignLeft, ClipboardList, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { format, parseISO } from "date-fns";
 import { Booking } from "@/types/bookings";
@@ -12,6 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import MemberSelect, { UserResult } from "@/components/invoices/MemberSelect";
 
 // Helper to generate 30-min interval times
 const TIME_OPTIONS = Array.from({ length: ((23 - 7) * 2) + 3 }, (_, i) => {
@@ -51,6 +52,16 @@ interface CheckOutFormProps {
   bookingDetails: BookingDetails | null;
 }
 
+// Helper to combine date and time strings into a UTC ISO string
+function getUtcIsoString(dateStr: string, timeStr: string): string | null {
+  if (!dateStr || !timeStr) return null;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  // JS Date months are 0-based
+  const local = new Date(year, month - 1, day, hours, minutes, 0, 0);
+  return local.toISOString();
+}
+
 export default function CheckOutForm({ booking, members, instructors, aircraft, lessons, flightTypes, bookingDetails }: CheckOutFormProps) {
   // Parse eta into date and time for default values
   let etaDateDefault = "";
@@ -64,7 +75,7 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
   }
   const checkedOutAircraftDefault = booking?.checked_out_aircraft_id || booking?.aircraft_id || "";
   const checkedOutInstructorDefault = booking?.checked_out_instructor_id || booking?.instructor_id || "";
-  const { control, handleSubmit } = useForm<CheckOutFormData>({
+  const { control, handleSubmit, watch } = useForm<CheckOutFormData>({
     defaultValues: {
       start_date: booking?.start_time ? format(parseISO(booking.start_time), "yyyy-MM-dd") : "",
       start_time: booking?.start_time ? format(parseISO(booking.start_time), "HH:mm") : "",
@@ -89,66 +100,50 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
 
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  // Track selected aircraft's current meter readings
+  const [selectedAircraftMeters, setSelectedAircraftMeters] = useState<{
+    current_hobbs: number | null;
+    current_tach: number | null;
+  } | null>(null);
 
-  // Store initial values for comparison
-  const initialBooking = {
-    checked_out_aircraft_id: booking?.checked_out_aircraft_id || booking?.aircraft_id || "",
-    checked_out_instructor_id: booking?.checked_out_instructor_id || booking?.instructor_id || "",
-    start_date: booking?.start_time ? format(parseISO(booking.start_time), "yyyy-MM-dd") : "",
-    start_time: booking?.start_time ? format(parseISO(booking.start_time), "HH:mm") : "",
-    end_date: booking?.end_time ? format(parseISO(booking.end_time), "yyyy-MM-dd") : "",
-    end_time: booking?.end_time ? format(parseISO(booking.end_time), "HH:mm") : "",
-    member: booking?.user_id || "",
-    lesson: booking?.lesson_id ?? "",
-    remarks: booking?.remarks || "",
-    purpose: booking?.purpose || "",
-    flight_type: booking?.flight_type_id ?? "",
-    booking_type: booking?.booking_type || "flight",
-  };
-  const initialDetails = {
-    eta_date: bookingDetails?.eta ? format(parseISO(bookingDetails.eta), "yyyy-MM-dd") : "",
-    eta_time: bookingDetails?.eta ? format(parseISO(bookingDetails.eta), "HH:mm") : "",
-    fuel_on_board: bookingDetails?.fuel_on_board?.toString() || "",
-    passengers: bookingDetails?.passengers || "",
-    route: bookingDetails?.route || "",
-    remarks_flight_out: bookingDetails?.remarks || "",
-  };
+
 
   const onSubmit = async (data: CheckOutFormData) => {
     setLoading(true);
-    const bookingPatch: Record<string, unknown> = {};
+    // Use robust UTC ISO string logic for start_time and end_time
+    const start_time = getUtcIsoString(data.start_date, data.start_time);
+    const end_time = getUtcIsoString(data.end_date, data.end_time);
+    // Always include all booking fields in the PATCH
+    const bookingPatch: Record<string, unknown> = {
+      checked_out_aircraft_id: data.checked_out_aircraft_id,
+      checked_out_instructor_id: data.checked_out_instructor_id,
+      start_time,
+      end_time,
+      user_id: data.member,
+      lesson_id: data.lesson,
+      remarks: data.remarks,
+      purpose: data.purpose,
+      flight_type_id: data.flight_type,
+      booking_type: data.booking_type,
+      // Always set status to 'flying' if not already
+      status: booking.status !== 'flying' ? 'flying' : booking.status,
+      // Include aircraft meter readings as start values
+      hobbs_start: selectedAircraftMeters?.current_hobbs ?? null,
+      tach_start: selectedAircraftMeters?.current_tach ?? null,
+    };
+    // Remove nulls (optional, but keeps PATCH clean)
+    Object.keys(bookingPatch).forEach(key => {
+      if (bookingPatch[key] === null || bookingPatch[key] === undefined) delete bookingPatch[key];
+    });
+    // Compose details payload
     const detailsPatch: Record<string, unknown> = {};
-    // Compare and add changed fields for bookings
-    if (data.checked_out_aircraft_id !== initialBooking.checked_out_aircraft_id) bookingPatch.checked_out_aircraft_id = data.checked_out_aircraft_id;
-    if (data.checked_out_instructor_id !== initialBooking.checked_out_instructor_id) bookingPatch.checked_out_instructor_id = data.checked_out_instructor_id;
-    if (data.start_date !== initialBooking.start_date || data.start_time !== initialBooking.start_time) {
-      const start = data.start_date && data.start_time ? `${data.start_date}T${data.start_time}:00Z` : null;
-      if (start && start !== booking.start_time) bookingPatch.start_time = start;
-    }
-    if (data.end_date !== initialBooking.end_date || data.end_time !== initialBooking.end_time) {
-      const end = data.end_date && data.end_time ? `${data.end_date}T${data.end_time}:00Z` : null;
-      if (end && end !== booking.end_time) bookingPatch.end_time = end;
-    }
-    if (data.member !== initialBooking.member) bookingPatch.user_id = data.member;
-    if (data.lesson !== initialBooking.lesson) bookingPatch.lesson_id = data.lesson;
-    if (data.remarks !== initialBooking.remarks) bookingPatch.remarks = data.remarks;
-    if (data.purpose !== initialBooking.purpose) bookingPatch.purpose = data.purpose;
-    if (data.flight_type !== initialBooking.flight_type) bookingPatch.flight_type_id = data.flight_type;
-    if (data.booking_type !== initialBooking.booking_type) bookingPatch.booking_type = data.booking_type;
-    // Always set status to 'flying' if not already
-    if (booking.status !== 'flying') bookingPatch.status = 'flying';
-
-    // Compare and add changed fields for booking_details
-    if (data.eta_date !== initialDetails.eta_date || data.eta_time !== initialDetails.eta_time) {
-      if (data.eta_date && data.eta_time) {
-        detailsPatch.eta = `${data.eta_date}T${data.eta_time}:00Z`;
-      }
-    }
-    if (data.fuel_on_board !== initialDetails.fuel_on_board) detailsPatch.fuel_on_board = data.fuel_on_board;
-    if (data.passengers !== initialDetails.passengers) detailsPatch.passengers = data.passengers;
-    if (data.route !== initialDetails.route) detailsPatch.route = data.route;
-    if (data.remarks_flight_out !== initialDetails.remarks_flight_out) detailsPatch.remarks = data.remarks_flight_out;
-
+    const etaIso = getUtcIsoString(data.eta_date, data.eta_time);
+    if (etaIso) detailsPatch.eta = etaIso;
+    if (data.fuel_on_board) detailsPatch.fuel_on_board = data.fuel_on_board;
+    if (data.passengers) detailsPatch.passengers = data.passengers;
+    if (data.route) detailsPatch.route = data.route;
+    if (data.remarks_flight_out) detailsPatch.remarks = data.remarks_flight_out;
+    detailsPatch.booking_id = booking.id;
     try {
       if (Object.keys(bookingPatch).length > 0) {
         const bookingRes = await fetch("/api/bookings", {
@@ -158,13 +153,23 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
         });
         if (!bookingRes.ok) throw new Error("Failed to update booking");
       }
-      if (Object.keys(detailsPatch).length > 0) {
-        const detailsRes = await fetch("/api/booking_details", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ booking_id: booking.id, ...detailsPatch }),
-        });
-        if (!detailsRes.ok) throw new Error("Failed to update booking details");
+      // Booking details: PATCH if exists, else POST
+      if (Object.keys(detailsPatch).length > 1) { // more than just booking_id
+        let detailsRes;
+        if (bookingDetails && bookingDetails.id) {
+          detailsRes = await fetch(`/api/booking_details`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: bookingDetails.id, ...detailsPatch }),
+          });
+        } else {
+          detailsRes = await fetch(`/api/booking_details`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(detailsPatch),
+          });
+        }
+        if (!detailsRes.ok) throw new Error("Failed to save booking details");
       }
       toast.success("Check-Out details saved successfully!");
       router.refresh();
@@ -178,6 +183,59 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
       setLoading(false);
     }
   };
+
+  // Helper to find UserResult for a given member id
+  function getUserResultById(id: string): UserResult | null {
+    const m = members.find(m => m.id === id);
+    if (!m) return null;
+    const [first_name, ...rest] = m.name.split(" ");
+    return {
+      id: m.id,
+      first_name: first_name || "",
+      last_name: rest.join(" ") || "",
+      email: "",
+    };
+  }
+
+  // Fetch aircraft meter readings when aircraft selection changes
+  const fetchAircraftMeters = async (aircraftId: string) => {
+    if (!aircraftId) {
+      setSelectedAircraftMeters(null);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/aircraft?id=${aircraftId}`);
+      const data = await res.json();
+      if (data.aircraft) {
+        setSelectedAircraftMeters({
+          current_hobbs: typeof data.aircraft.current_hobbs === 'number' ? data.aircraft.current_hobbs : null,
+          current_tach: typeof data.aircraft.current_tach === 'number' ? data.aircraft.current_tach : null,
+        });
+      } else {
+        setSelectedAircraftMeters(null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch aircraft meters:', error);
+      setSelectedAircraftMeters(null);
+    }
+  };
+
+  // Watch for aircraft selection changes
+  useEffect(() => {
+    const subscription = watch((value, { name }) => {
+      if (name === 'checked_out_aircraft_id' && value.checked_out_aircraft_id) {
+        fetchAircraftMeters(value.checked_out_aircraft_id);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
+
+  // Fetch initial aircraft meter readings if aircraft is already selected
+  useEffect(() => {
+    if (checkedOutAircraftDefault) {
+      fetchAircraftMeters(checkedOutAircraftDefault);
+    }
+  }, [checkedOutAircraftDefault]);
 
   return (
     <div className="flex w-full max-w-6xl mx-auto gap-4 mt-8">
@@ -315,18 +373,21 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Member</label>
-              <Controller name="member" control={control} render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {members.map(m => (
-                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )} />
+              <Controller
+                name="member"
+                control={control}
+                render={({ field }) => {
+                  const memberValue = getUserResultById(field.value);
+                  return (
+                    <MemberSelect
+                      value={memberValue}
+                      onSelect={user => {
+                        field.onChange(user ? user.id : "");
+                      }}
+                    />
+                  );
+                }}
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Instructor</label>
@@ -360,6 +421,14 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
                   </SelectContent>
                 </Select>
               )} />
+              {/* Display current meter readings */}
+              {selectedAircraftMeters && (
+                <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                  <div>Current Hobbs: {selectedAircraftMeters.current_hobbs !== null ? selectedAircraftMeters.current_hobbs.toFixed(1) : 'N/A'}</div>
+                  <div>Current Tacho: {selectedAircraftMeters.current_tach !== null ? selectedAircraftMeters.current_tach.toFixed(1) : 'N/A'}</div>
+                  <div className="text-blue-600 font-medium">These values will be recorded as flight start readings</div>
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BadgeCheck className="w-4 h-4" /> Flight Type</label>

@@ -1,17 +1,77 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import CheckInDetails from "@/components/bookings/CheckInDetails";
 import type { Booking } from "@/types/bookings";
 import type { Invoice } from "@/types/invoices";
 import type { Chargeable } from "@/types/chargeables";
 import type { InvoiceItem } from "@/types/invoice_items";
-import { Pencil, PlaneLanding, AirVent, Grid, Trash2 } from "lucide-react";
+import type { InstructorFlightTypeRate } from "@/types/instructor_flight_type_rates";
+import type { FlightType } from "@/types/flight_types";
+import { Pencil, PlaneLanding, AirVent, Grid, Trash2, Loader2, CheckCircle2, MessageSquare, X } from "lucide-react";
 import ChargeableSearchDropdown from "@/components/invoices/ChargeableSearchDropdown";
+import { useRouter } from "next/navigation";
 
 interface BookingCheckInClientProps {
   booking: Booking;
   instructors: { id: string; name: string }[];
   orgId: string;
+}
+
+
+
+// Hook to get instructor rate for a booking
+function useInstructorRate(orgId: string, instructorUserId: string | null, flightTypeId: string | null) {
+  const [instructorRate, setInstructorRate] = useState<InstructorFlightTypeRate | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchRate = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setInstructorRate(null);
+    if (!orgId || !instructorUserId || !flightTypeId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      // Step 1: Get instructor record by user_id
+      const instructorUrl = `/api/instructors?user_id=${instructorUserId}`;
+      const instructorRes = await fetch(instructorUrl);
+      const instructorData = await instructorRes.json();
+      if (!instructorRes.ok) {
+        setError("No instructor record found for this user");
+        setLoading(false);
+        return;
+      }
+      const instructor = instructorData.instructor;
+      if (!instructor || !instructor.id) {
+        setError("No instructor record found for this user");
+        setLoading(false);
+        return;
+      }
+      // Step 2: Get instructor rate by instructor_id and flight_type_id
+      const rateUrl = `/api/instructor_flight_type_rates?organization_id=${orgId}&instructor_id=${instructor.id}&flight_type_id=${flightTypeId}`;
+      const rateRes = await fetch(rateUrl);
+      const rateData = await rateRes.json();
+      if (!rateRes.ok) {
+        setError("No instructor rate found for this instructor and flight type");
+        setLoading(false);
+        return;
+      }
+      setInstructorRate(rateData.rate || null);
+      setLoading(false);
+    } catch (err) {
+      setError("Failed to fetch instructor rate");
+      setLoading(false);
+      console.error("Error in useInstructorRate hook:", err);
+    }
+  }, [orgId, instructorUserId, flightTypeId]);
+
+  useEffect(() => {
+    fetchRate();
+  }, [fetchRate]);
+
+  return { instructorRate, loading, error };
 }
 
 export default function BookingCheckInClient({ booking, instructors, orgId }: BookingCheckInClientProps) {
@@ -20,11 +80,30 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [chargeableTab, setChargeableTab] = useState<'landing_fee' | 'airways_fees' | 'other'>('landing_fee');
-  // Registration state for checked out aircraft
+  // Registration state for checked out aircraft (for display only)
   const [checkedOutAircraftReg, setCheckedOutAircraftReg] = useState<string | null>(null);
-  // Add state for current_hobbs and current_tach
-  const [checkedOutAircraftHobbs, setCheckedOutAircraftHobbs] = useState<number | null>(null);
-  const [checkedOutAircraftTacho, setCheckedOutAircraftTacho] = useState<number | null>(null);
+  const { instructorRate, loading: instructorRateLoading, error: instructorRateError } = useInstructorRate(orgId, booking.instructor_id, booking.flight_type_id);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [flightTypes, setFlightTypes] = useState<FlightType[]>([]);
+  const router = useRouter();
+  // Track current form values from CheckInDetails
+  const [currentFormValues, setCurrentFormValues] = useState<{
+    endHobbs: string;
+    endTacho: string;
+  }>({ endHobbs: "", endTacho: "" });
+
+  // Fetch all flight types for the org on mount
+  useEffect(() => {
+    if (!orgId) return;
+    fetch(`/api/flight_types?organization_id=${orgId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.flight_types) setFlightTypes(data.flight_types);
+      });
+  }, [orgId]);
 
   // Fetch invoice and items on mount (for refresh)
   useEffect(() => {
@@ -63,22 +142,14 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
           const data = await res.json();
           if (data.aircraft) {
             setCheckedOutAircraftReg(data.aircraft.registration || null);
-            setCheckedOutAircraftHobbs(typeof data.aircraft.current_hobbs === 'number' ? data.aircraft.current_hobbs : null);
-            setCheckedOutAircraftTacho(typeof data.aircraft.current_tach === 'number' ? data.aircraft.current_tach : null);
           } else {
             setCheckedOutAircraftReg(null);
-            setCheckedOutAircraftHobbs(null);
-            setCheckedOutAircraftTacho(null);
           }
         } catch {
           setCheckedOutAircraftReg(null);
-          setCheckedOutAircraftHobbs(null);
-          setCheckedOutAircraftTacho(null);
         }
       } else {
         setCheckedOutAircraftReg(null);
-        setCheckedOutAircraftHobbs(null);
-        setCheckedOutAircraftTacho(null);
       }
     };
     fetchCheckedOutAircraft();
@@ -95,10 +166,22 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
     hobbsEnd?: number;
     tachStart?: number;
     tachEnd?: number;
-  }) => {
+  }): Promise<void> => {
+    // Prevent calculation if instructor rate is loading or missing
+    if (instructorRateLoading) {
+      setInvoiceError("Instructor rate is still loading. Please wait.");
+      return;
+    }
+    if (!instructorRate) {
+      setInvoiceError(instructorRateError || "No instructor rate found for this instructor.");
+      console.error("No instructor rate found:", { instructorRateError, instructorRate });
+      return;
+    }
     setInvoiceLoading(true);
     setInvoiceError(null);
     let chargeTime = details.chargeTime;
+    console.debug("handleCalculateCharges called with:", details);
+    console.debug("Using instructorRate:", instructorRate);
 
     // 1. PATCH booking if there are meter values to update
     const patchBody: Record<string, unknown> = { id: booking.id };
@@ -159,8 +242,16 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
       const itemsData = await itemsRes.json();
       const currentItems: InvoiceItem[] = itemsData.invoice_items || [];
       // 4. Prepare line item descriptions
-      const aircraftDesc = `Aircraft (${details.chargingBy?.toUpperCase()} time)`;
-      const instructorDesc = `Instructor (${details.chargingBy?.toUpperCase()} time)`;
+      // Look up flight type name
+      const flightTypeName = flightTypes.find(ft => ft.id === details.selectedFlightType)?.name || 'Flight';
+      // Look up instructor name
+      const instructorName = instructors.find(i => i.id === details.selectedInstructor)?.name || 'Instructor';
+      // Look up aircraft registration
+      const aircraftReg = checkedOutAircraftReg || booking?.aircraft?.registration || 'Aircraft';
+      // Compose aircraft line item description
+      const aircraftDesc = `${flightTypeName} - ${aircraftReg}`;
+      // Compose instructor line item description
+      const instructorDesc = `${flightTypeName} - ${instructorName}`;
       // 5. Aircraft line item
       const aircraftAmount = chargeTime * details.aircraftRate;
       const aircraftRate = details.aircraftRate;
@@ -202,8 +293,8 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
         });
       }
       // 6. Instructor line item
-      const instructorAmount = chargeTime * details.instructorRate;
-      const instructorRate = details.instructorRate;
+      const instructorAmount = chargeTime * Number(instructorRate.rate);
+      const instructorRateValue = Number(instructorRate.rate);
       const instructorQty = chargeTime;
       const existingInstructor = currentItems.find(item => item.description === instructorDesc);
       if (existingInstructor) {
@@ -214,8 +305,8 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
           body: JSON.stringify({
             id: existingInstructor.id,
             quantity: instructorQty,
-            rate: instructorRate,
-            rate_inclusive: instructorRate,
+            rate: instructorRateValue,
+            rate_inclusive: instructorRateValue,
             amount: instructorAmount,
             tax_rate: 0,
             tax_amount: 0,
@@ -232,8 +323,8 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
             invoice_id: invoiceId,
             description: instructorDesc,
             quantity: instructorQty,
-            rate: instructorRate,
-            rate_inclusive: instructorRate, // For now, assume no tax
+            rate: instructorRateValue,
+            rate_inclusive: instructorRateValue, // For now, assume no tax
             amount: instructorAmount,
             tax_rate: 0,
             tax_amount: 0,
@@ -252,7 +343,7 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
     }
   };
 
-  const handleAddItem = async (item: Chargeable, quantity: number) => {
+  const handleAddItem = async (item: Chargeable, quantity: number): Promise<void> => {
     if (!invoice) return;
     setInvoiceLoading(true);
     const rate_inclusive = item.rate * (1 + (invoice.tax_rate ?? 0.15));
@@ -282,10 +373,94 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
     setInvoiceLoading(false);
   };
 
+  // Handler for form values changes from CheckInDetails
+  const handleFormValuesChange = useCallback((values: { endHobbs: string; endTacho: string }): void => {
+    setCurrentFormValues(values);
+  }, []);
+
   // Helper for invoice totals
   const subtotal = invoiceItems.reduce((sum, item) => sum + item.amount, 0);
   const totalTax = invoiceItems.reduce((sum, item) => sum + item.tax_amount, 0);
   const total = invoiceItems.reduce((sum, item) => sum + item.total_amount, 0);
+
+  // Confirm and Save handler
+  const handleConfirmAndSave = async (): Promise<void> => {
+    setSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+    try {
+      // 1. PATCH all invoice items (persist any edits)
+      if (invoice && invoiceItems.length > 0) {
+        await Promise.all(
+          invoiceItems.map(async (item) => {
+            // Only PATCH if item has an id (should always be true)
+            if (item.id) {
+              await fetch("/api/invoice_items", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  id: item.id,
+                  quantity: item.quantity,
+                  rate: item.rate,
+                  rate_inclusive: item.rate_inclusive,
+                  amount: item.amount,
+                  tax_rate: item.tax_rate,
+                  tax_amount: item.tax_amount,
+                  total_amount: item.total_amount,
+                  description: item.description,
+                  chargeable_id: item.chargeable_id ?? undefined,
+                }),
+              });
+            }
+          })
+        );
+      }
+      // 2. PATCH aircraft current_hobbs and current_tach if end values are present
+      if (booking.checked_out_aircraft_id) {
+        const patchBody: Record<string, unknown> = {};
+        // Use current form values if they are valid numbers
+        if (currentFormValues.endHobbs && !isNaN(parseFloat(currentFormValues.endHobbs))) {
+          patchBody.current_hobbs = parseFloat(currentFormValues.endHobbs);
+        }
+        if (currentFormValues.endTacho && !isNaN(parseFloat(currentFormValues.endTacho))) {
+          patchBody.current_tach = parseFloat(currentFormValues.endTacho);
+        }
+        if (Object.keys(patchBody).length > 0) {
+          await fetch(`/api/aircraft?id=${booking.checked_out_aircraft_id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(patchBody),
+          });
+        }
+      }
+      // 3. PATCH invoice to ensure booking_id is set and update status to 'pending'
+      if (invoice && booking?.id) {
+        const invoicePatchBody: Record<string, unknown> = { status: "pending" };
+        if (invoice.booking_id !== booking.id) {
+          invoicePatchBody.booking_id = booking.id;
+        }
+        await fetch(`/api/invoices`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: invoice.id, ...invoicePatchBody }),
+        });
+      }
+      // 4. PATCH booking status to 'complete'
+      await fetch("/api/bookings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: booking.id, status: "complete" }),
+      });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+      // Show success modal for debrief option
+      setShowSuccessModal(true);
+    } catch {
+      setSaveError("Failed to save changes. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="flex flex-row w-full max-w-6xl mx-auto gap-4">
@@ -302,13 +477,16 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
             aircraftId={booking?.aircraft_id}
             organizationId={orgId}
             selectedFlightTypeId={booking?.flight_type_id}
-            instructorId={booking?.checked_out_instructor_id}
+            instructorId={booking?.instructor_id}
             instructors={instructors}
+            instructorRate={instructorRate ? { rate: Number(instructorRate.rate), currency: instructorRate.currency } : undefined}
+            instructorRateLoading={instructorRateLoading}
             onCalculateCharges={handleCalculateCharges}
-            initialStartHobbs={checkedOutAircraftHobbs}
-            initialStartTacho={checkedOutAircraftTacho}
+            bookingStartHobbs={booking?.hobbs_start}
+            bookingStartTacho={booking?.tach_start}
             initialEndHobbs={booking?.hobbs_end}
             initialEndTacho={booking?.tach_end}
+            onFormValuesChange={handleFormValuesChange}
           />
         </div>
       </div>
@@ -431,8 +609,81 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
               <div className="font-bold text-green-600">${total.toFixed(2)}</div>
             </div>
           </div>
+          {/* Confirm and Save Button */}
+          <div className="mt-6 flex flex-col items-end gap-2">
+            {saveError && <div className="text-destructive text-sm">{saveError}</div>}
+            {saveSuccess && (
+              <div className="flex items-center gap-1 text-green-600 text-sm font-medium">
+                <CheckCircle2 className="w-4 h-4" /> Saved successfully
+              </div>
+            )}
+            <button
+              className={`inline-flex items-center gap-2 px-6 py-2 rounded-lg font-semibold bg-indigo-600 text-white shadow hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed`}
+              onClick={handleConfirmAndSave}
+              disabled={saving || invoiceLoading || invoiceItems.length === 0}
+              type="button"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Confirm and Save
+            </button>
+          </div>
         </div>
       </div>
+      
+      {/* Success Modal with Debrief Option */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-10 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle2 className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Check-In Complete!</h3>
+                  <p className="text-sm text-gray-600">Flight charges have been saved successfully.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSuccessModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <MessageSquare className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-semibold text-blue-900 mb-1">Ready for Debrief?</h4>
+                    <p className="text-sm text-blue-700">
+                      Complete the student&apos;s debrief to finalize this flight session.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => router.push(`/dashboard/bookings/debrief/${booking.id}`)}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Start Debrief
+                </button>
+                <button
+                  onClick={() => setShowSuccessModal(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

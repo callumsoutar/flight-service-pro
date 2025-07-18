@@ -12,18 +12,12 @@ import { User } from "@/types/users";
 import { Aircraft } from "@/types/aircraft";
 import BookingActions from "@/components/bookings/BookingActions";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
+import BookingConfirmActionClient from "@/components/bookings/BookingConfirmActionClient";
+import { STATUS_BADGE } from "@/components/bookings/statusBadge";
 
 interface BookingViewPageProps {
   params: Promise<{ id: string }>;
 }
-
-const STATUS_BADGE: Record<Booking["status"], { label: string; color: string }> = {
-  confirmed: { label: "Confirmed", color: "bg-green-100 text-green-800" },
-  unconfirmed: { label: "Unconfirmed", color: "bg-gray-100 text-gray-800" },
-  briefing: { label: "Briefing", color: "bg-yellow-100 text-yellow-800" },
-  flying: { label: "Flying", color: "bg-blue-100 text-blue-800" },
-  complete: { label: "Complete", color: "bg-violet-100 text-violet-800" },
-};
 
 export default async function BookingViewPage({ params }: BookingViewPageProps) {
   const { id: bookingId } = await params;
@@ -160,6 +154,10 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
           </div>
           <Badge className={STATUS_BADGE[status].color + " text-lg px-4 py-2 font-semibold"}>{STATUS_BADGE[status].label}</Badge>
           <div className="flex-none flex items-center justify-end gap-3">
+            {/* Render Confirm button if booking is unconfirmed (client component wrapper) */}
+            {booking && booking.id && (
+              <BookingConfirmActionClient bookingId={booking.id} status={booking.status} />
+            )}
             {booking && booking.id && (
               <BookingActions status={status} bookingId={booking.id} />
             )}
