@@ -2,35 +2,45 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/SupabaseServerClient';
 import { z } from 'zod';
 
-
-const EquipmentSchema = z.object({
+const equipmentSchema = z.object({
   name: z.string().min(1),
-  serial_number: z.string().nullable().optional(),
+  label: z.string().nullable().optional(),
+  type: z.enum(['AIP', 'Stationery', 'Headset', 'Technology', 'Maps', 'Radio', 'Transponder', 'ELT', 'Lifejacket', 'FirstAidKit', 'FireExtinguisher', 'Other']),
   status: z.enum(['active', 'lost', 'maintenance', 'retired']),
-  type: z.enum([
-    'AIP','Stationery','Headset','Technology','Maps','Radio','Transponder','ELT','Lifejacket','FirstAidKit','FireExtinguisher','Other',
-  ]).nullable(),
+  serial_number: z.string().nullable().optional(),
+  purchase_date: z.string().nullable().optional(),
+  warranty_expiry: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
   location: z.string().nullable().optional(),
-  year_purchased: z.number().int().nullable().optional(),
+  year_purchased: z.number().nullable().optional(),
 });
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const supabase = await createClient();
-  const orgId = req.nextUrl.searchParams.get('organization_id');
-  if (!orgId) return NextResponse.json({ error: 'Missing organization_id' }, { status: 400 });
-  const { data, error } = await supabase.from('equipment').select('*').eq('organization_id', orgId);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  
+  const { data, error } = await supabase.from('equipment').select('*');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ equipment: data });
+  return NextResponse.json({ equipment: data || [] });
 }
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  
   const body = await req.json();
-  const parse = EquipmentSchema.safeParse(body);
-  if (!parse.success) return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
-  const orgId = body.organization_id;
-  if (!orgId) return NextResponse.json({ error: 'Missing organization_id' }, { status: 400 });
-  const { data, error } = await supabase.from('equipment').insert([{ ...parse.data, organization_id: orgId }]).select();
+  const parse = equipmentSchema.safeParse(body);
+  if (!parse.success) {
+    return NextResponse.json({ error: 'Invalid equipment data' }, { status: 400 });
+  }
+  
+  const { data, error } = await supabase.from('equipment').insert([parse.data]).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ equipment: data?.[0] });
 }
@@ -40,7 +50,7 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { id, ...update } = body;
   if (!id) return NextResponse.json({ error: 'Missing equipment id' }, { status: 400 });
-  const parse = EquipmentSchema.partial().safeParse(update);
+  const parse = equipmentSchema.partial().safeParse(update);
   if (!parse.success) return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
   const { data, error } = await supabase.from('equipment').update(parse.data).eq('id', id).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

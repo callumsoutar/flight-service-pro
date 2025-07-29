@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import CheckInDetails from "@/components/bookings/CheckInDetails";
 import type { Booking } from "@/types/bookings";
 import type { Invoice } from "@/types/invoices";
@@ -14,58 +14,42 @@ import { useRouter } from "next/navigation";
 interface BookingCheckInClientProps {
   booking: Booking;
   instructors: { id: string; name: string }[];
-  orgId: string;
 }
 
-
-
 // Hook to get instructor rate for a booking
-function useInstructorRate(orgId: string, instructorUserId: string | null, flightTypeId: string | null) {
+function useInstructorRate(instructorId: string | null, flightTypeId: string | null) {
   const [instructorRate, setInstructorRate] = useState<InstructorFlightTypeRate | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchRate = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setInstructorRate(null);
-    if (!orgId || !instructorUserId || !flightTypeId) {
+    if (!instructorId || !flightTypeId) {
+      setInstructorRate(null);
       setLoading(false);
+      setError(null);
       return;
     }
+
+    setLoading(true);
+    setError(null);
+    
     try {
-      // Step 1: Get instructor record by user_id
-      const instructorUrl = `/api/instructors?user_id=${instructorUserId}`;
-      const instructorRes = await fetch(instructorUrl);
-      const instructorData = await instructorRes.json();
-      if (!instructorRes.ok) {
-        setError("No instructor record found for this user");
-        setLoading(false);
-        return;
-      }
-      const instructor = instructorData.instructor;
-      if (!instructor || !instructor.id) {
-        setError("No instructor record found for this user");
-        setLoading(false);
-        return;
-      }
-      // Step 2: Get instructor rate by instructor_id and flight_type_id
-      const rateUrl = `/api/instructor_flight_type_rates?organization_id=${orgId}&instructor_id=${instructor.id}&flight_type_id=${flightTypeId}`;
+      const rateUrl = `/api/instructor_flight_type_rates?instructor_id=${instructorId}&flight_type_id=${flightTypeId}`;
       const rateRes = await fetch(rateUrl);
-      const rateData = await rateRes.json();
+      
       if (!rateRes.ok) {
-        setError("No instructor rate found for this instructor and flight type");
-        setLoading(false);
-        return;
+        throw new Error("No instructor rate found for this instructor and flight type");
       }
+      
+      const rateData = await rateRes.json();
       setInstructorRate(rateData.rate || null);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch instructor rate";
+      setError(errorMessage);
+    } finally {
       setLoading(false);
-    } catch (err) {
-      setError("Failed to fetch instructor rate");
-      setLoading(false);
-      console.error("Error in useInstructorRate hook:", err);
     }
-  }, [orgId, instructorUserId, flightTypeId]);
+  }, [instructorId, flightTypeId]);
 
   useEffect(() => {
     fetchRate();
@@ -74,88 +58,114 @@ function useInstructorRate(orgId: string, instructorUserId: string | null, fligh
   return { instructorRate, loading, error };
 }
 
-export default function BookingCheckInClient({ booking, instructors, orgId }: BookingCheckInClientProps) {
+// Custom hook for data fetching
+function useCheckInData(booking: Booking) {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
-  const [invoiceLoading, setInvoiceLoading] = useState(false);
-  const [invoiceError, setInvoiceError] = useState<string | null>(null);
-  const [chargeableTab, setChargeableTab] = useState<'landing_fee' | 'airways_fees' | 'other'>('landing_fee');
-  // Registration state for checked out aircraft (for display only)
   const [checkedOutAircraftReg, setCheckedOutAircraftReg] = useState<string | null>(null);
-  const { instructorRate, loading: instructorRateLoading, error: instructorRateError } = useInstructorRate(orgId, booking.instructor_id, booking.flight_type_id);
+  const [flightTypes, setFlightTypes] = useState<FlightType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Memoized fetch function to avoid unnecessary re-renders
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Parallel API calls for better performance
+      const [invoiceRes, flightTypesRes, aircraftRes] = await Promise.allSettled([
+        fetch(`/api/invoices?booking_id=${booking.id}`),
+        fetch('/api/flight_types'),
+        booking.checked_out_aircraft_id 
+          ? fetch(`/api/aircraft?id=${booking.checked_out_aircraft_id}`)
+          : Promise.resolve(null)
+      ]);
+
+      // Handle invoice data
+      if (invoiceRes.status === 'fulfilled') {
+        const invoiceData = await invoiceRes.value.json();
+        const found = invoiceData.invoices?.[0] || null;
+        setInvoice(found);
+        
+        if (found) {
+          // Fetch invoice items if invoice exists
+          const itemsRes = await fetch(`/api/invoice_items?invoice_id=${found.id}`);
+          const itemsData = await itemsRes.json();
+          setInvoiceItems(itemsData.invoice_items || []);
+        } else {
+          setInvoiceItems([]);
+        }
+      }
+
+      // Handle flight types
+      if (flightTypesRes.status === 'fulfilled') {
+        const flightTypesData = await flightTypesRes.value.json();
+        setFlightTypes(flightTypesData.flight_types || []);
+      }
+
+      // Handle aircraft registration
+      if (aircraftRes.status === 'fulfilled' && aircraftRes.value) {
+        const aircraftData = await aircraftRes.value.json();
+        setCheckedOutAircraftReg(aircraftData.aircraft?.registration || null);
+      } else {
+        setCheckedOutAircraftReg(null);
+      }
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch data";
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [booking.id, booking.checked_out_aircraft_id]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return {
+    invoice,
+    setInvoice,
+    invoiceItems,
+    setInvoiceItems,
+    checkedOutAircraftReg,
+    flightTypes,
+    loading,
+    error,
+    refetch: fetchData
+  };
+}
+
+export default function BookingCheckInClient({ booking, instructors }: BookingCheckInClientProps) {
+  const router = useRouter();
+  const { instructorRate, loading: instructorRateLoading, error: instructorRateError } = useInstructorRate(booking.instructor_id, booking.flight_type_id);
+  
+  const {
+    invoice,
+    setInvoice,
+    invoiceItems,
+    setInvoiceItems,
+    checkedOutAircraftReg,
+    flightTypes,
+    loading: dataLoading,
+    error: dataError,
+    refetch
+  } = useCheckInData(booking);
+
+  const [chargeableTab, setChargeableTab] = useState<'landing_fee' | 'airways_fees' | 'other'>('landing_fee');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [flightTypes, setFlightTypes] = useState<FlightType[]>([]);
-  const router = useRouter();
+  
   // Track current form values from CheckInDetails
   const [currentFormValues, setCurrentFormValues] = useState<{
     endHobbs: string;
     endTacho: string;
   }>({ endHobbs: "", endTacho: "" });
 
-  // Fetch all flight types for the org on mount
-  useEffect(() => {
-    if (!orgId) return;
-    fetch(`/api/flight_types?organization_id=${orgId}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.flight_types) setFlightTypes(data.flight_types);
-      });
-  }, [orgId]);
-
-  // Fetch invoice and items on mount (for refresh)
-  useEffect(() => {
-    const fetchInvoiceAndItems = async () => {
-      setInvoiceLoading(true);
-      setInvoiceError(null);
-      try {
-        // Fetch invoice for this booking only
-        const res = await fetch(`/api/invoices?booking_id=${booking.id}`);
-        const data = await res.json();
-        const found = data.invoices && data.invoices.length > 0 ? data.invoices[0] : null;
-        if (found) {
-          setInvoice(found);
-          // Fetch items
-          const itemsRes = await fetch(`/api/invoice_items?invoice_id=${found.id}`);
-          const itemsData = await itemsRes.json();
-          setInvoiceItems(itemsData.invoice_items || []);
-        } else {
-          setInvoice(null);
-          setInvoiceItems([]);
-        }
-        setInvoiceLoading(false);
-      } catch {
-        setInvoiceError("Failed to fetch invoice");
-        setInvoiceLoading(false);
-      }
-    };
-    fetchInvoiceAndItems();
-  }, [booking.id]);
-
-  useEffect(() => {
-    const fetchCheckedOutAircraft = async () => {
-      if (booking.checked_out_aircraft_id) {
-        try {
-          const res = await fetch(`/api/aircraft?id=${booking.checked_out_aircraft_id}`);
-          const data = await res.json();
-          if (data.aircraft) {
-            setCheckedOutAircraftReg(data.aircraft.registration || null);
-          } else {
-            setCheckedOutAircraftReg(null);
-          }
-        } catch {
-          setCheckedOutAircraftReg(null);
-        }
-      } else {
-        setCheckedOutAircraftReg(null);
-      }
-    };
-    fetchCheckedOutAircraft();
-  }, [booking.checked_out_aircraft_id]);
-
-  const handleCalculateCharges = async (details: {
+  const handleCalculateCharges = useCallback(async (details: {
     chargeTime: number;
     aircraftRate: number;
     instructorRate: number;
@@ -169,52 +179,45 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
   }): Promise<void> => {
     // Prevent calculation if instructor rate is loading or missing
     if (instructorRateLoading) {
-      setInvoiceError("Instructor rate is still loading. Please wait.");
+      setSaveError("Instructor rate is still loading. Please wait.");
       return;
     }
     if (!instructorRate) {
-      setInvoiceError(instructorRateError || "No instructor rate found for this instructor.");
-      console.error("No instructor rate found:", { instructorRateError, instructorRate });
+      setSaveError(instructorRateError || "No instructor rate found for this instructor.");
       return;
     }
-    setInvoiceLoading(true);
-    setInvoiceError(null);
-    let chargeTime = details.chargeTime;
-    console.debug("handleCalculateCharges called with:", details);
-    console.debug("Using instructorRate:", instructorRate);
 
-    // 1. PATCH booking if there are meter values to update
-    const patchBody: Record<string, unknown> = { id: booking.id };
-    if (typeof details.hobbsStart === 'number') patchBody.hobbs_start = details.hobbsStart;
-    if (typeof details.hobbsEnd === 'number') patchBody.hobbs_end = details.hobbsEnd;
-    if (typeof details.tachStart === 'number') patchBody.tach_start = details.tachStart;
-    if (typeof details.tachEnd === 'number') patchBody.tach_end = details.tachEnd;
+    setSaving(true);
+    setSaveError(null);
+    
+    try {
+      let chargeTime = details.chargeTime;
 
-    if (Object.keys(patchBody).length > 1) { // id + at least one value
-      try {
+      // 1. PATCH booking if there are meter values to update
+      const patchBody: Record<string, unknown> = { id: booking.id };
+      if (typeof details.hobbsStart === 'number') patchBody.hobbs_start = details.hobbsStart;
+      if (typeof details.hobbsEnd === 'number') patchBody.hobbs_end = details.hobbsEnd;
+      if (typeof details.tachStart === 'number') patchBody.tach_start = details.tachStart;
+      if (typeof details.tachEnd === 'number') patchBody.tach_end = details.tachEnd;
+
+      if (Object.keys(patchBody).length > 1) {
         const patchRes = await fetch('/api/bookings', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(patchBody),
         });
-        const patchData = await patchRes.json();
-        if (patchRes.ok && patchData.booking) {
-          chargeTime = patchData.booking.flight_time ?? chargeTime;
-        } else if (patchData.error && patchData.error.includes('no valid fields to update')) {
-          // Ignore and proceed
+        
+        if (patchRes.ok) {
+          const patchData = await patchRes.json();
+          chargeTime = patchData.booking?.flight_time ?? chargeTime;
         } else {
-          setInvoiceError(patchData.error || 'Failed to update booking');
-          setInvoiceLoading(false);
-          return;
+          const patchData = await patchRes.json();
+          if (!patchData.error?.includes('no valid fields to update')) {
+            throw new Error(patchData.error || 'Failed to update booking');
+          }
         }
-      } catch {
-        setInvoiceError('Failed to update booking');
-        setInvoiceLoading(false);
-        return;
       }
-    }
 
-    try {
       // 2. Create invoice (if not already created)
       let invoiceId = invoice?.id;
       if (!invoiceId) {
@@ -222,156 +225,139 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            organization_id: orgId,
             user_id: booking?.user_id,
             booking_id: booking?.id,
             status: "draft",
           }),
         });
+        
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to create invoice");
+        }
+        
         const data = await res.json();
-        if (!res.ok || !data.id) throw new Error(data.error || "Failed to create invoice");
         invoiceId = data.id;
-        // Optionally fetch the invoice object
+        
+        // Update local state
         const invoiceRes = await fetch(`/api/invoices?booking_id=${booking.id}`);
         const invoiceData = await invoiceRes.json();
         const found = invoiceData.invoices?.[0] || null;
         setInvoice(found);
       }
+
       // 3. Fetch current invoice items
       const itemsRes = await fetch(`/api/invoice_items?invoice_id=${invoiceId}`);
       const itemsData = await itemsRes.json();
       const currentItems: InvoiceItem[] = itemsData.invoice_items || [];
+
       // 4. Prepare line item descriptions
-      // Look up flight type name
-      const flightTypeName = flightTypes.find(ft => ft.id === details.selectedFlightType)?.name || 'Flight';
-      // Look up instructor name
-      const instructorName = instructors.find(i => i.id === details.selectedInstructor)?.name || 'Instructor';
-      // Look up aircraft registration
-      const aircraftReg = checkedOutAircraftReg || booking?.aircraft?.registration || 'Aircraft';
-      // Compose aircraft line item description
-      const aircraftDesc = `${flightTypeName} - ${aircraftReg}`;
-      // Compose instructor line item description
-      const instructorDesc = `${flightTypeName} - ${instructorName}`;
-      // 5. Aircraft line item
-      const aircraftAmount = chargeTime * details.aircraftRate;
-      const aircraftRate = details.aircraftRate;
+      const selectedFlightTypeName = flightTypes.find(ft => ft.id === details.selectedFlightType)?.name || 'Flight';
+      const selectedInstructorName = instructors.find(i => i.id === details.selectedInstructor)?.name || 'Instructor';
+      const selectedAircraftReg = checkedOutAircraftReg || booking?.aircraft?.registration || 'Aircraft';
+      
+      const aircraftDesc = `${selectedFlightTypeName} - ${selectedAircraftReg}`;
+      const instructorDesc = `${selectedFlightTypeName} - ${selectedInstructorName}`;
+
+      // 5. Create/update line items in parallel
       const aircraftQty = chargeTime;
-      const existingAircraft = currentItems.find(item => item.description === aircraftDesc);
-      if (existingAircraft) {
-        // PATCH
-        await fetch("/api/invoice_items", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: existingAircraft.id,
-            quantity: aircraftQty,
-            rate: aircraftRate,
-            rate_inclusive: aircraftRate,
-            amount: aircraftAmount,
-            tax_rate: 0,
-            tax_amount: 0,
-            total_amount: aircraftAmount,
-            description: aircraftDesc,
-          }),
-        });
-      } else {
-        // POST
-        await fetch("/api/invoice_items", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            invoice_id: invoiceId,
-            description: aircraftDesc,
-            quantity: aircraftQty,
-            rate: aircraftRate,
-            rate_inclusive: aircraftRate, // For now, assume no tax
-            amount: aircraftAmount,
-            tax_rate: 0,
-            tax_amount: 0,
-            total_amount: aircraftAmount,
-          }),
-        });
-      }
-      // 6. Instructor line item
-      const instructorAmount = chargeTime * Number(instructorRate.rate);
-      const instructorRateValue = Number(instructorRate.rate);
       const instructorQty = chargeTime;
+      const instructorRateValue = Number(instructorRate.rate);
+
+      const existingAircraft = currentItems.find(item => item.description === aircraftDesc);
       const existingInstructor = currentItems.find(item => item.description === instructorDesc);
-      if (existingInstructor) {
-        // PATCH
-        await fetch("/api/invoice_items", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: existingInstructor.id,
-            quantity: instructorQty,
-            rate: instructorRateValue,
-            rate_inclusive: instructorRateValue,
-            amount: instructorAmount,
-            tax_rate: 0,
-            tax_amount: 0,
-            total_amount: instructorAmount,
-            description: instructorDesc,
-          }),
-        });
-      } else {
-        // POST
-        await fetch("/api/invoice_items", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            invoice_id: invoiceId,
-            description: instructorDesc,
-            quantity: instructorQty,
-            rate: instructorRateValue,
-            rate_inclusive: instructorRateValue, // For now, assume no tax
-            amount: instructorAmount,
-            tax_rate: 0,
-            tax_amount: 0,
-            total_amount: instructorAmount,
-          }),
-        });
-      }
-      // 7. Refetch invoice items
+
+      await Promise.all([
+        // Aircraft line item
+        existingAircraft 
+          ? fetch("/api/invoice_items", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                id: existingAircraft.id,
+                quantity: aircraftQty,
+                unit_price: details.aircraftRate,
+                description: aircraftDesc,
+              }),
+            })
+          : fetch("/api/invoice_items", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                invoice_id: invoiceId,
+                description: aircraftDesc,
+                quantity: aircraftQty,
+                unit_price: details.aircraftRate,
+              }),
+            }),
+        
+        // Instructor line item
+        existingInstructor
+          ? fetch("/api/invoice_items", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                id: existingInstructor.id,
+                quantity: instructorQty,
+                unit_price: instructorRateValue,
+                description: instructorDesc,
+              }),
+            })
+          : fetch("/api/invoice_items", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                invoice_id: invoiceId,
+                description: instructorDesc,
+                quantity: instructorQty,
+                unit_price: instructorRateValue,
+              }),
+            })
+      ]);
+
+      // 6. Refetch invoice items
       const updatedItemsRes = await fetch(`/api/invoice_items?invoice_id=${invoiceId}`);
       const updatedItemsData = await updatedItemsRes.json();
       setInvoiceItems(updatedItemsData.invoice_items || []);
-      setInvoiceLoading(false);
-    } catch (err: unknown) {
-      setInvoiceError((err instanceof Error ? err.message : "Failed to calculate charges"));
-      setInvoiceLoading(false);
+      
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to calculate charges";
+      setSaveError(errorMessage);
+    } finally {
+      setSaving(false);
     }
-  };
+  }, [booking, instructorRate, instructorRateLoading, instructorRateError, invoice, flightTypes, instructors, checkedOutAircraftReg, setInvoice, setInvoiceItems]);
 
-  const handleAddItem = async (item: Chargeable, quantity: number): Promise<void> => {
+  const handleAddItem = useCallback(async (item: Chargeable, quantity: number): Promise<void> => {
     if (!invoice) return;
-    setInvoiceLoading(true);
-    const rate_inclusive = item.rate * (1 + (invoice.tax_rate ?? 0.15));
-    const amount = item.rate * quantity;
-    const tax_amount = amount * (invoice.tax_rate ?? 0.15);
-    const total_amount = rate_inclusive * quantity;
-    await fetch("/api/invoice_items", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        invoice_id: invoice.id,
-        chargeable_id: item.id,
-        description: item.name,
-        quantity,
-        rate: item.rate,
-        rate_inclusive,
-        amount,
-        tax_rate: invoice.tax_rate ?? 0.15,
-        tax_amount,
-        total_amount,
-      }),
-    });
-    // Refetch items
-    const updatedItemsRes = await fetch(`/api/invoice_items?invoice_id=${invoice.id}`);
-    const updatedItemsData = await updatedItemsRes.json();
-    setInvoiceItems(updatedItemsData.invoice_items || []);
-    setInvoiceLoading(false);
-  };
+    
+    setSaving(true);
+    setSaveError(null);
+    
+    try {
+      await fetch("/api/invoice_items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoice_id: invoice.id,
+          chargeable_id: item.id,
+          description: item.name,
+          quantity,
+          unit_price: item.rate,
+        }),
+      });
+      
+      // Refetch items
+      const updatedItemsRes = await fetch(`/api/invoice_items?invoice_id=${invoice.id}`);
+      const updatedItemsData = await updatedItemsRes.json();
+      setInvoiceItems(updatedItemsData.invoice_items || []);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to add item";
+      setSaveError(errorMessage);
+    } finally {
+      setSaving(false);
+    }
+  }, [invoice, setInvoiceItems]);
 
   // Handler for form values changes from CheckInDetails
   const handleFormValuesChange = useCallback((values: { endHobbs: string; endTacho: string }): void => {
@@ -379,21 +365,24 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
   }, []);
 
   // Helper for invoice totals
-  const subtotal = invoiceItems.reduce((sum, item) => sum + item.amount, 0);
-  const totalTax = invoiceItems.reduce((sum, item) => sum + item.tax_amount, 0);
-  const total = invoiceItems.reduce((sum, item) => sum + item.total_amount, 0);
+  const { subtotal, totalTax, total } = useMemo(() => {
+    const subtotal = invoiceItems.reduce((sum, item) => sum + item.amount, 0);
+    const totalTax = invoiceItems.reduce((sum, item) => sum + (item.tax_amount || 0), 0);
+    const total = invoiceItems.reduce((sum, item) => sum + (item.line_total || 0), 0);
+    return { subtotal, totalTax, total };
+  }, [invoiceItems]);
 
   // Confirm and Save handler
-  const handleConfirmAndSave = async (): Promise<void> => {
+  const handleConfirmAndSave = useCallback(async (): Promise<void> => {
     setSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
+    
     try {
       // 1. PATCH all invoice items (persist any edits)
       if (invoice && invoiceItems.length > 0) {
         await Promise.all(
           invoiceItems.map(async (item) => {
-            // Only PATCH if item has an id (should always be true)
             if (item.id) {
               await fetch("/api/invoice_items", {
                 method: "PATCH",
@@ -401,12 +390,12 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
                 body: JSON.stringify({
                   id: item.id,
                   quantity: item.quantity,
-                  rate: item.rate,
+                  unit_price: item.unit_price,
                   rate_inclusive: item.rate_inclusive,
                   amount: item.amount,
                   tax_rate: item.tax_rate,
                   tax_amount: item.tax_amount,
-                  total_amount: item.total_amount,
+                  line_total: item.line_total,
                   description: item.description,
                   chargeable_id: item.chargeable_id ?? undefined,
                 }),
@@ -415,24 +404,43 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
           })
         );
       }
+
       // 2. PATCH aircraft current_hobbs and current_tach if end values are present
       if (booking.checked_out_aircraft_id) {
         const patchBody: Record<string, unknown> = {};
-        // Use current form values if they are valid numbers
+        
+        // Only update if we have valid numeric values
         if (currentFormValues.endHobbs && !isNaN(parseFloat(currentFormValues.endHobbs))) {
-          patchBody.current_hobbs = parseFloat(currentFormValues.endHobbs);
+          const endHobbsValue = parseFloat(currentFormValues.endHobbs);
+          if (endHobbsValue >= 0) {
+            patchBody.current_hobbs = endHobbsValue;
+          }
         }
+        
         if (currentFormValues.endTacho && !isNaN(parseFloat(currentFormValues.endTacho))) {
-          patchBody.current_tach = parseFloat(currentFormValues.endTacho);
+          const endTachoValue = parseFloat(currentFormValues.endTacho);
+          if (endTachoValue >= 0) {
+            patchBody.current_tach = endTachoValue;
+          }
         }
+        
         if (Object.keys(patchBody).length > 0) {
-          await fetch(`/api/aircraft?id=${booking.checked_out_aircraft_id}`, {
+          const aircraftRes = await fetch(`/api/aircraft`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(patchBody),
+            body: JSON.stringify({
+              id: booking.checked_out_aircraft_id,
+              ...patchBody
+            }),
           });
+          
+          if (!aircraftRes.ok) {
+            const aircraftError = await aircraftRes.json();
+            throw new Error(`Failed to update aircraft meters: ${aircraftError.error || 'Unknown error'}`);
+          }
         }
       }
+
       // 3. PATCH invoice to ensure booking_id is set and update status to 'pending'
       if (invoice && booking?.id) {
         const invoicePatchBody: Record<string, unknown> = { status: "pending" };
@@ -445,22 +453,70 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
           body: JSON.stringify({ id: invoice.id, ...invoicePatchBody }),
         });
       }
+
       // 4. PATCH booking status to 'complete'
       await fetch("/api/bookings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: booking.id, status: "complete" }),
       });
+
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
-      // Show success modal for debrief option
       setShowSuccessModal(true);
-    } catch {
-      setSaveError("Failed to save changes. Please try again.");
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to save changes. Please try again.";
+      setSaveError(errorMessage);
     } finally {
       setSaving(false);
     }
-  };
+  }, [invoice, invoiceItems, booking, currentFormValues]);
+
+  // Show loading state
+  if (dataLoading) {
+    return (
+      <div className="flex flex-row w-full max-w-6xl mx-auto gap-4">
+        <div className="flex-[2] flex flex-col gap-6 min-w-0" style={{ flexBasis: '40%' }}>
+          <div className="bg-white border rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <span className="ml-2">Loading...</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex-[3] flex flex-col gap-6 min-w-0" style={{ flexBasis: '60%' }}>
+          <div className="bg-white border rounded-2xl p-6 shadow-lg">
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <span className="ml-2">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (dataError) {
+    return (
+      <div className="flex flex-row w-full max-w-6xl mx-auto gap-4">
+        <div className="flex-[2] flex flex-col gap-6 min-w-0" style={{ flexBasis: '40%' }}>
+          <div className="bg-white border rounded-2xl p-6 shadow-sm">
+            <div className="text-center py-8">
+              <div className="text-red-600 mb-2">Failed to load data</div>
+              <button 
+                onClick={refetch}
+                className="text-blue-600 hover:text-blue-800 underline"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-row w-full max-w-6xl mx-auto gap-4">
@@ -475,7 +531,6 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
           )}
           <CheckInDetails 
             aircraftId={booking?.aircraft_id}
-            organizationId={orgId}
             selectedFlightTypeId={booking?.flight_type_id}
             instructorId={booking?.instructor_id}
             instructors={instructors}
@@ -495,10 +550,10 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
         <div className="bg-white border rounded-2xl p-6 shadow-lg">
           <h2 className="font-bold text-lg mb-4">Invoice</h2>
           {/* Invoice Table */}
-          {invoiceLoading ? (
+          {saving ? (
             <div className="text-muted-foreground">Calculating...</div>
-          ) : invoiceError ? (
-            <div className="text-destructive">{invoiceError}</div>
+          ) : saveError ? (
+            <div className="text-destructive">{saveError}</div>
           ) : invoice && invoiceItems.length > 0 ? (
             <div className="w-full border rounded-lg overflow-hidden mb-4">
               <div className="grid grid-cols-6 gap-0 bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-600">
@@ -517,10 +572,10 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
                     <span>{item.quantity}</span>
                   </div>
                   <div className="col-span-1 flex items-center justify-end text-xs">
-                    <span>${item.rate_inclusive.toFixed(2)}</span>
+                    <span>${(item.rate_inclusive || item.unit_price || 0).toFixed(2)}</span>
                   </div>
                   <div className="col-span-1 flex items-center justify-end font-semibold">
-                    <span>${item.total_amount.toFixed(2)}</span>
+                    <span>${(item.line_total || 0).toFixed(2)}</span>
                   </div>
                   <div className="col-span-1 flex items-center justify-center gap-2">
                     <button className="text-blue-600 hover:text-blue-800 p-1 rounded transition-colors" title="Edit">
@@ -620,7 +675,7 @@ export default function BookingCheckInClient({ booking, instructors, orgId }: Bo
             <button
               className={`inline-flex items-center gap-2 px-6 py-2 rounded-lg font-semibold bg-indigo-600 text-white shadow hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed`}
               onClick={handleConfirmAndSave}
-              disabled={saving || invoiceLoading || invoiceItems.length === 0}
+              disabled={saving || invoiceItems.length === 0}
               type="button"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}

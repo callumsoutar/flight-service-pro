@@ -73,7 +73,6 @@ export default function BookingsPageClient({ bookings, members, instructors, air
       <NewBookingModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        instructors={instructors}
         aircraft={aircraftList}
         bookings={bookings}
       />

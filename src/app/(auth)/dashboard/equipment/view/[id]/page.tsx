@@ -24,7 +24,7 @@ const tabItems = [
 
 const EQUIPMENT_TYPES: EquipmentType[] = [
   "AIP",
-  "Stationery",
+  "Stationery", 
   "Headset",
   "Technology",
   "Maps",
@@ -54,11 +54,9 @@ export default function EquipmentViewPage() {
     notes?: string;
   }>({
     id: id || "",
-    organization_id: "",
     name: "",
-    serial_number: "",
+    type: "Other",
     status: "active",
-    type: null,
     created_at: null,
     updated_at: null,
     location: "",
@@ -100,7 +98,7 @@ export default function EquipmentViewPage() {
       .then((data) => {
         setIssuance(data.issuances || []);
         // After fetching issuance, fetch user info for all unique user IDs
-        const userIds = Array.from(new Set((data.issuances || []).flatMap((row: EquipmentIssuance) => [row.issued_to, row.issued_by])));
+        const userIds = Array.from(new Set((data.issuances || []).flatMap((row: EquipmentIssuance) => [row.user_id, row.issued_by])));
         if (userIds.length > 0) {
           fetch(`/api/users?ids=${userIds.join(",")}`)
             .then((res) => res.json())
@@ -277,13 +275,12 @@ export default function EquipmentViewPage() {
                       />
                     </div>
                     <div className="flex flex-col gap-2">
-                      <label className="text-sm font-medium text-gray-700">Year Purchased</label>
+                      <label className="text-sm font-medium text-gray-700">Label</label>
                       <Input
-                        name="year_purchased"
-                        type="number"
-                        value={equipment.year_purchased ?? ""}
-                        onChange={e => setEquipment(prev => ({ ...prev, year_purchased: e.target.value === "" ? null : Number(e.target.value) }))}
-                        placeholder="Year"
+                        name="label"
+                        value={equipment.label || ""}
+                        onChange={e => setEquipment(prev => ({ ...prev, label: e.target.value }))}
+                        placeholder="Label"
                         className="bg-white"
                       />
                     </div>
@@ -359,7 +356,6 @@ export default function EquipmentViewPage() {
                   loading={issuanceLoading}
                   error={issuanceError}
                   equipment={equipment}
-                  orgId={equipment.organization_id}
                   refresh={() => {
                     if (!id) return;
                     setIssuanceLoading(true);
@@ -369,7 +365,7 @@ export default function EquipmentViewPage() {
                       .then((data) => {
                         setIssuance(data.issuances || []);
                         // After fetching issuance, fetch user info for all unique user IDs
-                        const userIds = Array.from(new Set((data.issuances || []).flatMap((row: EquipmentIssuance) => [row.issued_to, row.issued_by])));
+                        const userIds = Array.from(new Set((data.issuances || []).flatMap((row: EquipmentIssuance) => [row.user_id, row.issued_by])));
                         if (userIds.length > 0) {
                           fetch(`/api/users?ids=${userIds.join(",")}`)
                             .then((res) => res.json())
@@ -396,7 +392,6 @@ export default function EquipmentViewPage() {
                   loading={updatesLoading}
                   error={updatesError}
                   equipment={equipment}
-                  orgId={equipment.organization_id}
                   refresh={() => {
                     if (!id) return;
                     setUpdatesLoading(true);

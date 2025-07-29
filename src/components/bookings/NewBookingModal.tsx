@@ -26,6 +26,7 @@ import {
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
 import MemberSelect, { UserResult } from "@/components/invoices/MemberSelect";
+import InstructorSelect, { InstructorResult } from "@/components/invoices/InstructorSelect";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Helper to generate 30-min interval times
@@ -48,23 +49,34 @@ interface AircraftOption {
 interface NewBookingModalProps {
   open: boolean;
   onClose: () => void;
-  instructors: Option[];
   aircraft: AircraftOption[];
   bookings: import("@/types/bookings").Booking[];
   refresh?: () => void;
+  prefilledData?: {
+    date?: Date;
+    startTime?: string;
+    instructorName?: string;
+    aircraftName?: string;
+    instructorId?: string;
+    instructorUserId?: string;
+    aircraftId?: string;
+    aircraftRegistration?: string;
+  };
+  onBookingCreated?: (newBookingData: import("@/types/bookings").Booking) => void;
 }
 
 export const NewBookingModal: React.FC<NewBookingModalProps> = ({
   open,
   onClose,
-  instructors,
   aircraft,
   bookings,
   refresh,
+  prefilledData,
+  onBookingCreated,
 }) => {
   // Form state
   const [selectedMember, setSelectedMember] = useState<UserResult | null>(null);
-  const [instructor, setInstructor] = useState("");
+  const [instructor, setInstructor] = useState<InstructorResult | null>(null);
   const [aircraftId, setAircraftId] = useState("");
   const [flightType, setFlightType] = useState("");
   const [lesson, setLesson] = useState("");
@@ -106,18 +118,60 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     }
   }, [startDate, endDate]);
 
-  // When start time changes, auto-set end time if blank or different
+  // When start time changes, auto-set end time only if end time is blank
   useEffect(() => {
-    if (startTime && (!endTime || endTime !== startTime)) {
+    if (startTime && !endTime) {
       setEndTime(startTime);
     }
   }, [startTime, endTime]);
+
+  // Set initial values if prefilledData is provided
+  useEffect(() => {
+    if (prefilledData) {
+      if (prefilledData.date) setStartDate(prefilledData.date);
+      if (prefilledData.startTime) setStartTime(prefilledData.startTime);
+      
+      // Handle aircraft prefilling
+      if (prefilledData.aircraftId) {
+        // Use the direct aircraft ID if available
+        setAircraftId(prefilledData.aircraftId);
+      } else if (prefilledData.aircraftName) {
+        // Fallback to finding by name/registration
+        const registration = prefilledData.aircraftName.split(' (')[0];
+        const aircraftMatch = aircraft.find(a => a.registration === registration);
+        if (aircraftMatch) setAircraftId(aircraftMatch.id);
+      }
+      
+      // Handle instructor prefilling
+      if (prefilledData.instructorId && prefilledData.instructorUserId) {
+        // Fetch instructor details to create proper InstructorResult object
+        fetch('/api/instructors')
+          .then(res => res.json())
+          .then(data => {
+            const instructorData = (data.instructors || []).find((inst: { id: string; users?: { first_name?: string; last_name?: string; email?: string }; user_id: string }) => inst.id === prefilledData.instructorId);
+            if (instructorData && instructorData.users) {
+              const instructorResult = {
+                id: instructorData.id,
+                user_id: instructorData.user_id,
+                first_name: instructorData.users.first_name || "",
+                last_name: instructorData.users.last_name || "",
+                email: instructorData.users.email || "",
+              };
+              setInstructor(instructorResult);
+            }
+          })
+          .catch(err => {
+            console.error("Failed to fetch instructor details for prefilling:", err);
+          });
+      }
+    }
+  }, [prefilledData, aircraft]);
 
   function handleClose() {
     onClose();
     setTimeout(() => {
       setSelectedMember(null);
-      setInstructor("");
+      setInstructor(null);
       setAircraftId("");
       setFlightType("");
       setLesson("");
@@ -205,7 +259,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       end_time,
       purpose,
       booking_type: bookingType,
-      instructor_id: instructor || null,
+      instructor_id: instructor?.id || null,
       remarks: remarks || null,
       lesson_id: lesson || null,
       flight_type_id: flightType || null,
@@ -221,6 +275,10 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       if (!res.ok) {
         setError(data.error || "Failed to create booking");
       } else {
+        // Call the optimistic update callback if provided
+        if (onBookingCreated && data.booking) {
+          onBookingCreated(data.booking);
+        }
         if (refresh) refresh();
         handleClose();
       }
@@ -338,21 +396,15 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                 </div>
                 <div className="max-w-[340px] w-full">
                   <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Instructor</label>
-                  <Select value={instructor} onValueChange={setInstructor}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select instructor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {instructors.map(i => {
-                        const isBooked = unavailable.instructors.has(i.id);
-                        return (
-                          <SelectItem key={i.id} value={i.id} disabled={isBooked}>
-                            {i.name}{isBooked ? " (booked)" : ""}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
+                  <InstructorSelect
+                    value={instructor}
+                    onSelect={setInstructor}
+                  />
+                  {instructor && unavailable.instructors.has(instructor.id) && (
+                    <div className="text-xs text-orange-600 mt-1 font-medium">
+                      ⚠️ This instructor is already booked during this time
+                    </div>
+                  )}
                 </div>
               </div>
               {/* Aircraft, Flight Type, Lesson, Booking Type */}

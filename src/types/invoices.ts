@@ -7,45 +7,64 @@ export type InvoiceStatus =
   | 'cancelled'
   | 'refunded';
 
-export type Invoice = {
+export interface Invoice {
   id: string;
-  organization_id: string;
   user_id: string;
-  booking_id: string | null;
-  invoice_number: string;
-  issue_date: string;
-  due_date: string;
+  booking_id?: string | null;
+  invoice_number?: string | null;
+  issue_date?: string | null;
+  due_date?: string | null;
   status: InvoiceStatus;
-  subtotal: number;
-  tax_amount: number;
-  tax_rate: number;
-  total_amount: number;
+  subtotal: number | null;
+  tax_rate?: number | null;
+  tax_total: number | null; // Changed from 'tax_amount' to match database
+  total_amount: number | null;
+  total_paid: number | null; // Changed from 'paid' to match database
   balance_due: number | null;
-  paid: number | null;
-  paid_date: string | null;
-  payment_method: string | null;
-  payment_reference: string | null;
-  reference: string | null;
-  notes: string | null;
+  paid_date?: string | null;
+  payment_method?: string | null;
+  payment_reference?: string | null;
+  reference?: string | null;
+  notes?: string | null;
   created_at: string;
   updated_at: string;
-};
+  // Optionally joined objects from Supabase
+  user?: import("./users").User;
+  booking?: import("./bookings").Booking;
+}
+
+export interface InvoiceItem {
+  id: string;
+  invoice_id: string;
+  chargeable_id?: string | null;
+  description: string;
+  quantity: number;
+  rate: number;
+  rate_inclusive: number;
+  amount: number;
+  tax_rate: number;
+  tax_amount: number;
+  total_amount: number;
+  created_at: string;
+  updated_at: string;
+  // Optionally joined objects from Supabase
+  chargeable?: import("./chargeables").Chargeable;
+}
 
 export type InvoiceInsert = {
   id?: string;
-  organization_id: string;
   user_id: string;
   booking_id?: string | null;
-  invoice_number: string;
-  issue_date?: string;
-  due_date: string;
+  invoice_number?: string | null;
+  issue_date?: string | null;
+  due_date?: string | null;
   status?: InvoiceStatus;
-  subtotal?: number;
-  tax_amount?: number;
-  tax_rate?: number;
-  total_amount?: number;
+  subtotal?: number | null;
+  tax_total?: number | null; // Changed from 'tax_amount' to match database
+  tax_rate?: number | null;
+  total_amount?: number | null;
+  total_paid?: number | null; // Changed from 'paid' to match database
   balance_due?: number | null;
-  paid?: number | null;
   paid_date?: string | null;
   payment_method?: string | null;
   payment_reference?: string | null;
@@ -57,19 +76,18 @@ export type InvoiceInsert = {
 
 export type InvoiceUpdate = {
   id?: string;
-  organization_id?: string;
   user_id?: string;
   booking_id?: string | null;
-  invoice_number?: string;
-  issue_date?: string;
-  due_date?: string;
+  invoice_number?: string | null;
+  issue_date?: string | null;
+  due_date?: string | null;
   status?: InvoiceStatus;
-  subtotal?: number;
-  tax_amount?: number;
-  tax_rate?: number;
-  total_amount?: number;
+  subtotal?: number | null;
+  tax_total?: number | null; // Changed from 'tax_amount' to match database
+  tax_rate?: number | null;
+  total_amount?: number | null;
+  total_paid?: number | null; // Changed from 'paid' to match database
   balance_due?: number | null;
-  paid?: number | null;
   paid_date?: string | null;
   payment_method?: string | null;
   payment_reference?: string | null;

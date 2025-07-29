@@ -4,7 +4,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { useOrgContext } from "@/components/OrgContextProvider";
 import MemberSelect, { UserResult } from "@/components/invoices/MemberSelect";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -30,7 +29,6 @@ interface MemberSyllabusEnrollmentTabProps {
 }
 
 export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabusEnrollmentTabProps) {
-  const { currentOrgId } = useOrgContext();
   const [enrollments, setEnrollments] = useState<StudentSyllabusEnrollment[]>([]);
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,11 +50,11 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
 
   // Fetch syllabi and enrollments
   useEffect(() => {
-    if (!memberId || !currentOrgId) return;
+    if (!memberId) return;
     setLoading(true);
     setError(null);
     Promise.all([
-      fetch(`/api/syllabus?organization_id=${currentOrgId}`).then(res => res.json()).then(data => Array.isArray(data.data) ? data.data : []),
+      fetch(`/api/syllabus`).then(res => res.json()).then(data => Array.isArray(data.data) ? data.data : []),
       fetch(`/api/student_syllabus_enrollment?user_id=${memberId}`).then(res => res.json()).then(data => Array.isArray(data.data) ? data.data : []),
     ])
       .then(([syllabiData, enrollmentsData]) => {
@@ -76,11 +74,10 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to load syllabus enrollments"))
       .finally(() => setLoading(false));
-  }, [memberId, currentOrgId]);
+  }, [memberId]);
 
   // Enroll form submit
   const onSubmit = async (values: EnrollForm) => {
-    if (!currentOrgId) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -90,7 +87,6 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
         body: JSON.stringify({
           ...values,
           user_id: memberId,
-          organization_id: currentOrgId,
         }),
       });
       if (!res.ok) throw new Error("Failed to enroll student");

@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
       "koviyikwttwsogmbseab.supabase.co",
       "media2.dev.to",
       "www.gravatar.com",
+      "cdn.jetphotos.com",
       // add other allowed domains here if needed
       'optimalw.com',
     ],

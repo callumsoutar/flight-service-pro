@@ -121,10 +121,10 @@ const AircraftComponentForm = forwardRef<HTMLFormElement, AircraftComponentFormP
       
       let res;
       if (isEdit) {
-        res = await fetch(`/api/aircraft_components/${componentId}`, {
+        res = await fetch(`/api/aircraft_components`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ id: componentId, ...payload }),
         });
       } else {
         res = await fetch(`/api/aircraft_components`, {

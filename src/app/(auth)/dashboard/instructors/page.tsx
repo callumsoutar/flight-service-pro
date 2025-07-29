@@ -1,16 +1,12 @@
 import StaffTable from "@/components/members/StaffTable";
 import { createClient } from "@/lib/SupabaseServerClient";
 import type { Member } from "@/components/members/columns";
-import { cookies } from "next/headers";
 import { Users, UserCog, UserCheck, MailPlus } from "lucide-react";
 
 export default async function InstructorsPage() {
   const supabase = await createClient();
-  const cookieStore = await cookies();
-  const currentOrgId = cookieStore.get("current_org_id")?.value;
-  if (!currentOrgId) return null;
 
-  // Fetch all instructors for the org, join user for display
+  // Fetch all instructors, join user for display
   const { data: instructorsRaw, error } = await supabase
     .from("instructors")
     .select(`
@@ -21,11 +17,9 @@ export default async function InstructorsPage() {
         id,
         email,
         first_name,
-        last_name,
-        profile_image_url
+        last_name
       )
-    `)
-    .eq("organization_id", currentOrgId);
+    `);
 
   if (error) {
     return <div className="p-8 text-red-500">Error loading instructors: {error.message}</div>;
@@ -41,13 +35,11 @@ export default async function InstructorsPage() {
       email: string;
       first_name?: string;
       last_name?: string;
-      profile_image_url?: string;
     } | {
       id: string;
       email: string;
       first_name?: string;
       last_name?: string;
-      profile_image_url?: string;
     }[] | null;
   };
 
@@ -62,7 +54,6 @@ export default async function InstructorsPage() {
         email: user.email,
         first_name: user.first_name ?? undefined,
         last_name: user.last_name ?? undefined,
-        profile_image_url: user.profile_image_url ?? undefined,
         role: "instructor",
         status: instructor.expires_at && new Date(instructor.expires_at) < new Date() ? "expired" : "active",
       };

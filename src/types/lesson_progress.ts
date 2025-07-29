@@ -1,15 +1,16 @@
 // AUTO-GENERATED: Types for lesson_progress table from Supabase
 
+export type LessonOutcome = 'pass' | 'not yet competent';
+
 export type LessonProgress = {
   id: string;
-  organization_id: string;
   user_id: string;
   syllabus_id: string | null;
   lesson_id: string | null;
   booking_id: string | null;
   attempt: number;
-  status: string;
-  comments: string | null;
+  status: LessonOutcome;
+  instructor_comments: string | null;
   instructor_id: string | null;
   date: string;
   created_at: string;
@@ -24,14 +25,13 @@ export type LessonProgress = {
 
 export type LessonProgressInsert = {
   id?: string;
-  organization_id: string;
   user_id: string;
   syllabus_id?: string | null;
   lesson_id?: string | null;
   booking_id?: string | null;
   attempt?: number;
-  status: string;
-  comments?: string | null;
+  status?: LessonOutcome;
+  instructor_comments?: string | null;
   instructor_id?: string | null;
   date?: string;
   created_at?: string;
@@ -46,14 +46,13 @@ export type LessonProgressInsert = {
 
 export type LessonProgressUpdate = {
   id?: string;
-  organization_id?: string;
   user_id?: string;
   syllabus_id?: string | null;
   lesson_id?: string | null;
   booking_id?: string | null;
   attempt?: number;
-  status?: string;
-  comments?: string | null;
+  status?: LessonOutcome;
+  instructor_comments?: string | null;
   instructor_id?: string | null;
   date?: string;
   created_at?: string;

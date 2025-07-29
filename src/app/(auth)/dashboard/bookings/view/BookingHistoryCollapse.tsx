@@ -7,7 +7,6 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface BookingHistoryCollapseProps {
   bookingId: string;
-  organizationId: string;
   lessons: { id: string; name: string }[];
 }
 
@@ -21,7 +20,6 @@ interface AuditLog {
   old_data?: Record<string, unknown> | null;
   new_data?: Record<string, unknown> | null;
   column_changes?: Record<string, { old: unknown; new: unknown }> | null;
-  organization_id?: string | null;
 }
 
 interface User {
@@ -41,7 +39,7 @@ const FIELD_LABELS: Record<string, string> = {
   remarks: 'Remarks',
   purpose: 'Description',
 };
-const IGNORED_FIELDS = ['updated_at', 'created_at', 'organization_id', 'id', 'user_id'];
+const IGNORED_FIELDS = ['updated_at', 'created_at', 'id', 'user_id'];
 const FIELD_PRIORITY = [
   'start_time',
   'end_time',
@@ -53,7 +51,7 @@ const FIELD_PRIORITY = [
   'purpose',
 ];
 
-export default function BookingHistoryCollapse({ bookingId, organizationId, lessons }: BookingHistoryCollapseProps) {
+export default function BookingHistoryCollapse({ bookingId, lessons }: BookingHistoryCollapseProps) {
   const [open, setOpen] = React.useState(false);
   const [logs, setLogs] = React.useState<AuditLog[]>([]);
   const [users, setUsers] = React.useState<Record<string, User>>({});
@@ -66,7 +64,7 @@ export default function BookingHistoryCollapse({ bookingId, organizationId, less
   React.useEffect(() => {
     if (open && logs.length === 0 && !loading) {
       setLoading(true);
-      fetch(`/api/audit_logs?row_id=${bookingId}&organization_id=${organizationId}`)
+      fetch(`/api/audit_logs?row_id=${bookingId}`)
         .then(res => res.json())
         .then(async (data: AuditLog[] | { error: string }) => {
           if (!Array.isArray(data) && data.error) throw new Error(data.error);
@@ -87,7 +85,7 @@ export default function BookingHistoryCollapse({ bookingId, organizationId, less
         .catch(e => setError(e.message))
         .finally(() => setLoading(false));
     }
-  }, [open, bookingId, organizationId, logs.length, loading]);
+  }, [open, bookingId, logs.length, loading]);
 
   function renderDescription(log: AuditLog) {
     if (log.action === "INSERT") return "Booking Created";

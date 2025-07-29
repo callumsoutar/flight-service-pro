@@ -8,36 +8,37 @@ export async function GET(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ users: [] }, { status: 401 });
   }
-  // Org check
-  const orgId = req.cookies.get("current_org_id")?.value;
-  if (!orgId) {
-    return NextResponse.json({ users: [] }, { status: 400 });
-  }
+  
   const searchParams = req.nextUrl.searchParams;
   const q = searchParams.get("q")?.toLowerCase() || "";
   const id = searchParams.get("id");
+  const ids = searchParams.get("ids");
 
-  const query = supabase
-    .from("user_organizations")
-    .select("user_id, users(first_name, last_name, email, account_balance)")
-    .eq("organization_id", orgId);
+  // Simple fetch of all users - minimal fields to avoid stack depth issues
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, first_name, last_name, email, account_balance")
+    .order("last_name", { ascending: true });
 
-  const { data, error } = await query;
   if (error) {
+    console.error('Error fetching users:', error);
     return NextResponse.json({ users: [] }, { status: 500 });
   }
-  let users = (data || []).map((row: { user_id: string; users: { first_name?: string; last_name?: string; email?: string; account_balance?: number } | { first_name?: string; last_name?: string; email?: string; account_balance?: number }[] | null }) => {
-    const userObj = Array.isArray(row.users) ? row.users[0] : row.users;
-    return {
-      id: row.user_id,
-      first_name: userObj?.first_name || "",
-      last_name: userObj?.last_name || "",
-      email: userObj?.email || "",
-      account_balance: userObj?.account_balance ?? 0,
-    };
-  });
 
-  if (id) {
+  let users = (data || []).map((user: { id: string; first_name?: string; last_name?: string; email: string; account_balance?: number }) => ({
+    id: user.id,
+    first_name: user.first_name || "",
+    last_name: user.last_name || "",
+    email: user.email || "",
+    account_balance: user.account_balance || 0,
+    role: 'member', // Default role for now
+  }));
+
+  if (ids) {
+    // Filter by specific IDs (comma-separated)
+    const idArray = ids.split(",").map(id => id.trim());
+    users = users.filter(u => idArray.includes(u.id));
+  } else if (id) {
     users = users.filter(u => u.id === id);
   } else if (q) {
     users = users.filter(u =>
@@ -47,16 +48,80 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Sort by last_name, then first_name
-  users.sort((a, b) => {
-    const lastA = a.last_name?.toLowerCase() || "";
-    const lastB = b.last_name?.toLowerCase() || "";
-    if (lastA < lastB) return -1;
-    if (lastA > lastB) return 1;
-    const firstA = a.first_name?.toLowerCase() || "";
-    const firstB = b.first_name?.toLowerCase() || "";
-    return firstA.localeCompare(firstB);
+  return NextResponse.json({ users });
+}
+
+export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+  // Auth check
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  
+  const body = await req.json();
+  const { email, first_name, last_name, phone, date_of_birth, notes, role = "member" } = body;
+  
+  if (!email) {
+    return NextResponse.json({ error: "Email is required" }, { status: 400 });
+  }
+
+  // Create user in Supabase Auth first
+  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    email,
+    password: "tempPassword123!", // This should be changed by the user
+    email_confirm: true,
+    user_metadata: {
+      first_name,
+      last_name,
+    },
   });
 
-  return NextResponse.json({ users });
+  if (authError) {
+    return NextResponse.json({ error: authError.message }, { status: 500 });
+  }
+
+  if (!authData.user) {
+    return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
+  }
+
+  // Create user record in users table (without role column)
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .insert([{
+      id: authData.user.id,
+      email,
+      first_name,
+      last_name,
+      phone,
+      date_of_birth,
+      notes,
+    }])
+    .select()
+    .single();
+
+  if (userError) {
+    // If user creation fails, we should clean up the auth user
+    await supabase.auth.admin.deleteUser(authData.user.id);
+    return NextResponse.json({ error: userError.message }, { status: 500 });
+  }
+
+  // Assign role to user via user_roles table
+  const { data: roleData } = await supabase
+    .from("roles")
+    .select("id")
+    .eq("name", role)
+    .single();
+
+  if (roleData?.id) {
+    await supabase
+      .from("user_roles")
+      .insert([{
+        user_id: authData.user.id,
+        role_id: roleData.id,
+        granted_by: authData.user.id,
+      }]);
+  }
+
+  return NextResponse.json({ user: userData });
 } 

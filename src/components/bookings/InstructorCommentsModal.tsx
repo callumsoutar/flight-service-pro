@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { InstructorComment } from "@/types/instructor_comments";
+import { createClient } from "@/lib/SupabaseBrowserClient";
 
 interface InstructorCommentsModalProps {
   bookingId: string;
@@ -31,11 +32,29 @@ export default function InstructorCommentsModal({ bookingId, open, onOpenChange 
           // Fetch instructor names
           const uniqueIds = Array.from(new Set(data.map(c => c.instructor_id).filter(Boolean)));
           if (uniqueIds.length > 0) {
-            const usersRes = await fetch(`/api/members?ids=${uniqueIds.join(",")}`);
-            const usersData: { id: string; first_name?: string; last_name?: string }[] = await usersRes.json();
-            const userMap: Record<string, { first_name?: string; last_name?: string }> = {};
-            usersData.forEach(u => { userMap[u.id] = { first_name: u.first_name, last_name: u.last_name }; });
-            setInstructors(userMap);
+            const instructorMap: Record<string, { first_name?: string; last_name?: string }> = {};
+            
+            // Fetch each instructor individually since instructor_id references instructors table
+            for (const instructorId of uniqueIds) {
+              try {
+                const instructorRes = await fetch(`/api/instructors?id=${instructorId}`);
+                const instructorData = await instructorRes.json();
+                if (instructorData.instructor && instructorData.instructor.users) {
+                  const user = instructorData.instructor.users;
+                  instructorMap[instructorId] = {
+                    first_name: user.first_name || "",
+                    last_name: user.last_name || "",
+                  };
+                }
+              } catch (error) {
+                console.error(`Failed to fetch instructor ${instructorId}:`, error);
+                instructorMap[instructorId] = {
+                  first_name: "Unknown",
+                  last_name: "Instructor",
+                };
+              }
+            }
+            setInstructors(instructorMap);
           } else {
             setInstructors({});
           }
@@ -50,10 +69,22 @@ export default function InstructorCommentsModal({ bookingId, open, onOpenChange 
     setSubmitting(true);
     setError(null);
     try {
+      // Get current user to use as instructor_id
+      const supabase = createClient();
+      const { data: authData } = await supabase.auth.getUser();
+      
+      if (!authData.user) {
+        throw new Error("User not authenticated");
+      }
+      
       const res = await fetch("/api/instructor_comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ booking_id: bookingId, comment: newComment }),
+        body: JSON.stringify({ 
+          booking_id: bookingId, 
+          instructor_id: authData.user.id,
+          comment: newComment 
+        }),
       });
       if (!res.ok) {
         const err = await res.json();

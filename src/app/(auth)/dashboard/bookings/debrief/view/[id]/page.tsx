@@ -3,7 +3,6 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Button } from "@/components/ui/button";
 import { Mail, Eye, User, Printer, ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/SupabaseServerClient";
-import { cookies } from "next/headers";
 import { CheckCircle, MessageCircle, ListChecks, ArrowRightCircle, UserCircle2, ClipboardList } from "lucide-react";
 import React from "react";
 import type { LessonProgress } from "@/types/lesson_progress";
@@ -25,19 +24,14 @@ interface BookingWithJoins extends Booking {
 export default async function DebriefViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: bookingId } = await params;
   const supabase = await createClient();
-  const cookiesList = await cookies();
-  const orgId = cookiesList.get("current_org_id")?.value;
 
   let booking: BookingWithJoins | null = null;
-  if (orgId) {
-    const { data: bookingData } = await supabase
-      .from("bookings")
-      .select(`*, user:user_id(*), instructor:instructor_id(*), lesson:lesson_id(*), aircraft:checked_out_aircraft_id(*)`)
-      .eq("organization_id", orgId)
-      .eq("id", bookingId)
-      .single();
-    booking = bookingData;
-  }
+  const { data: bookingData } = await supabase
+    .from("bookings")
+    .select(`*, user:user_id(*), instructor:instructor_id(*), lesson:lesson_id(*), aircraft:checked_out_aircraft_id(*)`)
+    .eq("id", bookingId)
+    .single();
+  booking = bookingData;
 
   if (!booking) {
     return (
@@ -87,7 +81,7 @@ export default async function DebriefViewPage({ params }: { params: Promise<{ id
                 className={
                   lessonProgress.status === 'pass'
                     ? 'bg-green-600 text-white text-lg px-4 py-2 font-semibold'
-                    : lessonProgress.status === 'needs improvement' || lessonProgress.status === 'fail'
+                    : lessonProgress.status === 'not yet competent'
                     ? 'bg-red-600 text-white text-lg px-4 py-2 font-semibold'
                     : 'bg-yellow-500 text-white text-lg px-4 py-2 font-semibold'
                 }
@@ -166,7 +160,7 @@ export default async function DebriefViewPage({ params }: { params: Promise<{ id
                 <span className="text-lg font-bold">Instructor Comments</span>
               </div>
               <div className="text-base text-gray-800 min-h-[60px]">
-                <LessonProgressComments comments={lessonProgress?.comments} />
+                <LessonProgressComments comments={lessonProgress?.instructor_comments} />
               </div>
             </div>
             {/* Lesson Breakdown */}

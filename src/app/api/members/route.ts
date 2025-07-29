@@ -1,15 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "../../../lib/SupabaseServerClient";
+import { createClient } from "@/lib/SupabaseServerClient";
 
-interface SupabaseUser {
-  id: string;
-  email: string;
-  first_name?: string;
-  last_name?: string;
-  profile_image_url?: string;
-}
-
-// GET /api/members?page=1&limit=20&search=foo
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { searchParams } = new URL(req.url);
@@ -27,12 +18,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get current organization from cookie
-  const currentOrgId = req.cookies.get("current_org_id")?.value;
-  if (!currentOrgId) {
-    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
-  }
-
   // If ids param is present, fetch only those users
   if (ids) {
     const idList = ids.split(",").map((id) => id.trim()).filter(Boolean);
@@ -40,38 +25,67 @@ export async function GET(req: NextRequest) {
       return NextResponse.json([], { status: 200 });
     }
     const { data, error } = await supabase
-      .from("user_organizations")
-      .select("user_id, users:users!inner(id, first_name, last_name, email, profile_image_url)")
-      .eq("organization_id", currentOrgId)
-      .in("user_id", idList);
+      .from("users")
+      .select(`
+        id, 
+        first_name, 
+        last_name, 
+        email, 
+        profile_image_url,
+        user_roles!user_roles_user_id_fkey (
+          roles (
+            name
+          )
+        )
+      `)
+      .in("id", idList);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    const users = (data || []).map((row: { user_id: string; users: { first_name?: string; last_name?: string; email?: string; profile_image_url?: string } | { first_name?: string; last_name?: string; email?: string; profile_image_url?: string }[] }) => {
-      const u = Array.isArray(row.users) ? row.users[0] : row.users;
+    const users = (data || []).map((user) => {
+      const typedUser = user as unknown as { 
+        id: string; 
+        first_name?: string; 
+        last_name?: string; 
+        email: string;
+        user_roles?: Array<{ roles: { name: string } }>;
+      };
+      const primaryRole = typedUser.user_roles && typedUser.user_roles.length > 0 
+        ? typedUser.user_roles[0]?.roles?.name || 'member'
+        : 'member';
+      
       return {
-        id: row.user_id,
-        first_name: u?.first_name,
-        last_name: u?.last_name,
-        email: u?.email,
-        profile_image_url: u?.profile_image_url,
+        id: typedUser.id,
+        first_name: typedUser.first_name || "",
+        last_name: typedUser.last_name || "",
+        email: typedUser.email,
+        profile_image_url: undefined, // This field doesn't exist in our data
+        role: primaryRole,
       };
     });
     return NextResponse.json(users, { status: 200 });
   }
 
-  // Build query: join user_organizations and users, filter by org, search, paginate
+  // Build query: select users with roles, filter by search, paginate
   let query = supabase
-    .from("user_organizations")
-    .select(
-      `id, role, user_id, users:users!inner(id, first_name, last_name, email, profile_image_url)`
-    )
-    .eq("organization_id", currentOrgId)
-    .order("users.last_name", { ascending: true })
+    .from("users")
+    .select(`
+      id, 
+      first_name, 
+      last_name, 
+      email, 
+      profile_image_url,
+      user_roles!user_roles_user_id_fkey (
+        roles (
+          name
+        )
+      )
+    `)
+    .order("last_name", { ascending: true })
     .range((page - 1) * limit, page * limit - 1);
 
   if (search) {
-    query = query.ilike("users.email", `%${search}%`);
+    query = query.or(`email.ilike.%${search}%,first_name.ilike.%${search}%,last_name.ilike.%${search}%`);
   }
 
   const { data, error, count } = await query;
@@ -79,30 +93,37 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Type-safe mapping for members
-  type UserOrgRaw = { users: SupabaseUser | SupabaseUser[] | null; user_id: string; role: string };
-  const members = (data || []).map((row: UserOrgRaw) => {
-    let users: SupabaseUser | null = null;
-    if (Array.isArray(row.users)) {
-      users = row.users[0] ?? null;
-    } else {
-      users = row.users;
-    }
+  // Type-safe mapping for members with roles
+  const members = (data || []).map((user) => {
+    const typedUser = user as unknown as { 
+      id: string; 
+      first_name?: string; 
+      last_name?: string; 
+      email: string;
+      user_roles?: Array<{ roles: { name: string } }>;
+    };
+    const primaryRole = typedUser.user_roles && typedUser.user_roles.length > 0 
+      ? typedUser.user_roles[0]?.roles?.name || 'member'
+      : 'member';
+    
     return {
-      id: row.user_id,
-      first_name: users?.first_name,
-      last_name: users?.last_name,
-      email: users?.email,
-      profile_image_url: users?.profile_image_url,
-      role: row.role,
+      id: typedUser.id,
+      first_name: typedUser.first_name || "",
+      last_name: typedUser.last_name || "",
+      email: typedUser.email,
+      profile_image_url: undefined, // This field doesn't exist in our data
+      role: primaryRole,
     };
   });
 
   return NextResponse.json({
     members,
-    page,
-    limit,
-    total: count ?? members.length,
+    pagination: {
+      page,
+      limit,
+      total: count || 0,
+      totalPages: Math.ceil((count || 0) / limit),
+    },
   });
 }
 
@@ -111,7 +132,11 @@ export async function PATCH(req: NextRequest) {
   const supabase = await createClient();
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
+  
+  console.log('PATCH /api/members called with id:', id);
+  
   if (!id) {
+    console.error('Missing member id in PATCH request');
     return NextResponse.json({ error: "Missing member id" }, { status: 400 });
   }
 
@@ -121,29 +146,22 @@ export async function PATCH(req: NextRequest) {
     error: userError,
   } = await supabase.auth.getUser();
   if (userError || !user) {
+    console.error('Authentication error in PATCH:', userError);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get current organization from cookie
-  const currentOrgId = req.cookies.get("current_org_id")?.value;
-  if (!currentOrgId) {
-    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
-  }
-
-  // Check that the user to update is in the current org
-  const { data: userOrg, error: orgError } = await supabase
-    .from("user_organizations")
-    .select("user_id")
-    .eq("organization_id", currentOrgId)
-    .eq("user_id", id)
-    .single();
-  if (orgError || !userOrg) {
-    return NextResponse.json({ error: "Member not found in this organization" }, { status: 404 });
-  }
+  console.log('Authenticated user:', user.id);
 
   // Parse body for updatable fields
-  const body = await req.json();
-  console.log('PATCH /api/members received body:', body);
+  let body;
+  try {
+    body = await req.json();
+    console.log('PATCH /api/members received body:', body);
+  } catch (error) {
+    console.error('Failed to parse request body:', error);
+    return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
+  }
+
   const allowedFields = [
     "first_name",
     "last_name",
@@ -157,8 +175,10 @@ export async function PATCH(req: NextRequest) {
     "next_of_kin_phone",
     "street_address",
     "gender",
-    "date_of_birth"
+    "date_of_birth",
+    "role"
   ];
+  
   interface UpdateUserFields {
     first_name?: string;
     last_name?: string;
@@ -172,30 +192,57 @@ export async function PATCH(req: NextRequest) {
     next_of_kin_phone?: string;
     street_address?: string;
     gender?: string;
-    date_of_birth?: string;
+    date_of_birth?: string | null;
+    role?: string;
   }
-  const updateData: UpdateUserFields = {};
-  for (const key of allowedFields) {
-    if (body[key] !== undefined && body[key] !== "") {
-      updateData[key as keyof UpdateUserFields] = body[key];
+  
+  const updates: UpdateUserFields = {};
+  for (const field of allowedFields) {
+    if (field in body) {
+      const value = body[field];
+      
+      // Handle date fields - convert empty strings to null
+      if (field === 'date_of_birth') {
+        updates[field as keyof UpdateUserFields] = value === '' ? null : value;
+      }
+      // Handle other optional fields - only include if not empty string
+      else if (value !== '' || field === 'first_name' || field === 'last_name' || field === 'email') {
+        updates[field as keyof UpdateUserFields] = value;
+      }
     }
   }
-  console.log('PATCH /api/members updateData:', updateData);
-  if (Object.keys(updateData).length === 0) {
-    console.error('PATCH /api/members error: No valid fields to update', { body });
+
+  console.log('Filtered updates:', updates);
+
+  if (Object.keys(updates).length === 0) {
+    console.error('No valid fields to update');
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
 
   // Update the user
-  const { data: updated, error: updateError } = await supabase
+  console.log('Updating user with ID:', id);
+  const { data, error } = await supabase
     .from("users")
-    .update(updateData)
+    .update(updates)
     .eq("id", id)
     .select()
     .single();
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+
+  if (error) {
+    console.error('Supabase update error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ user: updated });
+  console.log('Update successful, returned data:', data);
+
+  return NextResponse.json({
+    member: {
+      id: data.id,
+      first_name: data.first_name || "",
+      last_name: data.last_name || "",
+      email: data.email || "",
+      profile_image_url: data.profile_image_url,
+      role: data.role,
+    },
+  });
 } 

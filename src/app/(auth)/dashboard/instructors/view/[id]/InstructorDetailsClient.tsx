@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
-import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -44,11 +44,9 @@ const licenseSchema = z.object({
 
 interface InstructorWithUser {
   id: string;
-  organization_id: string;
   first_name: string;
   last_name: string;
   email: string;
-  profile_image_url: string;
   status: string;
   instructor_check_due_date?: string;
   instrument_check_due_date?: string;
@@ -134,13 +132,12 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
     <div className="w-full flex flex-col bg-white rounded-2xl shadow border border-gray-200 overflow-hidden max-w-4xl mx-auto mt-2">
       {/* Header */}
       <div className="flex items-center gap-6 px-8 pt-8 pb-4">
-        <Image
-          src={instructor.profile_image_url}
-          alt="Profile"
-          width={96}
-          height={96}
-          className="w-24 h-24 rounded-full border-4 border-indigo-100 shadow"
-        />
+        <Avatar className="w-24 h-24 border-4 border-indigo-100 shadow">
+          <AvatarFallback className="text-2xl font-semibold bg-indigo-100 text-indigo-700">
+            {(instructor.first_name || instructor.email || "").charAt(0).toUpperCase()}
+            {(instructor.last_name || "").charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
             <User className="w-6 h-6 text-indigo-600" />
@@ -329,7 +326,7 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
                     Endorsements & Ratings
                   </h3>
                   <Card className="p-4 bg-white border border-indigo-100">
-                    <RatingsTab instructorId={instructor.id} organizationId={instructor.organization_id} />
+                    <RatingsTab instructorId={instructor.id} />
                   </Card>
                 </div>
               </Card>
@@ -498,7 +495,7 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
                   <h3 className="text-base font-semibold mb-2 flex items-center gap-2">
                     <Settings className="w-5 h-5 text-indigo-600" /> Instructor Rates by Flight Type
                   </h3>
-                  <InstructorFlightTypeRatesTable instructorId={instructor.id} organizationId={instructor.organization_id} />
+                  <InstructorFlightTypeRatesTable instructorId={instructor.id} />
                 </div>
               </Card>
             </form>

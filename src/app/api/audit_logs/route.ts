@@ -7,16 +7,10 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const table_name = searchParams.get('table_name');
   const row_id = searchParams.get('row_id');
-  const organization_id = searchParams.get('organization_id');
-
-  if (!organization_id) {
-    return new Response(JSON.stringify({ error: 'Missing organization_id' }), { status: 400 });
-  }
 
   let query = supabase
     .from('audit_logs')
     .select('*')
-    .eq('organization_id', organization_id)
     .order('changed_at', { ascending: false });
 
   if (table_name) query = query.eq('table_name', table_name);

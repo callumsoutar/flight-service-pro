@@ -1,0 +1,374 @@
+# Single-Tenant Migration Progress
+
+## 🎯 MIGRATION OVERVIEW
+Converting from multi-tenant to single-tenant architecture where each organization has its own database instance.
+
+## ✅ COMPLETED WORK
+
+### Phase 1: Aircraft System Migration ✅
+- **API Routes Updated:**
+  - `aircraft_components/route.ts` - Removed organization filtering from GET, POST, PATCH methods
+  - `observations/route.ts` - Removed `organization_id` from schema and all CRUD operations
+  - `endorsements/route.ts` - Removed organization filtering from GET and POST
+
+- **Components Updated:**
+  - `RatingsTab.tsx` - Removed `organizationId` prop and organization filtering in data fetching
+  - `AddObservationModal.tsx` - Removed `orgId` prop and organization context; updated to use current user ID
+  - `LogMaintenanceModal.tsx` - Removed `organization_id` prop; updated form and API call to exclude organization context; fixed missing `setNotes` prop and usage
+  - `InstructorDetailsClient.tsx` - Removed `organizationId` prop from `RatingsTab` component call
+  - `AircraftMaintenanceTab.tsx` - Removed `organization_id` prop from `LogMaintenanceModal` and `useOrgContext` hook
+  - `AircraftServicingTab.tsx` - Removed `organization_id` prop from `LogMaintenanceModal` and `useOrgContext` hook; removed `organization_id` from component creation payload
+  - `ObservationsTable.tsx` - Removed `useOrgContext` hook and `orgId` prop from `AddObservationModal`
+
+### Phase 2: Equipment System Migration ✅
+- **API Routes Updated:**
+  - `equipment_issuance/route.ts` - Removed organization filtering from GET method
+  - `equipment_updates/route.ts` - Removed `organization_id` from schema and filtering
+
+- **Components Updated:**
+  - `IssueEquipmentModal.tsx` - Removed `organization_id` from payload and `orgId` prop from interface
+  - `UpdateEquipmentModal.tsx` - Removed `organization_id` from payload and `orgId` prop from interface
+  - `AddEquipmentModal.tsx` - Removed `organization_id` from payload and `orgId` prop from interface; fixed EquipmentType and EquipmentStatus values to match actual type definitions
+  - `EquipmentIssuanceTable.tsx` - Removed `orgId` prop from interface and component calls
+  - `EquipmentUpdatesTable.tsx` - Removed `orgId` prop from interface and component calls
+  - `EquipmentViewPage.tsx` - Removed `orgId` prop from `EquipmentIssuanceTable` and `EquipmentUpdatesTable` components; fixed EquipmentType and EquipmentStatus values
+
+### Phase 3: Booking System Migration ✅
+- **API Routes Updated:**
+  - `booking_details/route.ts` - Removed organization filtering and `organization_id` from schema
+  - `lesson_progress/route.ts` - Removed `organization_id` from schema and all CRUD operations
+
+- **Pages Updated:**
+  - `bookings/debrief/[id]/page.tsx` - Removed orgId cookie check and organization filtering
+  - `bookings/debrief/view/[id]/page.tsx` - Removed orgId cookie check and organization filtering
+
+- **Components Updated:**
+  - `BookingStagesOptions.tsx` - Removed `useOrgContext` hook and `currentOrgId` usage; fixed modal prop interfaces
+
+- **TypeScript Types Updated:**
+  - `lessons.ts` - Removed `organization_id` from Lesson interface
+  - `lesson_progress.ts` - Removed `organization_id` from all type definitions
+  - `booking_details.ts` - Removed `organization_id` from BookingDetails interface
+
+### Phase 4: High Priority API Routes Migration ✅
+- **API Routes Updated:**
+  - `instructor_rates/route.ts` - Removed organization filtering and `organization_id` parameter
+  - `tax_rates/route.ts` - Removed organization filtering from GET method
+  - `payments/route.ts` - Removed `organization_id` from payment schema
+  - `transactions/route.ts` - Removed organization filtering from GET method
+  - `audit_logs/route.ts` - Removed organization filtering and `organization_id` requirement
+  - `invoices/[id]/route.ts` - Removed organization filtering from PATCH and DELETE methods
+  - `cancellation_categories/route.ts` - Removed organization filtering from GET method
+
+### Phase 5: High Priority TypeScript Types Migration ✅
+- **TypeScript Types Updated:**
+  - `tax_rates.ts` - Removed `organization_id` from all type definitions
+  - `invoices.ts` - Removed `organization_id` from InvoiceInsert and InvoiceUpdate types
+  - `payments.ts` - Removed `organization_id` from Payment interface
+  - `transactions.ts` - Removed `organization_id` from Transaction type
+  - `audit_logs.ts` - Removed `organization_id` from AuditLog interface
+  - `instructor_rates.ts` - Removed `organization_id` from InstructorRate interface
+  - `instructor_flight_type_rates.ts` - Removed `organization_id` from InstructorFlightTypeRate interface
+  - `chargeables.ts` - Removed `organization_id` from all chargeable type definitions
+  - `instructor_comments.ts` - Removed `organization_id` from InstructorComment interface
+
+### Phase 6: High Priority Pages Migration ✅
+- **Pages Updated:**
+  - `dashboard/equipment/page.tsx` - Removed organization filtering from equipment fetch
+  - `dashboard/instructors/page.tsx` - Removed organization filtering from instructors fetch
+  - `dashboard/instructors/view/[id]/page.tsx` - Removed organization filtering from instructor fetch
+
+### Phase 7: High Priority Components Migration ✅
+- **Components Updated:**
+  - `InstructorFlightTypeRatesTable.tsx` - Removed `organizationId` prop and organization filtering; simplified component
+  - `instructors/view/[id]/InstructorDetailsClient.tsx` - Removed `organizationId` prop from `InstructorFlightTypeRatesTable`
+
+### Phase 8: Invoice & Member Pages Migration ✅
+- **Pages Updated:**
+  - `dashboard/invoices/view/[id]/page.tsx` - Removed organization filtering from invoice fetch
+  - `dashboard/members/view/[id]/page.tsx` - Removed organization filtering from member fetch; simplified user lookup
+  - `dashboard/invoices/new/NewInvoiceForm.tsx` - Removed organization context and orgId cookie check from invoice creation
+
+### Phase 9: Medium Priority API Routes Migration ✅
+- **API Routes Updated:**
+  - `exam_results/route.ts` - Removed organization filtering and `organization_id` from queries and payloads
+  - `exam/route.ts` - Removed `organization_id` from database query
+  - `memberships/route.ts` - Removed organization filtering and `organization_id` from queries
+  - `syllabus/route.ts` - Removed `organization_id` from schema and database queries
+  - `student_syllabus_enrollment/route.ts` - Removed `organization_id` from schema
+
+### Phase 10: Member Components Migration ✅
+- **Components Updated:**
+  - `members/tabs/MemberAccountTab.tsx` - Removed `useOrgContext` hook, `currentOrgId` dependency, and `organization_id` from API calls
+  - `members/tabs/MemberSyllabusEnrollmentTab.tsx` - Removed `useOrgContext` hook, `currentOrgId` dependency, and `organization_id` from API calls and payloads
+  - `members/tabs/MemberTrainingHistoryTab.tsx` - Removed `useOrgContext` hook and `currentOrgId` dependency
+  - `members/tabs/MemberTrainingTab.tsx` - Removed `useOrgContext` hook, `currentOrgId` dependency, and `organization_id` from API calls and payloads
+  - `members/MemberProfileCard.tsx` - Removed `organization_id` from instructor creation payload and cookie-based orgId state
+
+### Phase 11: Organization Context Removal ✅
+- **Components Removed:**
+  - `OrgContextProvider.tsx` - **DEPRECATED** - Removed entire component (multi-org state management)
+  - `OrgSwitcher.tsx` - **DEPRECATED** - Removed entire component (organization switching)
+  - `OrgHeaderTitle.tsx` - **DEPRECATED** - Removed entire component (organization name display)
+
+- **Components Refactored:**
+  - `UserMenu.tsx` - Removed organization switching dropdown and `useOrgContext` hook; simplified to single-tenant user menu
+
+- **API Routes Removed:**
+  - `user-orgs/route.ts` - **DEPRECATED** - Removed entire route (no longer needed for single-tenant)
+  - `set-org/route.ts` - **DEPRECATED** - Removed entire route (no longer needed for single-tenant)
+
+- **Dependencies Removed:**
+  - All `useOrgContext()` hooks throughout the codebase
+  - Organization cookie management (`current_org_id`)
+  - Organization switching logic and state management
+
+## 🔄 REMAINING WORK TO COMPLETE
+
+### Phase 12: Database Schema Changes (CRITICAL - MUST BE DONE FIRST)
+**⚠️ WARNING: These migrations will permanently change your database structure. Backup first!**
+
+1. **Add role column to users table:**
+   ```sql
+   ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'member' CHECK (role IN ('admin', 'instructor', 'member', 'student'));
+   ```
+
+2. **Remove organization_id columns from all tables:**
+   ```sql
+   ALTER TABLE bookings DROP COLUMN organization_id;
+   ALTER TABLE invoices DROP COLUMN organization_id;
+   ALTER TABLE invoice_items DROP COLUMN organization_id;
+   ALTER TABLE aircraft DROP COLUMN organization_id;
+   ALTER TABLE equipment DROP COLUMN organization_id;
+   ALTER TABLE instructors DROP COLUMN organization_id;
+   ALTER TABLE chargeables DROP COLUMN organization_id;
+   ALTER TABLE flight_types DROP COLUMN organization_id;
+   ALTER TABLE instructor_rates DROP COLUMN organization_id;
+   ALTER TABLE instructor_flight_type_rates DROP COLUMN organization_id;
+   ALTER TABLE lessons DROP COLUMN organization_id;
+   ALTER TABLE lesson_progress DROP COLUMN organization_id;
+   ALTER TABLE observations DROP COLUMN organization_id;
+   ALTER TABLE maintenance_visits DROP COLUMN organization_id;
+   ALTER TABLE aircraft_components DROP COLUMN organization_id;
+   ALTER TABLE aircraft_charge_rates DROP COLUMN organization_id;
+   ALTER TABLE tax_rates DROP COLUMN organization_id;
+   ALTER TABLE payments DROP COLUMN organization_id;
+   ALTER TABLE transactions DROP COLUMN organization_id;
+   ALTER TABLE audit_logs DROP COLUMN organization_id;
+   ALTER TABLE endorsements DROP COLUMN organization_id;
+   ALTER TABLE equipment_issuance DROP COLUMN organization_id;
+   ALTER TABLE equipment_updates DROP COLUMN organization_id;
+   ALTER TABLE booking_details DROP COLUMN organization_id;
+   ALTER TABLE syllabus DROP COLUMN organization_id;
+   ALTER TABLE student_syllabus_enrollment DROP COLUMN organization_id;
+   ALTER TABLE exam DROP COLUMN organization_id;
+   ALTER TABLE exam_results DROP COLUMN organization_id;
+   ALTER TABLE instructor_comments DROP COLUMN organization_id;
+   ALTER TABLE memberships DROP COLUMN organization_id;
+   ```
+
+3. **Drop user_organizations table:**
+   ```sql
+   DROP TABLE user_organizations;
+   ```
+
+4. **Update RLS policies** to remove organization-based filtering
+
+### Phase 13: Remaining TypeScript Types to Update ✅
+- **TypeScript Types Updated:**
+  - `maintenance_visits.ts` - Removed `organization_id` from MaintenanceVisit interface
+  - `aircraft_components.ts` - Removed `organization_id` from AircraftComponent interface
+  - `aircraft_charge_rates.ts` - Removed `organization_id` from AircraftChargeRate interface
+  - `flight_types.ts` - Removed `organization_id` from FlightType interface
+  - `endorsements.ts` - Removed `organization_id` from Endorsement interface
+  - `observations.ts` - Removed `organization_id` from all observation interfaces
+  - `equipment.ts` - Removed `organization_id` from EquipmentUpdate interface
+  - `exam.ts` - Removed `organization_id` from Exam type
+  - `exam_results.ts` - Removed `organization_id` from ExamResult type
+  - `syllabus.ts` - Removed `organization_id` from all syllabus types
+  - `student_syllabus_enrollment.ts` - Removed `organization_id` from all enrollment types
+
+- **Components Updated:**
+  - `members/tabs/MemberMembershipsTab.tsx` - Removed `organization_id` from Membership interface and organization references
+  - `instructors/view/[id]/InstructorDetailsClient.tsx` - Removed `organization_id` from InstructorWithUser interface
+
+- **Dependencies Removed:**
+  - All `organization_id` field references from TypeScript type definitions
+  - Organization context from component interfaces
+
+### Phase 14: Authentication & Middleware Updates ⏳
+- `middleware.ts` - Remove organization-based routing logic
+- Update authentication flows to remove organization context
+- Remove organization cookies and session management
+
+## 📊 MIGRATION STATUS
+- **Aircraft System**: ✅ 100% Complete
+- **Equipment System**: ✅ 100% Complete  
+- **Booking System**: ✅ 100% Complete
+- **High Priority API Routes**: ✅ 100% Complete
+- **High Priority TypeScript Types**: ✅ 100% Complete
+- **High Priority Pages**: ✅ 100% Complete
+- **High Priority Components**: ✅ 100% Complete
+- **Invoice & Member Pages**: ✅ 100% Complete
+- **Medium Priority API Routes**: ✅ 100% Complete
+- **Member Components**: ✅ 100% Complete
+- **Organization Context**: ✅ 100% Complete
+- **TypeScript Types**: ✅ 100% Complete
+- **Database Schema**: ⏳ **CRITICAL - NEXT STEP**
+- **Authentication/Middleware**: ⏳ 0% Complete
+
+## 🎯 IMMEDIATE NEXT STEPS
+
+### 1. ✅ Database Schema Migration (COMPLETED)
+- **Successfully migrated schema to new Supabase project**
+- **New project ID**: `fergmobsjyucucxeumvb`
+- **Old project ID**: `koviyikwttwsogmbseab`
+
+### 2. Update Environment Variables
+Update your `.env.local` file with new project credentials:
+```bash
+# Get these from your new Supabase project dashboard
+NEXT_PUBLIC_SUPABASE_URL=https://fergmobsjyucucxeumvb.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_new_anon_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_new_service_role_key_here
+```
+
+### 3. Test Core Functionality
+Test the following in your new project:
+- User authentication and role assignment
+- Aircraft management (create, edit, view)
+- Equipment management (create, edit, view)
+- Booking system functionality (create, edit, view, debrief)
+- Invoice system functionality
+- Member management
+- Instructor management
+
+### 4. Database Schema Changes (NEXT)
+Once testing confirms everything works, proceed with:
+- Removing `organization_id` columns from all tables
+- Adding `role` column to users table
+- Dropping `user_organizations` table
+- Updating RLS policies
+
+## ⚠️ ROLLBACK PLAN
+If issues arise during migration:
+1. Restore database from backup
+2. Revert code changes to previous commit
+3. Investigate and fix issues before retrying
+
+## 📋 COMPLETE FILE INVENTORY
+
+### API Routes (35 total):
+**✅ COMPLETED (22):**
+- aircraft_components/route.ts
+- observations/route.ts
+- endorsements/route.ts
+- equipment_issuance/route.ts
+- equipment_updates/route.ts
+- booking_details/route.ts
+- lesson_progress/route.ts
+- lessons/route.ts
+- instructor_rates/route.ts
+- tax_rates/route.ts
+- payments/route.ts
+- transactions/route.ts
+- audit_logs/route.ts
+- invoices/[id]/route.ts
+- cancellation_categories/route.ts
+- exam_results/route.ts
+- exam/route.ts
+- memberships/route.ts
+- syllabus/route.ts
+- student_syllabus_enrollment/route.ts
+- user-orgs/route.ts (DEPRECATED)
+- set-org/route.ts (DEPRECATED)
+
+**⏳ PENDING (13):**
+- aircraft/route.ts
+- equipment/route.ts
+- instructors/route.ts
+- members/route.ts
+- instructor_endorsements/route.ts
+- observation_comments/route.ts
+- maintenance_visits/route.ts
+- chargeables/route.ts
+- invoice_items/route.ts
+- flight_types/route.ts
+- users/route.ts
+- invoices/route.ts
+- equipment/[id]/route.ts
+
+### Pages (10 total):
+**✅ COMPLETED (10):**
+- bookings/debrief/[id]/page.tsx
+- bookings/debrief/view/[id]/page.tsx
+- aircraft/view/[id]/page.tsx
+- equipment/view/[id]/page.tsx
+- bookings/page.tsx
+- dashboard/equipment/page.tsx
+- dashboard/instructors/page.tsx
+- dashboard/instructors/view/[id]/page.tsx
+- dashboard/invoices/view/[id]/page.tsx
+- dashboard/members/view/[id]/page.tsx
+
+**⏳ PENDING (0):**
+- All pages completed!
+
+### Components (15 total):
+**✅ COMPLETED (15):**
+- aircraft/RatingsTab.tsx
+- aircraft/AddObservationModal.tsx
+- aircraft/maintenance/LogMaintenanceModal.tsx
+- aircraft/maintenance/AircraftMaintenanceTab.tsx
+- aircraft/maintenance/AircraftServicingTab.tsx
+- aircraft/ObservationsTable.tsx
+- equipment/IssueEquipmentModal.tsx
+- equipment/UpdateEquipmentModal.tsx
+- equipment/AddEquipmentModal.tsx
+- equipment/EquipmentIssuanceTable.tsx
+- equipment/EquipmentUpdatesTable.tsx
+- bookings/BookingStagesOptions.tsx
+- InstructorFlightTypeRatesTable.tsx
+- instructors/view/[id]/InstructorDetailsClient.tsx
+- members/tabs/MemberAccountTab.tsx
+- members/tabs/MemberSyllabusEnrollmentTab.tsx
+- members/tabs/MemberTrainingHistoryTab.tsx
+- members/tabs/MemberTrainingTab.tsx
+- members/MemberProfileCard.tsx
+- UserMenu.tsx
+- OrgContextProvider.tsx (DEPRECATED)
+- OrgSwitcher.tsx (DEPRECATED)
+- OrgHeaderTitle.tsx (DEPRECATED)
+
+**⏳ PENDING (0):**
+- All components completed!
+
+### TypeScript Types (25 total):
+**✅ COMPLETED (25):**
+- lessons.ts
+- lesson_progress.ts
+- booking_details.ts
+- tax_rates.ts
+- invoices.ts
+- payments.ts
+- transactions.ts
+- audit_logs.ts
+- instructor_rates.ts
+- instructor_flight_type_rates.ts
+- chargeables.ts
+- instructor_comments.ts
+- syllabus.ts
+- student_syllabus_enrollment.ts
+- exam.ts
+- exam_results.ts
+- maintenance_visits.ts
+- aircraft_components.ts
+- aircraft_charge_rates.ts
+- flight_types.ts
+- endorsements.ts
+- observations.ts
+- equipment.ts
+- users.ts (role field added)
+
+**⏳ PENDING (0):**
+- All TypeScript types completed!

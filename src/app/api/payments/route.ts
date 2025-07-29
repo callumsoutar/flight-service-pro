@@ -13,7 +13,6 @@ const paymentSchema = z.object({
   payment_method: z.string(),
   payment_reference: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
-  organization_id: z.string().uuid().optional(),
 });
 
 export async function GET(req: NextRequest) {

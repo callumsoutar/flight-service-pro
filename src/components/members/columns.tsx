@@ -1,6 +1,6 @@
 "use client";
 import { ColumnDef } from "@tanstack/react-table";
-import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Badge } from "../ui/badge";
 
 export type Member = {
@@ -24,14 +24,10 @@ export const columns: ColumnDef<Member>[] = [
       return (
         <div className="flex items-center gap-3">
           <Avatar className="h-8 w-8">
-            {member.profile_image_url ? (
-              <AvatarImage src={member.profile_image_url} alt={member.first_name || member.email} />
-            ) : (
-              <AvatarFallback>
-                {member.first_name?.[0] || member.email[0]}
-                {member.last_name?.[0] || ""}
-              </AvatarFallback>
-            )}
+            <AvatarFallback>
+              {(member.first_name || member.email || "").charAt(0).toUpperCase()}
+              {(member.last_name || "").charAt(0).toUpperCase()}
+            </AvatarFallback>
           </Avatar>
           <span className="font-medium">
             {member.first_name || ""} {member.last_name || ""}
@@ -60,11 +56,15 @@ export const columns: ColumnDef<Member>[] = [
   {
     accessorKey: "status",
     header: "Status",
-    cell: ({ row }) => (
-      <Badge variant="default" className="font-medium">
-        {row.original.status ? row.original.status.charAt(0).toUpperCase() + row.original.status.slice(1) : "Active"}
-      </Badge>
-    ),
+    cell: ({ row }) => {
+      const status = row.original.status || "active";
+      const displayStatus = status.charAt(0).toUpperCase() + status.slice(1);
+      return (
+        <Badge variant="default" className="font-medium">
+          {displayStatus}
+        </Badge>
+      );
+    },
     enableSorting: false,
   },
 ]; 

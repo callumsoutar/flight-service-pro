@@ -7,7 +7,6 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { useOrgContext } from "@/components/OrgContextProvider";
 import { format } from "date-fns";
 import Progress from "@/components/ui/progress";
 import type { Syllabus } from "@/types/syllabus";
@@ -22,11 +21,10 @@ interface ExamResultWithExamSyllabus {
   user_id: string;
   score?: number | null;
   result: 'PASS' | 'FAIL';
-  date_completed?: string | null;
-  kdrs_completed?: boolean | null;
-  kdrs_signed_by?: string | null;
-  organization_id: string;
+  exam_date?: string | null;
+  notes?: string | null;
   created_at: string;
+  updated_at: string;
   exam?: {
     id: string;
     name: string;
@@ -60,7 +58,6 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logModalOpen, setLogModalOpen] = useState(false);
-  const { currentOrgId } = useOrgContext();
 
   // Log Exam Result modal state
   const [syllabi, setSyllabi] = useState<{ id: string; name: string }[]>([]);
@@ -70,8 +67,6 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
   const [result, setResult] = useState<'PASS' | 'FAIL' | "">("");
   const [score, setScore] = useState<string>("");
   const [dateCompleted, setDateCompleted] = useState<Date | undefined>(undefined);
-  const [kdrsCompleted, setKdrsCompleted] = useState<boolean | null>(null);
-  const [kdrsSignedBy, setKdrsSignedBy] = useState<string>("");
   const [modalError, setModalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [syllabusMap, setSyllabusMap] = useState<Record<string, Syllabus>>({});
@@ -79,8 +74,7 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
 
   // Fetch syllabi on modal open and for progress
   useEffect(() => {
-    if (!currentOrgId) return;
-    fetch(`/api/syllabus?organization_id=${currentOrgId}`)
+    fetch(`/api/syllabus`)
       .then(res => res.json())
       .then(data => {
         const arr = Array.isArray(data.data) ? data.data : [];
@@ -89,7 +83,7 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
         arr.forEach((s: Syllabus) => { map[s.id] = s; });
         setSyllabusMap(map);
       });
-  }, [logModalOpen, currentOrgId]);
+  }, [logModalOpen]);
 
   // Fetch exams when syllabus changes
   useEffect(() => {
@@ -125,7 +119,7 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
     e.preventDefault();
     setSubmitting(true);
     setModalError(null);
-    if (!selectedExam || !result || !dateCompleted || !currentOrgId) {
+    if (!selectedExam || !result || !dateCompleted) {
       setModalError("Please fill all required fields.");
       setSubmitting(false);
       return;
@@ -133,12 +127,9 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
     const payload = {
       exam_id: selectedExam,
       user_id: memberId,
-      organization_id: currentOrgId,
       result,
       score: score ? Number(score) : null,
-      date_completed: dateCompleted.toISOString().split("T")[0],
-      kdrs_completed: kdrsCompleted,
-      kdrs_signed_by: kdrsSignedBy || null,
+      exam_date: dateCompleted.toISOString().split("T")[0],
     };
     try {
       const res = await fetch("/api/exam_results", {
@@ -152,7 +143,7 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
       }
       setLogModalOpen(false);
       // Reset modal state
-      setSelectedSyllabus(""); setSelectedExam(""); setResult(""); setScore(""); setDateCompleted(undefined); setKdrsCompleted(null); setKdrsSignedBy("");
+      setSelectedSyllabus(""); setSelectedExam(""); setResult(""); setScore(""); setDateCompleted(undefined);
       refreshResults();
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : "Failed to log exam result";
@@ -270,24 +261,6 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="block text-base font-medium mb-1">KDRs Completed</label>
-                  <Select value={kdrsCompleted === null ? "" : kdrsCompleted ? "yes" : "no"} onValueChange={val => setKdrsCompleted(val === "yes" ? true : val === "no" ? false : null)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="yes">Yes</SelectItem>
-                      <SelectItem value="no">No</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-base font-medium mb-1">KDRs Signed By</label>
-                  <Input value={kdrsSignedBy} onChange={e => setKdrsSignedBy(e.target.value)} placeholder="Instructor name" className="w-full" />
-                </div>
-              </div>
               {modalError && <div className="text-red-600 text-sm mt-2">{modalError}</div>}
               <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2 sm:gap-4 w-full">
                 <DialogClose asChild>
@@ -359,7 +332,6 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
                                         <TableHead className="py-3 px-4 font-semibold text-gray-700">Score</TableHead>
                                         <TableHead className="py-3 px-4 font-semibold text-gray-700">Result</TableHead>
                                         <TableHead className="py-3 px-4 font-semibold text-gray-700">Date Completed</TableHead>
-                                        <TableHead className="py-3 px-4 font-semibold text-gray-700">KDRs</TableHead>
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -368,10 +340,7 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
                                           <TableCell className="py-3 px-4">{row.exam?.name || "-"}</TableCell>
                                           <TableCell className="py-3 px-4">{row.score != null ? `${row.score}%` : "-"}</TableCell>
                                           <TableCell className="py-3 px-4"><ResultBadge result={row.result} /></TableCell>
-                                          <TableCell className="py-3 px-4">{row.date_completed || "-"}</TableCell>
-                                          <TableCell className="py-3 px-4">
-                                            {row.kdrs_completed === true ? <Badge variant="default">KDRs ✓</Badge> : row.kdrs_completed === false ? <Badge variant="secondary">No</Badge> : "-"}
-                                          </TableCell>
+                                          <TableCell className="py-3 px-4">{row.exam_date ? format(new Date(row.exam_date), 'dd MMM yyyy') : "-"}</TableCell>
                                         </TableRow>
                                       ))}
                                     </TableBody>

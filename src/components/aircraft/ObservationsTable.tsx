@@ -9,7 +9,6 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AddObservationModal } from './AddObservationModal';
-import { useOrgContext } from '@/components/OrgContextProvider';
 import { ViewObservationModal } from './ViewObservationModal';
 import { ResolveObservationModal } from './ResolveObservationModal';
 
@@ -25,8 +24,8 @@ const statusColor: Record<string, string> = {
 
 const stageColor: Record<string, string> = {
   open: 'bg-blue-100 text-blue-800',
-  investigating: 'bg-orange-100 text-orange-800',
-  monitoring: 'bg-purple-100 text-purple-800',
+  investigation: 'bg-orange-100 text-orange-800',
+  resolution: 'bg-purple-100 text-purple-800',
   closed: 'bg-gray-200 text-gray-700',
 };
 
@@ -41,7 +40,6 @@ export function ObservationsTable({ aircraftId }: ObservationsTableProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedObservationId, setSelectedObservationId] = useState<string | null>(null);
   const [resolveObservationId, setResolveObservationId] = useState<string | null>(null);
-  const { currentOrgId } = useOrgContext();
   const { data: observations, isLoading, isError, refetch } = useQuery<Observation[]>({
     queryKey: ['observations', aircraftId],
     queryFn: async () => {
@@ -152,7 +150,6 @@ export function ObservationsTable({ aircraftId }: ObservationsTableProps) {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         aircraftId={aircraftId}
-        orgId={currentOrgId || ''}
         refresh={refetch}
       />
       {selectedObservationId && (

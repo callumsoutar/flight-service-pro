@@ -5,14 +5,13 @@ import { createClient } from "@/lib/SupabaseServerClient";
 // TODO: Enforce RLS/auth for all operations
 
 const insertSchema = z.object({
-  organization_id: z.string().uuid(),
   user_id: z.string().uuid(),
-  status: z.string(),
+  status: z.enum(['pass', 'not yet competent']),
   attempt: z.number().optional(),
   syllabus_id: z.string().uuid().nullable().optional(),
   lesson_id: z.string().uuid().nullable().optional(),
   booking_id: z.string().uuid().nullable().optional(),
-  comments: z.string().nullable().optional(),
+  instructor_comments: z.string().nullable().optional(),
   instructor_id: z.string().uuid().nullable().optional(),
   date: z.string().optional(),
   lesson_highlights: z.string().nullable().optional(),

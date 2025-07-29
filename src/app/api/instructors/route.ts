@@ -4,7 +4,6 @@ import { createClient } from '@/lib/SupabaseServerClient';
 
 const InstructorSchema = z.object({
   user_id: z.string().uuid(),
-  organization_id: z.string().uuid(),
   approved_by: z.string().uuid().nullable().optional(),
   approved_at: z.string().datetime().optional(),
   expires_at: z.string().datetime().nullable().optional(),
@@ -20,20 +19,43 @@ const InstructorSchema = z.object({
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { searchParams } = new URL(req.url);
-  const orgId = searchParams.get('organization_id');
   const userId = searchParams.get('user_id');
+  const instructorId = searchParams.get('id');
+  const searchQuery = searchParams.get('q');
 
-  let query = supabase.from('instructors').select('*');
-  if (orgId) query = query.eq('organization_id', orgId);
-  if (userId) query = query.eq('user_id', userId);
-
+  // Join with users table to get instructor names
+  let query = supabase
+    .from('instructors')
+    .select(`
+      *,
+      users!instructors_user_id_fkey (
+        id,
+        first_name,
+        last_name,
+        email
+      )
+    `);
+  
   if (userId) {
-    // Return a single instructor for this user (optionally scoped to org)
+    query = query.eq('user_id', userId);
+  }
+  
+  if (instructorId) {
+    query = query.eq('id', instructorId);
+  }
+  
+  if (searchQuery) {
+    // Search by instructor name using the joined users table
+    query = query.or(`users.first_name.ilike.%${searchQuery}%,users.last_name.ilike.%${searchQuery}%`);
+  }
+
+  if (userId || instructorId) {
+    // Return a single instructor for this user or id
     const { data, error } = await query.single();
     if (error) return NextResponse.json({ error: error.message }, { status: 404 });
     return NextResponse.json({ instructor: data }, { status: 200 });
   } else {
-    // Return all instructors (optionally scoped to org)
+    // Return all instructors
     const { data, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ instructors: data }, { status: 200 });

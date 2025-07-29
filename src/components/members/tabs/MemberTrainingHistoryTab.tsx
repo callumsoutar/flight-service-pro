@@ -2,10 +2,10 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { useOrgContext } from "@/components/OrgContextProvider";
-import type { LessonProgress } from "@/types/lesson_progress";
+import type { LessonProgress, LessonOutcome } from "@/types/lesson_progress";
 import type { Lesson } from "@/types/lessons";
 import type { User } from "@/types/users";
+import type { Instructor } from "@/types/instructors";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 
@@ -14,7 +14,6 @@ interface MemberTrainingHistoryTabProps {
 }
 
 export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHistoryTabProps) {
-  const { currentOrgId } = useOrgContext();
   const router = useRouter();
   const [records, setRecords] = useState<LessonProgress[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -23,7 +22,7 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!memberId || !currentOrgId) return;
+    if (!memberId) return;
     setLoading(true);
     setError(null);
     // Fetch lesson_progress, lessons, and instructors
@@ -32,25 +31,50 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
         .then(res => res.json())
         .then(data => Array.isArray(data.data) ? data.data : []),
       fetch(`/api/lessons`).then(res => res.json()).then(data => Array.isArray(data.lessons) ? data.lessons : []),
+      fetch(`/api/instructors`).then(res => res.json()).then(data => Array.isArray(data.instructors) ? data.instructors : []),
     ])
-      .then(async ([progressData, lessonsData]) => {
+      .then(async ([progressData, lessonsData, instructorsData]) => {
         setRecords(progressData);
         setLessons(lessonsData);
-        // Collect unique instructor_ids
-        const instructorIds = Array.from(new Set(progressData.map((r: LessonProgress) => r.instructor_id).filter(Boolean)));
-        const instructorMap: Record<string, User> = {};
-        if (instructorIds.length > 0) {
-          const usersRes = await fetch(`/api/users?ids=${instructorIds.join(",")}`);
+        
+        // Create instructor map: instructor_id -> instructor record
+        const instructorMap: Record<string, Instructor> = {};
+        instructorsData.forEach((instructor: Instructor) => {
+          instructorMap[instructor.id] = instructor;
+        });
+        
+        // Collect unique user_ids from instructors
+        const instructorIds = Array.from(new Set(progressData.map((r: LessonProgress) => r.instructor_id).filter(Boolean))) as string[];
+        const userIds = instructorIds
+          .map(id => instructorMap[id]?.user_id)
+          .filter(Boolean);
+        
+        const userMap: Record<string, User> = {};
+        if (userIds.length > 0) {
+          const usersRes = await fetch(`/api/users?ids=${userIds.join(",")}`);
           const usersData = await usersRes.json();
           if (Array.isArray(usersData.users)) {
-            usersData.users.forEach((u: User) => { instructorMap[u.id] = u; });
+            usersData.users.forEach((u: User) => { userMap[u.id] = u; });
           }
         }
-        setInstructors(instructorMap);
+        
+        // Create final instructor map: instructor_id -> user data
+        const finalInstructorMap: Record<string, User> = {};
+        instructorIds.forEach((instructorId: string) => {
+          const instructor = instructorMap[instructorId];
+          if (instructor && instructor.user_id) {
+            const user = userMap[instructor.user_id];
+            if (user) {
+              finalInstructorMap[instructorId] = user;
+            }
+          }
+        });
+        
+        setInstructors(finalInstructorMap);
       })
       .catch((e) => setError(e.message || "Failed to load training history"))
       .finally(() => setLoading(false));
-  }, [memberId, currentOrgId]);
+  }, [memberId]);
 
   // Map lesson_id to lesson name
   const lessonNameMap = lessons.reduce<Record<string, string>>((acc, lesson) => {
@@ -62,34 +86,36 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
   function getInstructorName(id?: string | null) {
     if (!id) return "-";
     const u = instructors[id];
-    if (!u) return id;
-    return [u.first_name, u.last_name].filter(Boolean).join(" ") || u.email || id;
+    if (!u) {
+      return `Unknown (${id.slice(0, 8)}...)`;
+    }
+    return [u.first_name, u.last_name].filter(Boolean).join(" ") || u.email || `Unknown (${id.slice(0, 8)}...)`;
   }
 
   // Helper: status to badge color
-  function StatusBadge({ status }: { status?: string | null }) {
-    const normalized = (status || "").toLowerCase();
+  function StatusBadge({ status }: { status?: LessonOutcome | null }) {
+    if (!status) return <Badge variant="secondary">-</Badge>;
+    
     let color: "default" | "secondary" | "destructive" | "outline" = "secondary";
-    let label = status || "-";
+    let displayLabel: string = status;
     let customClass = "";
-    switch (normalized) {
+    
+    switch (status) {
       case "pass":
-      case "passed":
-        color = "default"; label = label.charAt(0).toUpperCase() + label.slice(1); customClass = "bg-green-100 text-green-800 border-green-200"; break;
-      case "complete":
-        color = "default"; label = label.charAt(0).toUpperCase() + label.slice(1); break;
-      case "fail":
-      case "failed":
-        color = "destructive"; label = label.charAt(0).toUpperCase() + label.slice(1); break;
-      case "in progress":
-      case "progress":
-        color = "outline"; label = "In Progress"; break;
-      case "unattempted":
-        color = "secondary"; label = "Unattempted"; break;
+        color = "default"; 
+        displayLabel = "Pass"; 
+        customClass = "bg-green-100 text-green-800 border-green-200"; 
+        break;
+      case "not yet competent":
+        color = "destructive"; 
+        displayLabel = "Not Yet Competent"; 
+        break;
       default:
         color = "secondary";
+        displayLabel = status;
     }
-    return <Badge variant={color} className={customClass}>{label}</Badge>;
+    
+    return <Badge variant={color} className={customClass}>{displayLabel}</Badge>;
   }
 
   return (
@@ -126,7 +152,7 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
                             (isClickable ? "cursor-pointer hover:bg-blue-50 transition" : "") +
                             " group border-b last:border-0 hover:shadow-sm hover:z-10"
                           }
-                          onClick={isClickable ? () => router.push(`/dashboard/bookings/debrief/view/${row.booking_id}`) : undefined}
+                          onClick={isClickable ? () => router.push(`/dashboard/bookings/debrief/${row.booking_id}`) : undefined}
                           style={{ height: 56 }}
                         >
                           <TableCell className="py-3 px-4">{row.date ? new Date(row.date).toLocaleDateString() : "-"}</TableCell>

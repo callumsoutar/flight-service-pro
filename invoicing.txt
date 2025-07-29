@@ -3,6 +3,8 @@
 ## Overview
 The Aero Safety invoicing system is designed for robust, auditable, and secure financial management. It leverages a hybrid client-server workflow, with all critical calculations and data integrity enforced at the database level. The system supports draft, pending, paid, overdue, cancelled, and refunded invoice states, and ensures that all financial data is accurate, immutable, and compliant.
 
+**Note: This system uses a single-tenant architecture. All organization_id references have been removed from the schema.**
+
 ---
 
 ## Tables Involved
@@ -10,11 +12,11 @@ The Aero Safety invoicing system is designed for robust, auditable, and secure f
 ### 1. `invoices`
 - **Purpose:** Stores invoice headers, totals, status, and metadata.
 - **Key Fields:**
-  - `id`, `organization_id`, `user_id` (member), `booking_id`
+  - `id`, `user_id` (member), `booking_id`
   - `invoice_number`, `issue_date`, `due_date`
   - `status` (`draft`, `pending`, `paid`, `overdue`, `cancelled`, `refunded`)
-  - `subtotal`, `tax_amount`, `tax_rate`, `total_amount`
-  - `balance_due`, `paid`, `paid_date`, `payment_method`, `payment_reference`
+  - `subtotal`, `tax_total`, `tax_rate`, `total_amount`
+  - `total_paid`, `balance_due`, `paid_date`, `payment_method`, `payment_reference`
   - `reference`, `notes`
   - `created_at`, `updated_at`
 
@@ -22,19 +24,25 @@ The Aero Safety invoicing system is designed for robust, auditable, and secure f
 - **Purpose:** Stores individual line items for each invoice, including rates, quantities, and tax details.
 - **Key Fields:**
   - `id`, `invoice_id`, `chargeable_id`
-  - `description`, `quantity`, `rate`, `rate_inclusive`
-  - `amount`, `tax_rate`, `tax_amount`, `total_amount`
-  - `created_at`, `updated_at`
+  - `description`, `quantity`, `unit_price`, `rate_inclusive`
+  - `amount`, `tax_rate`, `tax_amount`, `line_total`
+  - `notes`, `created_at`, `updated_at`
 
 ### 3. `transactions`
 - **Purpose:** General ledger of all financial events (debits, payments, refunds, adjustments).
 - **Key Fields:**
-  - `id`, `organization_id`, `user_id`, `type`, `status`, `amount`, `description`, `metadata`, `reference_number`, `created_at`, `completed_at`
+  - `id`, `user_id`, `type`, `status`, `amount`, `description`, `metadata`, `reference_number`, `created_at`, `completed_at`
+- **Constraints:**
+  - `transactions_amount_not_zero` CHECK (amount <> 0)
 
 ### 4. `payments`
 - **Purpose:** Records payments made against invoices, linked to both the invoice and a transaction.
 - **Key Fields:**
-  - `id`, `organization_id`, `invoice_id`, `transaction_id`, `amount`, `payment_method`, `payment_reference`, `created_at`, `updated_at`
+  - `id`, `invoice_id`, `transaction_id`, `amount`, `payment_method`, `payment_reference`, `notes`, `created_at`, `updated_at`
+- **Constraints:**
+  - `payments_amount_positive` CHECK (amount > 0)
+  - `payments_invoice_id_fkey` FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+  - `payments_transaction_id_fkey` FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
 - **Note:**
   - `payment_method` is an enum (`payment_method`). The API and process_payment function accept a string and cast it to the enum. Allowed values: `cash`, `credit_card`, `bank_transfer`, `direct_debit`, `cheque`, `other`. If you add new payment methods, update the enum in the database and document them here.
 
@@ -42,6 +50,153 @@ The Aero Safety invoicing system is designed for robust, auditable, and secure f
 - **Purpose:** Stores user/member info and their real-time `account_balance`.
 - **Key Fields:**
   - `id`, `account_balance`, ...
+
+---
+
+## Schema Restoration Changes (Latest Update)
+
+### Payments Table Schema Fixes:
+- ✅ **Added:** `transaction_id` (uuid, NOT NULL) - Links payment to transaction record
+- ✅ **Removed:** `user_id` (uuid) - Should be derived from invoice
+- ✅ **Removed:** `status` (text) - Not in original design
+- ✅ **Added:** `payments_amount_positive` CHECK constraint
+- ✅ **Added:** `payments_transaction_id_fkey` FOREIGN KEY constraint
+
+### Transactions Table Schema Fixes:
+- ✅ **Added:** `transactions_amount_not_zero` CHECK constraint
+
+### Function Updates:
+- ✅ **Updated:** `process_payment()` function to work with new schema
+  - Now creates transaction first, then payment with transaction_id
+  - Properly handles the payment_method enum casting
+  - Updates transaction metadata with payment_id
+- ✅ **Fixed:** `update_invoice_balance_due()` function
+  - Removed reference to `payments.status = 'completed'` (column no longer exists)
+  - Now considers all payments as completed
+- ✅ **Fixed:** `update_invoice_payment_totals()` function
+  - Removed reference to `payments.status = 'completed'` (column no longer exists)
+  - Now considers all payments as completed
+- ✅ **Fixed:** `process_refund()` function
+  - Updated to work with new payments table schema (no user_id or status columns)
+  - Now creates transaction first, then refund payment record
+  - Properly handles payment_method enum casting
+
+### Issue Resolution:
+- ✅ **Fixed:** "column 'status' does not exist" error when inserting invoice_items
+  - Caused by functions trying to reference removed `payments.status` column
+  - All affected functions have been updated to work with new schema
+- ✅ **Fixed:** Incorrect tax calculation in invoice_items
+  - **Issue:** Tax amount showing as 0.067777 instead of 6.75 for $45 with 15% tax
+  - **Root Cause:** `calculate_invoice_item_amounts()` function was dividing tax_rate by 100
+  - **Problem:** Tax rates are stored as decimals (0.15 for 15%), not percentages (15 for 15%)
+  - **Fix:** Removed division by 100 in tax calculation: `NEW.tax_amount := NEW.line_total * NEW.tax_rate`
+  - **Result:** Tax calculations now work correctly (e.g., $45 × 0.15 = $6.75)
+- ✅ **Fixed:** Amount column not being calculated in invoice_items
+  - **Issue:** Frontend was using `item.amount` for subtotal calculations, but database trigger wasn't calculating it
+  - **Root Cause:** `calculate_invoice_item_amounts()` function was only calculating `line_total`, not `amount`
+  - **Problem:** `amount` column was defaulting to 0, causing incorrect subtotals
+  - **Fix:** Updated function to calculate both `amount` (before tax) and `line_total` (with tax)
+  - **Result:** Proper calculation: `amount = quantity × unit_price`, `line_total = amount + tax_amount`
+- ✅ **Fixed:** Rate_inclusive field not being calculated in invoice_items
+  - **Issue:** Frontend was trying to display `rate_inclusive` but it was showing as 0/null
+  - **Root Cause:** `calculate_invoice_item_amounts()` function wasn't calculating `rate_inclusive`
+  - **Problem:** Frontend falls back to `unit_price` when `rate_inclusive` is null, showing incorrect rates
+  - **Fix:** Added `rate_inclusive` calculation: `NEW.rate_inclusive := ROUND(NEW.unit_price * (1 + COALESCE(NEW.tax_rate, 0)), 2)`
+  - **Result:** Proper display of tax-inclusive rates (e.g., $45.00 base rate + 15% tax = $51.75 displayed rate)
+- ✅ **Fixed:** Invoice creation API failing with 500 error
+  - **Issue:** POST `/api/invoices` returning 500 error when creating new invoices
+  - **Root Cause:** API route was using old multi-tenant schema field names (`tax_rate`, `tax_amount`, `paid`) instead of single-tenant schema
+  - **Problem:** Database constraints failing due to missing required fields and wrong field names
+  - **Fix:** Updated API routes to use correct single-tenant schema:
+    - `tax_amount` → `tax_total`
+    - Removed non-existent `tax_rate` and `paid` fields
+    - Added required `due_date` field
+    - Added `total_paid` field
+  - **Result:** Invoice creation now works correctly from MemberSelect component
+- ✅ **Fixed:** Invoice items API using wrong field names
+  - **Issue:** POST `/api/invoice_items` using old field names (`rate`, `total_amount`) instead of new schema
+  - **Root Cause:** API route not updated for single-tenant schema changes
+  - **Problem:** Database trigger couldn't calculate derived fields properly
+  - **Fix:** Updated API routes to use correct field names:
+    - `rate` → `unit_price`
+    - `total_amount` → `line_total`
+    - Let database trigger calculate derived fields automatically
+  - **Result:** Invoice items can be created and updated correctly
+
+## Invoice Item Calculation Logic
+
+### Database Trigger: `calculate_invoice_item_amounts()`
+
+This trigger automatically calculates all derived fields when an invoice item is inserted or updated:
+
+```sql
+-- Calculate amount (before tax) - quantity * unit_price
+NEW.amount := NEW.quantity * NEW.unit_price;
+
+-- Calculate line total (same as amount initially)
+NEW.line_total := NEW.amount;
+
+-- Calculate tax amount if applicable
+IF NEW.tax_rate IS NOT NULL AND NEW.tax_rate > 0 THEN
+    NEW.tax_amount := NEW.amount * NEW.tax_rate;
+    -- Add tax to line total
+    NEW.line_total := NEW.line_total + NEW.tax_amount;
+ELSE
+    NEW.tax_amount := 0;
+END IF;
+
+-- Calculate rate_inclusive (unit_price including tax)
+NEW.rate_inclusive := ROUND(NEW.unit_price * (1 + COALESCE(NEW.tax_rate, 0)), 2);
+```
+
+### Field Definitions and Usage
+
+| Field | Type | Description | Calculation | Usage |
+|-------|------|-------------|-------------|-------|
+| `unit_price` | numeric | Base rate per unit (exclusive of tax) | User input | Base pricing reference |
+| `quantity` | numeric | Number of units | User input | Multiplier for calculations |
+| `amount` | numeric | Total before tax | `quantity × unit_price` | Subtotal calculations |
+| `tax_rate` | numeric | Tax rate as decimal (e.g., 0.15 for 15%) | User input | Tax calculation |
+| `tax_amount` | numeric | Tax amount | `amount × tax_rate` | Tax display and totals |
+| `rate_inclusive` | numeric | Rate including tax | `unit_price × (1 + tax_rate)` | Display to customers |
+| `line_total` | numeric | Final amount including tax | `amount + tax_amount` | Invoice totals |
+
+### Example Calculation
+
+**Input:**
+- Unit price: $45.00
+- Quantity: 2
+- Tax rate: 15% (0.15)
+
+**Calculated Fields:**
+- Amount: $45.00 × 2 = $90.00
+- Tax amount: $90.00 × 0.15 = $13.50
+- Rate inclusive: $45.00 × 1.15 = $51.75
+- Line total: $90.00 + $13.50 = $103.50
+
+### Frontend Display Logic
+
+The frontend uses these fields for different purposes:
+
+1. **Rate Display:** `item.rate_inclusive || item.unit_price` (shows tax-inclusive rate to customers)
+2. **Subtotal:** Sum of all `item.amount` values (before tax)
+3. **Total Tax:** Sum of all `item.tax_amount` values
+4. **Line Total:** `item.line_total` (final amount for each line item)
+5. **Invoice Total:** Sum of all `item.line_total` values
+
+### Business Logic Rationale
+
+**Why `rate_inclusive` is needed:**
+- **Customer Transparency:** Shows customers the actual rate they're paying (including tax)
+- **Display Clarity:** Invoice displays "Rate (incl. tax)" column with tax-inclusive pricing
+- **Business Standard:** Common practice to show tax-inclusive rates on invoices
+- **Consistent UX:** Frontend expects this field and falls back gracefully if missing
+
+**Why database calculation vs frontend:**
+- **Data Integrity:** Ensures consistent calculations across all applications
+- **Performance:** Pre-calculated values for faster display
+- **Audit Trail:** Stored values for historical accuracy
+- **Simplicity:** Frontend doesn't need to handle calculation logic
 
 ---
 
@@ -112,7 +267,15 @@ The Aero Safety invoicing system is designed for robust, auditable, and secure f
   - If `paid_date` is unset, status is `pending` or `overdue` based on `due_date`.
 - **All status logic is enforced in the database.**
 
-### 7. **Invoice Listing & Viewing**
+### 7. **Payment Processing**
+- **When a payment is made:**
+  - A `credit` transaction is created in the `transactions` table (positive amount).
+  - A `payment` record is created linking the invoice and transaction.
+  - The invoice's `paid_date` is updated.
+  - The user's `account_balance` is decreased by the payment amount.
+  - This is handled by the `process_payment()` function.
+
+### 8. **Invoice Listing & Viewing**
 - **Route:** `/dashboard/invoices`
   - Lists all invoices for the current organization.
   - Fetches joined user/member info for display.
@@ -125,7 +288,7 @@ The Aero Safety invoicing system is designed for robust, auditable, and secure f
 
 ### `/api/invoices`
 - **GET:** List all invoices for the current organization (with user info).
-- **POST:** Create a new draft invoice (requires `organization_id` and `user_id`).
+- **POST:** Create a new draft invoice (requires `user_id`).
 - **PATCH:** Update invoice fields (dates, reference, status, etc.).
 - **DELETE:** Delete an invoice.
 
@@ -202,7 +365,8 @@ sequenceDiagram
     User->>Client: Make Payment
     Client->>API: POST /api/payments
     API->>DB: process_payment()
-    DB->>DB: INSERT transactions (payment)
+    DB->>DB: INSERT transactions (credit)
+    DB->>DB: INSERT payments (with transaction_id)
     DB->>DB: UPDATE users.account_balance
 ```
 
@@ -219,6 +383,7 @@ sequenceDiagram
 | Update Invoice Total  | Client → API    | sync_invoice_debit_transaction() | PATCH /api/invoices      | Keeps transaction and balance in sync  |
 | Cancel/Delete Invoice | Client → API    | reverse_invoice_debit_transaction() | PATCH/DELETE /api/invoices | Reverses transaction and balance       |
 | Mark as Paid          | Client → API    | update_invoice_status()    | PATCH /api/invoices      | Sets status to paid, or overdue/pending|
+| Process Payment       | API             | process_payment()          | POST /api/payments       | Creates transaction + payment records  |
 | List Invoices         | API             |                            | GET /api/invoices        | Joins user info                        |
 | List Invoice Items    | API             |                            | GET /api/invoice_items   | For a given invoice                    |
 
@@ -230,6 +395,7 @@ sequenceDiagram
 - **API endpoints** are RESTful and secure, requiring authentication and organization context.
 - **All calculations and status transitions** are immutable and auditable, supporting aviation compliance needs.
 - **Extensibility:** The system is designed to support future features like refunds, credit notes, and multi-currency.
+- **Schema Restoration:** The payments and transactions tables have been restored to match the original design with proper constraints and relationships.
 
 ---
 

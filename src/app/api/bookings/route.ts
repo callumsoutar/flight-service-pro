@@ -4,46 +4,52 @@ import { createClient } from "@/lib/SupabaseServerClient";
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   // Auth check
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError) {
+    console.error("Auth error in /api/bookings:", authError);
+    return NextResponse.json({ error: "Authentication failed", details: authError.message }, { status: 401 });
+  }
   if (!user) {
+    console.error("No user found in /api/bookings");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Org check
-  const orgId = req.cookies.get("current_org_id")?.value;
-  if (!orgId) {
-    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
-  }
+  
   const searchParams = req.nextUrl.searchParams;
   const bookingId = searchParams.get("id");
 
-  let query = supabase
-    .from("bookings")
-    .select(`
-      id,
-      start_time,
-      end_time,
-      status,
-      purpose,
-      user:user_id(id, first_name, last_name),
-      instructor:instructor_id(id, first_name, last_name),
-      aircraft:aircraft_id(id, registration, type)
-    `)
-    .eq("organization_id", orgId);
+  try {
+    let query = supabase
+      .from("bookings")
+      .select(`
+        *,
+        user:user_id(id, first_name, last_name, email),
+        instructor:instructor_id(*),
+        aircraft:aircraft_id(id, registration, type)
+      `);
 
-  if (bookingId) {
-    query = query.eq("id", bookingId);
-    const { data, error } = await query.single();
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 404 });
+    if (bookingId) {
+      query = query.eq("id", bookingId);
+      const { data, error } = await query.single();
+      if (error) {
+        console.error("Error fetching single booking:", error);
+        return NextResponse.json({ error: error.message }, { status: 404 });
+      }
+      return NextResponse.json({ booking: normalizeBookingTimestamps(data) });
     }
-    return NextResponse.json({ booking: normalizeBookingTimestamps(data) });
-  }
 
-  const { data, error } = await query.order("start_time", { ascending: false });
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const { data, error } = await query.order("start_time", { ascending: false });
+    if (error) {
+      console.error("Error fetching bookings:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ bookings: (data ?? []).map(normalizeBookingTimestamps) });
+  } catch (error) {
+    console.error("Unexpected error in /api/bookings:", error);
+    return NextResponse.json({ 
+      error: "Internal server error", 
+      details: error instanceof Error ? error.message : 'Unknown error' 
+    }, { status: 500 });
   }
-  return NextResponse.json({ bookings: (data ?? []).map(normalizeBookingTimestamps) });
 }
 
 export async function POST(req: NextRequest) {
@@ -53,11 +59,7 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Org check
-  const orgId = req.cookies.get("current_org_id")?.value;
-  if (!orgId) {
-    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
-  }
+  
   const body = await req.json();
   const requiredFields = ["user_id", "aircraft_id", "start_time", "end_time", "purpose", "booking_type"];
   for (const field of requiredFields) {
@@ -67,7 +69,6 @@ export async function POST(req: NextRequest) {
   }
   // Compose insert payload
   const insertPayload: Record<string, unknown> = {
-    organization_id: orgId,
     user_id: body.user_id,
     aircraft_id: body.aircraft_id,
     start_time: body.start_time,
@@ -86,7 +87,12 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabase
     .from("bookings")
     .insert([insertPayload])
-    .select()
+    .select(`
+      *,
+      user:user_id(id, first_name, last_name, email),
+      instructor:instructor_id(*),
+      aircraft:aircraft_id(id, registration, type)
+    `)
     .single();
   if (error) {
     // Handle exclusion constraint (double-booking) errors
@@ -107,7 +113,7 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ booking: data });
+  return NextResponse.json({ booking: normalizeBookingTimestamps(data) });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -117,11 +123,7 @@ export async function PATCH(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Org check
-  const orgId = req.cookies.get("current_org_id")?.value;
-  if (!orgId) {
-    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
-  }
+  
   const body = await req.json();
   const { id, ...updateFields } = body;
   if (!id) {
@@ -145,12 +147,11 @@ export async function PATCH(req: NextRequest) {
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
-  // Always scope by org
+  
   const { error } = await supabase
     .from("bookings")
     .update(updates)
-    .eq("id", id)
-    .eq("organization_id", orgId);
+    .eq("id", id);
   if (error) {
     // Handle exclusion constraint (double-booking) errors
     if (
@@ -175,7 +176,6 @@ export async function PATCH(req: NextRequest) {
     .from("bookings")
     .select("*")
     .eq("id", id)
-    .eq("organization_id", orgId)
     .single();
   if (fetchError) {
     return NextResponse.json({ error: fetchError.message }, { status: 500 });

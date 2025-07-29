@@ -13,18 +13,19 @@ import {
   Wrench as LucideWrench,
   Settings as LucideSettings,
 } from "lucide-react";
-import { OrgContextProvider } from "@/components/OrgContextProvider";
-import OrgHeaderTitle from "@/components/OrgHeaderTitle";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 
+// Force dynamic rendering since this layout requires authentication
+export const dynamic = 'force-dynamic';
+
 
 const mainNavOptions = [
   { label: "Dashboard", icon: LucideHome, href: "/dashboard", tab: "dashboard" },
-  { label: "Scheduler", icon: LucideCalendar, href: "/scheduler", tab: "scheduler" },
+  { label: "Scheduler", icon: LucideCalendar, href: "/dashboard/scheduler", tab: "scheduler" },
   { label: "Bookings", icon: LucideBookOpen, href: "/dashboard/bookings", tab: "bookings" },
   { label: "Aircraft", icon: LucidePlane, href: "/dashboard/aircraft", tab: "aircraft" },
   { label: "Members", icon: LucideUsers, href: "/dashboard/members", tab: "members" },
@@ -44,66 +45,64 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
     <>
     <Analytics/>
     <SpeedInsights/>
-      <OrgContextProvider>
-        <div className="flex h-screen bg-gray-50">
-          {/* Sidebar */}
-          <aside className="fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-[#7c3aed] via-[#6d28d9] to-[#3b82f6] text-white flex flex-col z-30">
-            <div className="flex items-center h-16 px-6 font-extrabold text-2xl tracking-tight border-b border-white/10">
-              Flight Desk Pro
-            </div>
-            <nav className="flex-1 overflow-y-auto py-6 px-2 gap-1 flex flex-col">
-              {mainNavOptions.map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link"
-                  style={{
-                    fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
-                    textShadow: '0 2px 8px rgba(60,0,120,0.10)',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span className="sidebar-link-label" style={{ fontSize: '1.25rem', fontWeight: 500 }}>
-                    {item.label}
-                  </span>
-                </Link>
-              ))}
-            </nav>
-            <div className="mt-auto mb-4 px-4">
-              <div className="w-full h-px mb-3" style={{ background: 'rgba(255,255,255,0.10)' }} />
+      <div className="flex h-screen bg-gray-50">
+        {/* Sidebar */}
+        <aside className="fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-[#7c3aed] via-[#6d28d9] to-[#3b82f6] text-white flex flex-col z-30">
+          <div className="flex items-center h-16 px-6 font-extrabold text-2xl tracking-tight border-b border-white/10">
+            Flight Desk Pro
+          </div>
+          <nav className="flex-1 overflow-y-auto py-6 px-2 gap-1 flex flex-col">
+            {mainNavOptions.map((item) => (
               <Link
-                href="/settings"
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link mb-2"
+                key={item.label}
+                href={item.href}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link"
                 style={{
                   fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
                   textShadow: '0 2px 8px rgba(60,0,120,0.10)',
                   letterSpacing: '0.02em',
                 }}
               >
-                <LucideSettings className="w-5 h-5" />
+                <item.icon className="w-5 h-5" />
                 <span className="sidebar-link-label" style={{ fontSize: '1.25rem', fontWeight: 500 }}>
-                  Settings
+                  {item.label}
                 </span>
               </Link>
-            </div>
-          </aside>
-          {/* Main content area */}
-          <div className="flex-1 flex flex-col ml-64 min-h-0">
-            {/* Top navbar */}
-            <header className="h-16 flex items-center justify-between px-8 bg-white border-b border-gray-200 z-20">
-              <div className="flex items-center gap-6">
-                <OrgHeaderTitle />
-              </div>
-              <div>
-                <UserMenu />
-              </div>
-            </header>
-            {/* Scrollable content */}
-            <main className="flex-1 overflow-y-auto p-8 bg-gray-50">{children}</main>
+            ))}
+          </nav>
+          <div className="mt-auto mb-4 px-4">
+            <div className="w-full h-px mb-3" style={{ background: 'rgba(255,255,255,0.10)' }} />
+            <Link
+              href="/settings"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link mb-2"
+              style={{
+                fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
+                textShadow: '0 2px 8px rgba(60,0,120,0.10)',
+                letterSpacing: '0.02em',
+              }}
+            >
+              <LucideSettings className="w-5 h-5" />
+              <span className="sidebar-link-label" style={{ fontSize: '1.25rem', fontWeight: 500 }}>
+                Settings
+              </span>
+            </Link>
           </div>
+        </aside>
+        {/* Main content area */}
+        <div className="flex-1 flex flex-col ml-64 min-h-0">
+          {/* Top navbar */}
+          <header className="h-16 flex items-center justify-between px-8 bg-white border-b border-gray-200 z-20">
+            <div className="flex items-center gap-6">
+              {/* Organization title removed - single tenant */}
+            </div>
+            <div>
+              <UserMenu />
+            </div>
+          </header>
+          {/* Scrollable content */}
+          <main className="flex-1 overflow-y-auto p-8 bg-gray-50">{children}</main>
         </div>
-      </OrgContextProvider>
+      </div>
       <Toaster richColors position="bottom-right" />
     </>
   );

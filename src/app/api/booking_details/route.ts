@@ -12,11 +12,7 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Org check
-  const orgId = req.cookies.get("current_org_id")?.value;
-  if (!orgId) {
-    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
-  }
+  
   const body = await req.json();
   const { booking_id, ...fields } = body;
   if (!booking_id) {
@@ -27,7 +23,6 @@ export async function POST(req: NextRequest) {
     .from("booking_details")
     .select("id")
     .eq("booking_id", booking_id)
-    .eq("organization_id", orgId)
     .maybeSingle();
   if (existing && existing.id) {
     return NextResponse.json({ error: "Booking details already exist for this booking." }, { status: 409 });
@@ -35,7 +30,6 @@ export async function POST(req: NextRequest) {
   // Insert new record
   const insertPayload: Record<string, unknown> = {
     booking_id,
-    organization_id: orgId,
   };
   for (const key of ALLOWED_FIELDS) {
     if (key in fields) insertPayload[key] = fields[key];
@@ -58,11 +52,7 @@ export async function PATCH(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Org check
-  const orgId = req.cookies.get("current_org_id")?.value;
-  if (!orgId) {
-    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
-  }
+  
   const body = await req.json();
   const { id, ...fields } = body;
   if (!id) {
@@ -78,8 +68,7 @@ export async function PATCH(req: NextRequest) {
   const { error } = await supabase
     .from("booking_details")
     .update(updates)
-    .eq("id", id)
-    .eq("organization_id", orgId);
+    .eq("id", id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -88,7 +77,6 @@ export async function PATCH(req: NextRequest) {
     .from("booking_details")
     .select("*")
     .eq("id", id)
-    .eq("organization_id", orgId)
     .single();
   if (fetchError || !updated) {
     return NextResponse.json({ error: "Booking details not found" }, { status: 404 });

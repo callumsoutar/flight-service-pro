@@ -10,11 +10,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Org check
-  const orgId = req.cookies.get("current_org_id")?.value;
-  if (!orgId) {
-    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
-  }
+  
   const body = await req.json();
 
   // Allow updating these fields
@@ -35,7 +31,6 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     .from("invoices")
     .update(updateData)
     .eq("id", id)
-    .eq("organization_id", orgId)
     .select()
     .single();
 
@@ -54,16 +49,11 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Org check
-  const orgId = req.cookies.get("current_org_id")?.value;
-  if (!orgId) {
-    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
-  }
+  
   const { error } = await supabase
     .from("invoices")
     .delete()
-    .eq("id", id)
-    .eq("organization_id", orgId);
+    .eq("id", id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

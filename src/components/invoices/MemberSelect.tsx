@@ -48,8 +48,6 @@ export default function MemberSelect({ onSelect, value }: MemberSelectProps) {
           <div className="flex items-center px-3 py-2">
             <User className="w-4 h-4 mr-2 text-indigo-500" />
             <span className="font-medium text-gray-900">{value.first_name} {value.last_name}</span>
-            <span className="ml-2 text-xs text-gray-500">{value.email}</span>
-            {value.role && <span className="ml-2 text-xs text-gray-400">({value.role})</span>}
           </div>
         ) : (
           <CommandInput
@@ -85,8 +83,6 @@ export default function MemberSelect({ onSelect, value }: MemberSelectProps) {
                   >
                     <User className="w-4 h-4 mr-2 text-indigo-500" />
                     <span className="font-medium text-gray-900">{u.first_name} {u.last_name}</span>
-                    <span className="ml-2 text-xs text-gray-500">{u.email}</span>
-                    {u.role && <span className="ml-2 text-xs text-gray-400">({u.role})</span>}
                   </CommandItem>
                 ))
               ) : (

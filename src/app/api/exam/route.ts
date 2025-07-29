@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('exam')
-    .select('id, name, description, syllabus_id, organization_id, created_at')
+    .select('id, name, description, syllabus_id, passing_score, is_active, created_at, updated_at')
     .eq('syllabus_id', syllabus_id)
     .order('name', { ascending: true });
   if (error) {

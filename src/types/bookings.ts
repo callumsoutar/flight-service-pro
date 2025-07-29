@@ -4,10 +4,9 @@ export type BookingType = "flight" | "groundwork" | "maintenance" | "other";
 
 export interface Booking {
   id: string;
-  organization_id: string;
   aircraft_id: string;
   user_id: string;
-  instructor_id: string | null; // FK to users.id (the instructor, not instructors table)
+  instructor_id: string | null; // FK to instructors.id (the instructor record, not users table)
   start_time: string;
   end_time: string;
   status: BookingStatus;
@@ -36,7 +35,6 @@ export interface Booking {
 
 export interface CancellationCategory {
   id: string;
-  organization_id: string;
   name: string;
   description?: string | null;
 } 

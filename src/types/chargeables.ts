@@ -26,7 +26,6 @@ export const CHARGEABLE_TYPE_LABELS: Record<ChargeableType, string> = {
 
 export type Chargeable = {
   id: string;
-  organization_id: string;
   name: string;
   description: string | null;
   type: ChargeableType;
@@ -38,7 +37,6 @@ export type Chargeable = {
 
 export type ChargeableInsert = {
   id?: string;
-  organization_id: string;
   name: string;
   description?: string | null;
   type: string;
@@ -50,7 +48,6 @@ export type ChargeableInsert = {
 
 export type ChargeableUpdate = {
   id?: string;
-  organization_id?: string;
   name?: string;
   description?: string | null;
   type?: string;

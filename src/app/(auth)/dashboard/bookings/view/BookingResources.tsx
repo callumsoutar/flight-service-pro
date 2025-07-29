@@ -5,9 +5,16 @@ import { User } from "@/types/users";
 import { Aircraft } from "@/types/aircraft";
 import { Users, User as UserIcon, UserCheck, Plane } from "lucide-react";
 
+// Define a type for the joined instructor row
+export type JoinedInstructor = {
+  id: string;
+  user_id: string;
+  users: User;
+};
+
 interface BookingResourcesProps {
   member?: User | null;
-  instructor?: User | null;
+  instructor?: JoinedInstructor | null;
   aircraft?: Aircraft | null;
 }
 
@@ -35,8 +42,12 @@ export default function BookingResources({ member, instructor, aircraft }: Booki
             <UserCheck className="w-4 h-4 text-muted-foreground" />
             <div className="flex-1">
               <div className="font-semibold">Instructor <Badge className="ml-2" variant="secondary">Staff</Badge></div>
-              <div className="mt-1">{instructor ? `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.email : "-"}</div>
-              <div className="text-gray-500 text-sm">{instructor?.email || "-"}</div>
+              <div className="mt-1">
+                {instructor?.users
+                  ? `${instructor.users.first_name || ""} ${instructor.users.last_name || ""}`.trim() || instructor.users.email
+                  : "-"}
+              </div>
+              <div className="text-gray-500 text-sm">{instructor?.users?.email || "-"}</div>
             </div>
           </div>
         </div>

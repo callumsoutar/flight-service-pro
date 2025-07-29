@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import MemberSelect, { UserResult } from "@/components/invoices/MemberSelect";
+import InstructorSelect, { InstructorResult } from "@/components/invoices/InstructorSelect";
 
 // Helper to generate 30-min interval times
 const TIME_OPTIONS = Array.from({ length: ((23 - 7) * 2) + 3 }, (_, i) => {
@@ -74,6 +75,7 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
     } catch {}
   }
   const checkedOutAircraftDefault = booking?.checked_out_aircraft_id || booking?.aircraft_id || "";
+  // Proper fallback logic: checked_out_instructor_id first, then instructor_id, then empty
   const checkedOutInstructorDefault = booking?.checked_out_instructor_id || booking?.instructor_id || "";
   const { control, handleSubmit, watch } = useForm<CheckOutFormData>({
     defaultValues: {
@@ -100,6 +102,7 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
 
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const [instructorValue, setInstructorValue] = useState<InstructorResult | null>(null);
   // Track selected aircraft's current meter readings
   const [selectedAircraftMeters, setSelectedAircraftMeters] = useState<{
     current_hobbs: number | null;
@@ -114,35 +117,41 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
     const start_time = getUtcIsoString(data.start_date, data.start_time);
     const end_time = getUtcIsoString(data.end_date, data.end_time);
     // Always include all booking fields in the PATCH
-    const bookingPatch: Record<string, unknown> = {
-      checked_out_aircraft_id: data.checked_out_aircraft_id,
-      checked_out_instructor_id: data.checked_out_instructor_id,
-      start_time,
-      end_time,
-      user_id: data.member,
-      lesson_id: data.lesson,
-      remarks: data.remarks,
-      purpose: data.purpose,
-      flight_type_id: data.flight_type,
-      booking_type: data.booking_type,
-      // Always set status to 'flying' if not already
-      status: booking.status !== 'flying' ? 'flying' : booking.status,
-      // Include aircraft meter readings as start values
-      hobbs_start: selectedAircraftMeters?.current_hobbs ?? null,
-      tach_start: selectedAircraftMeters?.current_tach ?? null,
-    };
-    // Remove nulls (optional, but keeps PATCH clean)
-    Object.keys(bookingPatch).forEach(key => {
-      if (bookingPatch[key] === null || bookingPatch[key] === undefined) delete bookingPatch[key];
-    });
+    const bookingPatch: Record<string, unknown> = {};
+    
+    // Only include fields that have valid values
+    if (data.checked_out_aircraft_id) bookingPatch.checked_out_aircraft_id = data.checked_out_aircraft_id;
+    if (data.checked_out_instructor_id) bookingPatch.checked_out_instructor_id = data.checked_out_instructor_id;
+    if (start_time) bookingPatch.start_time = start_time;
+    if (end_time) bookingPatch.end_time = end_time;
+    if (data.member) bookingPatch.user_id = data.member;
+    if (data.lesson) bookingPatch.lesson_id = data.lesson;
+    if (data.remarks && data.remarks.trim() !== '') bookingPatch.remarks = data.remarks;
+    if (data.purpose && data.purpose.trim() !== '') bookingPatch.purpose = data.purpose;
+    if (data.flight_type) bookingPatch.flight_type_id = data.flight_type;
+    if (data.booking_type) bookingPatch.booking_type = data.booking_type;
+    
+    // Always set status to 'flying' if not already
+    bookingPatch.status = booking.status !== 'flying' ? 'flying' : booking.status;
+    
+    // Include aircraft meter readings as start values
+    if (selectedAircraftMeters?.current_hobbs != null) {
+      bookingPatch.hobbs_start = Number(selectedAircraftMeters.current_hobbs);
+    }
+    if (selectedAircraftMeters?.current_tach != null) {
+      bookingPatch.tach_start = Number(selectedAircraftMeters.current_tach);
+    }
     // Compose details payload
     const detailsPatch: Record<string, unknown> = {};
     const etaIso = getUtcIsoString(data.eta_date, data.eta_time);
     if (etaIso) detailsPatch.eta = etaIso;
-    if (data.fuel_on_board) detailsPatch.fuel_on_board = data.fuel_on_board;
-    if (data.passengers) detailsPatch.passengers = data.passengers;
-    if (data.route) detailsPatch.route = data.route;
-    if (data.remarks_flight_out) detailsPatch.remarks = data.remarks_flight_out;
+    if (data.fuel_on_board && data.fuel_on_board.trim() !== '') {
+      const fuelValue = parseInt(data.fuel_on_board, 10);
+      if (!isNaN(fuelValue)) detailsPatch.fuel_on_board = fuelValue;
+    }
+    if (data.passengers && data.passengers.trim() !== '') detailsPatch.passengers = data.passengers;
+    if (data.route && data.route.trim() !== '') detailsPatch.route = data.route;
+    if (data.remarks_flight_out && data.remarks_flight_out.trim() !== '') detailsPatch.remarks = data.remarks_flight_out;
     detailsPatch.booking_id = booking.id;
     try {
       if (Object.keys(bookingPatch).length > 0) {
@@ -230,12 +239,154 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
     return () => subscription.unsubscribe();
   }, [watch]);
 
+  // Effect to watch instructor field changes and fetch instructor data
+  React.useEffect(() => {
+    const subscription = watch((value, { name }) => {
+      if (name === 'checked_out_instructor_id') {
+        const instructorFieldValue = value.checked_out_instructor_id;
+        
+        if (!instructorFieldValue) {
+          setInstructorValue(null);
+          return;
+        }
+
+        // Find the selected instructor's details for display
+        const selectedInstructor = instructors.find(i => i.id === instructorFieldValue);
+        
+        if (selectedInstructor) {
+          // Use the instructor from the list
+          // Since we only have the instructor ID and name, we need to fetch the full details
+          fetch(`/api/instructors?id=${selectedInstructor.id}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.instructor && data.instructor.users) {
+                const user = data.instructor.users;
+                setInstructorValue({
+                  id: data.instructor.id,
+                  user_id: data.instructor.user_id,
+                  first_name: user.first_name || "",
+                  last_name: user.last_name || "",
+                  email: user.email || "",
+                });
+              }
+            })
+            .catch(() => {
+              // If fetch fails, create a basic instructor object
+              setInstructorValue({
+                id: selectedInstructor.id,
+                user_id: selectedInstructor.id, // Fallback to instructor ID
+                first_name: selectedInstructor.name.split(" ")[0] || "",
+                last_name: selectedInstructor.name.split(" ").slice(1).join(" ") || "",
+                email: "",
+              });
+            });
+        } else {
+          // Fetch the instructor data for the selected instructor_id
+          fetch(`/api/instructors?id=${instructorFieldValue}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.instructor && data.instructor.users) {
+                const user = data.instructor.users;
+                setInstructorValue({
+                  id: data.instructor.id,
+                  user_id: data.instructor.user_id,
+                  first_name: user.first_name || "",
+                  last_name: user.last_name || "",
+                  email: user.email || "",
+                });
+              }
+            })
+            .catch(() => {
+              // If fetch fails, create a basic instructor object
+              setInstructorValue({
+                id: instructorFieldValue,
+                user_id: instructorFieldValue,
+                first_name: "Unknown",
+                last_name: "Instructor",
+                email: "",
+              });
+            });
+        }
+      }
+    });
+    
+    return () => subscription.unsubscribe();
+  }, [instructors, watch]);
+
   // Fetch initial aircraft meter readings if aircraft is already selected
   useEffect(() => {
     if (checkedOutAircraftDefault) {
       fetchAircraftMeters(checkedOutAircraftDefault);
     }
   }, [checkedOutAircraftDefault]);
+
+  // Initialize instructor value with proper fallback logic
+  useEffect(() => {
+    // Priority: checked_out_instructor_id first, then instructor_id, then null
+    const instructorId = booking?.checked_out_instructor_id || booking?.instructor_id || null;
+    
+    if (instructorId) {
+      // Find the selected instructor's details for display
+      const selectedInstructor = instructors.find(i => i.id === instructorId);
+      
+      if (selectedInstructor) {
+        // Use the instructor from the list
+        fetch(`/api/instructors?id=${selectedInstructor.id}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.instructor && data.instructor.users) {
+              const user = data.instructor.users;
+              setInstructorValue({
+                id: data.instructor.id,
+                user_id: data.instructor.user_id,
+                first_name: user.first_name || "",
+                last_name: user.last_name || "",
+                email: user.email || "",
+              });
+            }
+          })
+          .catch(() => {
+            // If fetch fails, create a basic instructor object
+            setInstructorValue({
+              id: selectedInstructor.id,
+              user_id: selectedInstructor.id, // Fallback to instructor ID
+              first_name: selectedInstructor.name.split(" ")[0] || "",
+              last_name: selectedInstructor.name.split(" ").slice(1).join(" ") || "",
+              email: "",
+            });
+          });
+      } else {
+        // Fetch the instructor data for the selected instructor_id
+        fetch(`/api/instructors?id=${instructorId}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.instructor && data.instructor.users) {
+              const user = data.instructor.users;
+              setInstructorValue({
+                id: data.instructor.id,
+                user_id: data.instructor.user_id,
+                first_name: user.first_name || "",
+                last_name: user.last_name || "",
+                email: user.email || "",
+              });
+            }
+          })
+          .catch(() => {
+            // If fetch fails, create a basic instructor object
+            setInstructorValue({
+              id: instructorId,
+              user_id: instructorId,
+              first_name: "Unknown",
+              last_name: "Instructor",
+              email: "",
+            });
+          });
+      }
+    } else {
+      // No instructor found, clear the value
+      setInstructorValue(null);
+    }
+  }, [booking?.checked_out_instructor_id, booking?.instructor_id, instructors]);
 
   return (
     <div className="flex w-full max-w-6xl mx-auto gap-4 mt-8">
@@ -391,18 +542,18 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
             </div>
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Instructor</label>
-              <Controller name="checked_out_instructor_id" control={control} render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select instructor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {instructors.map(i => (
-                      <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )} />
+              <Controller
+                name="checked_out_instructor_id"
+                control={control}
+                render={({ field }) => (
+                  <InstructorSelect
+                    value={instructorValue}
+                    onSelect={instructor => {
+                      field.onChange(instructor ? instructor.id : "");
+                    }}
+                  />
+                )}
+              />
             </div>
           </div>
           {/* Aircraft, Flight Type, Lesson, Booking Type */}

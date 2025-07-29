@@ -20,6 +20,7 @@ import {
 const aircraftSchema = z.object({
   manufacturer: z.string().optional().nullable(),
   type: z.string().optional().nullable(),
+  model: z.string().optional().nullable(),
   year_manufactured: z.coerce.number().min(1900, "Invalid year").max(2100, "Invalid year").nullable().optional(),
   registration: z.string().min(1, "Required"),
   status: z.string().optional(),
@@ -28,10 +29,10 @@ const aircraftSchema = z.object({
   on_line: z.boolean().optional(),
   for_ato: z.boolean().optional(),
   prioritise_scheduling: z.boolean().optional(),
-  aircraft_image_url: z.string().url().optional().nullable(),
-  total_hours: z.coerce.number().optional(),
-  current_tach: z.coerce.number().optional(),
-  current_hobbs: z.coerce.number().optional(),
+  aircraft_image_url: z.string().url("Invalid url").or(z.literal("")).or(z.null()).optional(),
+  total_hours: z.coerce.number().nullable().optional(),
+  current_tach: z.coerce.number().nullable().optional(),
+  current_hobbs: z.coerce.number().nullable().optional(),
   record_tacho: z.boolean().optional(),
   record_hobbs: z.boolean().optional(),
   record_airswitch: z.boolean().optional(),
@@ -56,21 +57,22 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
     defaultValues: {
       manufacturer: aircraft.manufacturer || "",
       type: aircraft.type || "",
+      model: aircraft.model || "",
       year_manufactured: aircraft.year_manufactured ?? undefined,
       registration: aircraft.registration,
       status: aircraft.status || "available",
       capacity: aircraft.capacity ?? undefined,
       engine_count: aircraft.engine_count ?? undefined,
-      on_line: aircraft.on_line,
-      for_ato: aircraft.for_ato,
-      prioritise_scheduling: aircraft.prioritise_scheduling,
+      on_line: aircraft.on_line ?? true,
+      for_ato: aircraft.for_ato ?? false,
+      prioritise_scheduling: aircraft.prioritise_scheduling ?? false,
       aircraft_image_url: aircraft.aircraft_image_url || "",
-      total_hours: aircraft.total_hours !== undefined ? Number(aircraft.total_hours) : undefined,
-      current_tach: aircraft.current_tach !== undefined ? Number(aircraft.current_tach) : undefined,
-      current_hobbs: aircraft.current_hobbs !== undefined ? Number(aircraft.current_hobbs) : undefined,
-      record_tacho: aircraft.record_tacho,
-      record_hobbs: aircraft.record_hobbs,
-      record_airswitch: aircraft.record_airswitch,
+      total_hours: aircraft.total_hours ?? undefined,
+      current_tach: aircraft.current_tach ?? undefined,
+      current_hobbs: aircraft.current_hobbs ?? undefined,
+      record_tacho: aircraft.record_tacho ?? false,
+      record_hobbs: aircraft.record_hobbs ?? false,
+      record_airswitch: aircraft.record_airswitch ?? false,
       fuel_consumption: aircraft.fuel_consumption ?? undefined,
       total_time_method: aircraft.total_time_method ?? undefined,
     },
@@ -79,11 +81,22 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
   const onSubmit = async (data: AircraftFormValues) => {
     setIsSaving(true);
     setError(null);
+
+    // Clean data: convert "" to null for nullable fields, remove undefined
+    const cleanData: Record<string, string | number | boolean | null> = { id: aircraft.id };
+    Object.entries(data).forEach(([key, value]) => {
+      if (value === "") {
+        cleanData[key] = null;
+      } else if (value !== undefined) {
+        cleanData[key] = value;
+      }
+    });
+
     try {
       const res = await fetch(`/api/aircraft?id=${aircraft.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(cleanData),
       });
       const result = await res.json();
       if (!res.ok || result.error) {
@@ -107,7 +120,7 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
       <div className="flex flex-row items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-gray-900">Aircraft Information</h3>
         <div className="flex gap-2 items-center">
-          <Button type="submit" disabled={!isDirty || isSaving} size="sm" className="min-w-[100px] font-semibold">
+          <Button type="submit" disabled={isSaving} size="sm" className="min-w-[100px] font-semibold">
             {isSaving ? "Saving..." : "Save"}
           </Button>
           <Button type="button" variant="outline" size="sm" disabled={!isDirty || isSaving} onClick={() => reset()}>
@@ -134,6 +147,11 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
                 <label className="block text-sm font-medium mb-1 text-gray-800">Type</label>
                 <Input {...register("type")} className="bg-white w-64" />
                 {errors.type && <p className="text-xs text-red-500 mt-1">{errors.type.message}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-800">Model</label>
+                <Input {...register("model")} className="bg-white w-64" />
+                {errors.model && <p className="text-xs text-red-500 mt-1">{errors.model.message}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-gray-800">Year Manufactured</label>
@@ -230,17 +248,17 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
             <div>
               <label className="block text-sm font-medium mb-1 text-gray-800">Total Hours</label>
-              <Input type="number" step="0.1" {...register("total_hours", { valueAsNumber: true })} className="bg-white w-64" />
+              <Input type="number" step="0.1" {...register("total_hours")} className="bg-white w-64" />
               {errors.total_hours && <p className="text-xs text-red-500 mt-1">{errors.total_hours.message}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium mb-1 text-gray-800">Current Tach</label>
-              <Input type="number" step="0.1" {...register("current_tach", { valueAsNumber: true })} className="bg-white w-64" />
+              <Input type="number" step="0.1" {...register("current_tach")} className="bg-white w-64" />
               {errors.current_tach && <p className="text-xs text-red-500 mt-1">{errors.current_tach.message}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium mb-1 text-gray-800">Current Hobbs</label>
-              <Input type="number" step="0.1" {...register("current_hobbs", { valueAsNumber: true })} className="bg-white w-64" />
+              <Input type="number" step="0.1" {...register("current_hobbs")} className="bg-white w-64" />
               {errors.current_hobbs && <p className="text-xs text-red-500 mt-1">{errors.current_hobbs.message}</p>}
             </div>
           </div>

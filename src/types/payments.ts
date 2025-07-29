@@ -10,7 +10,6 @@ export type PaymentMethod =
 
 export interface Payment {
   id: string;
-  organization_id: string;
   invoice_id: string;
   transaction_id: string;
   amount: string; // numeric as string for precision

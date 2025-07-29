@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AircraftComponent } from "@/types/aircraft_components";
 import LogMaintenanceModal from "@/components/aircraft/maintenance/LogMaintenanceModal";
-import { useOrgContext } from "@/components/OrgContextProvider";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import ComponentEditModal from "@/components/aircraft/maintenance/ComponentEditModal";
 import ComponentNewModal from "@/components/aircraft/maintenance/ComponentNewModal";
@@ -46,23 +45,14 @@ function getDueIn(comp: AircraftComponent, currentHours: number | null) {
 
 export default function AircraftServicingTab() {
   const { id: aircraft_id } = useParams<{ id: string }>();
-  const { currentOrgId } = useOrgContext();
-  const organization_id = currentOrgId || "";
+  
   const [components, setComponents] = useState<AircraftComponent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentHours, setCurrentHours] = useState<number | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [logMaintenanceModalOpen, setLogMaintenanceModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedComponent, setSelectedComponent] = useState<AircraftComponent | null>(null);
-  // Placeholder state for form fields
-  const [visitDate, setVisitDate] = useState<Date | undefined>(undefined);
-  const [visitType, setVisitType] = useState("");
-  const [description, setDescription] = useState("");
-  const [totalCost, setTotalCost] = useState("");
-  const [hoursAtVisit, setHoursAtVisit] = useState("");
-  const [notes] = useState("");
-  const [dateOutOfMaintenance, setDateOutOfMaintenance] = useState<Date | undefined>(undefined);
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
   const [newModalOpen, setNewModalOpen] = useState(false);
 
@@ -92,7 +82,6 @@ export default function AircraftServicingTab() {
   }, [aircraft_id]);
 
   const handleEditSave = async (updated: Partial<AircraftComponent>) => {
-    console.log('AircraftServicingTab handleEditSave called', { selectedComponent, updated });
     if (!selectedComponent) return;
     // Convert empty string dates to null
     const cleanUpdate = { ...updated };
@@ -115,6 +104,22 @@ export default function AircraftServicingTab() {
     } catch {
       // Optionally set error state here
     }
+  };
+
+  const handleLogMaintenance = (componentId: string) => {
+    setSelectedComponentId(componentId);
+    setLogMaintenanceModalOpen(true);
+  };
+
+  const handleScheduleMaintenance = (component: AircraftComponent) => {
+    void component; // Explicitly mark as intentionally unused
+    // TODO: Implement schedule maintenance functionality
+    toast.info("Schedule maintenance functionality coming soon!");
+  };
+
+  const handleViewDetails = (component: AircraftComponent) => {
+    setSelectedComponent(component);
+    setEditModalOpen(true);
   };
 
   return (
@@ -241,14 +246,16 @@ export default function AircraftServicingTab() {
                           <Button variant="ghost" size="icon" className="h-7 w-7 p-0"><MoreHorizontal className="w-4 h-4" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setSelectedComponentId(comp.id); setModalOpen(true); }}>
+                          <DropdownMenuItem onClick={() => {
+                            handleLogMaintenance(comp.id);
+                          }}>
                             <ClipboardList className="w-4 h-4 mr-2" /> Log Maintenance
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleScheduleMaintenance(comp)}>
                             <CalendarCheck className="w-4 h-4 mr-2" /> Schedule Maintenance
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => { setSelectedComponent(comp); setEditModalOpen(true); }}>
+                          <DropdownMenuItem onClick={() => handleViewDetails(comp)}>
                             <Eye className="w-4 h-4 mr-2" /> View Details
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -274,7 +281,6 @@ export default function AircraftServicingTab() {
           const newComp = {
             ...newComponent,
             aircraft_id: aircraft_id,
-            organization_id: currentOrgId || "",
             current_due_date: newComponent.current_due_date === "" ? null : newComponent.current_due_date,
             last_completed_date: newComponent.last_completed_date === "" ? null : newComponent.last_completed_date,
           };
@@ -302,24 +308,10 @@ export default function AircraftServicingTab() {
         }}
       />
       <LogMaintenanceModal
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        visitDate={visitDate}
-        setVisitDate={setVisitDate}
-        visitType={visitType}
-        setVisitType={setVisitType}
-        description={description}
-        setDescription={setDescription}
-        totalCost={totalCost}
-        setTotalCost={setTotalCost}
-        hoursAtVisit={hoursAtVisit}
-        setHoursAtVisit={setHoursAtVisit}
-        notes={notes}
-        dateOutOfMaintenance={dateOutOfMaintenance}
-        setDateOutOfMaintenance={setDateOutOfMaintenance}
+        open={logMaintenanceModalOpen}
+        onOpenChange={setLogMaintenanceModalOpen}
         aircraft_id={aircraft_id}
         component_id={selectedComponentId}
-        organization_id={organization_id}
       />
     </div>
   );

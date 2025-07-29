@@ -1,3 +1,4 @@
+
 "use client";
 
 import { User } from "@/types/users";
@@ -9,21 +10,12 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { ChevronDown, FileText, Calendar, AlertTriangle, Menu, UserPlus } from "lucide-react";
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export default function MemberProfileCard({ member, joinDate }: { member: User; joinDate: string }) {
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [orgId, setOrgId] = useState<string>("");
-
-  // Get organization_id from cookies (client-side)
-  useEffect(() => {
-    if (typeof document !== "undefined") {
-      const match = document.cookie.match(/current_org_id=([^;]+)/);
-      if (match) setOrgId(match[1]);
-    }
-  }, []);
 
   return (
     <Card className="mb-6">
@@ -101,7 +93,7 @@ export default function MemberProfileCard({ member, joinDate }: { member: User; 
           <DialogHeader>
             <DialogTitle>Are you sure?</DialogTitle>
             <p className="text-sm text-gray-500 mt-2">
-              This action will create {member.first_name} {member.last_name} as an instructor in your organization. No extra permissions will be granted yet.
+              This action will create {member.first_name} {member.last_name} as an instructor. No extra permissions will be granted yet.
             </p>
           </DialogHeader>
           <DialogFooter>
@@ -116,7 +108,6 @@ export default function MemberProfileCard({ member, joinDate }: { member: User; 
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       user_id: member.id,
-                      organization_id: orgId || "org-demo-uuid",
                       is_actively_instructing: false,
                     }),
                   });

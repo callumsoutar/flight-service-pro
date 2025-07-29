@@ -12,8 +12,8 @@ export default function EquipmentStatsCards({ equipment, openIssuanceByEquipment
   const safeEquipment = Array.isArray(equipment) ? equipment : [];
   const total = safeEquipment.length;
   const issued = safeEquipment.filter(eq => openIssuanceByEquipmentId[eq.id]).length;
-  const lost = safeEquipment.filter(eq => eq.status === "lost").length;
-  const available = safeEquipment.filter(eq => !openIssuanceByEquipmentId[eq.id] && eq.status !== "lost").length;
+  const retired = safeEquipment.filter(eq => eq.status === "retired").length;
+  const available = safeEquipment.filter(eq => !openIssuanceByEquipmentId[eq.id] && eq.status === "active").length;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
@@ -34,8 +34,8 @@ export default function EquipmentStatsCards({ equipment, openIssuanceByEquipment
       </div>
       <div className="bg-white rounded-xl shadow p-6 flex flex-col items-start">
         <span className="mb-2"><XCircle className="w-6 h-6 text-red-500" /></span>
-        <h3 className="text-zinc-600 font-medium mb-2">Lost</h3>
-        <p className="text-3xl font-bold text-red-500">{lost}</p>
+        <h3 className="text-zinc-600 font-medium mb-2">Retired</h3>
+        <p className="text-3xl font-bold text-red-500">{retired}</p>
       </div>
     </div>
   );

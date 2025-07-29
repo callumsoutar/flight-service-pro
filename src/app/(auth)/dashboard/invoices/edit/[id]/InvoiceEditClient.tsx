@@ -144,10 +144,6 @@ export default function InvoiceEditClient({ id }: { id: string }) {
   const handleAddItem = (item: Chargeable, quantity: number) => {
     if (!id) return;
     setAdding(true);
-    const rate_inclusive = item.rate * (1 + (invoice?.tax_rate ?? 0.15));
-    const amount = item.rate * quantity;
-    const tax_amount = amount * (invoice?.tax_rate ?? 0.15);
-    const total_amount = rate_inclusive * quantity;
     fetch("/api/invoice_items", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -156,12 +152,8 @@ export default function InvoiceEditClient({ id }: { id: string }) {
         chargeable_id: item.id,
         description: item.name,
         quantity,
-        rate: item.rate,
-        rate_inclusive,
-        amount,
+        unit_price: item.rate,
         tax_rate: invoice?.tax_rate ?? 0.15,
-        tax_amount,
-        total_amount,
       }),
     });
     setAdding(false);
@@ -213,7 +205,7 @@ export default function InvoiceEditClient({ id }: { id: string }) {
 
   const startEditItem = (item: InvoiceItem) => {
     setEditingItemId(item.id);
-    setEditRate(item.rate);
+    setEditRate(item.unit_price);
     setEditQuantity(item.quantity);
   };
 
@@ -228,7 +220,7 @@ export default function InvoiceEditClient({ id }: { id: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: item.id,
-        rate: editRate,
+        unit_price: editRate,
         quantity: editQuantity,
       }),
     });
@@ -316,8 +308,8 @@ export default function InvoiceEditClient({ id }: { id: string }) {
   if (error || !invoice) return <div className="p-10 text-center text-destructive">Invoice not found.</div>;
 
   const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
-  const totalTax = items.reduce((sum, item) => sum + item.tax_amount, 0);
-  const total = items.reduce((sum, item) => sum + item.total_amount, 0);
+  const totalTax = items.reduce((sum, item) => sum + (item.tax_amount || 0), 0);
+  const total = items.reduce((sum, item) => sum + (item.line_total || 0), 0);
 
   return (
     <div className="flex flex-col gap-8 p-6 md:p-10 max-w-4xl mx-auto">
@@ -491,7 +483,7 @@ export default function InvoiceEditClient({ id }: { id: string }) {
                       onChange={e => setEditRate(Number(e.target.value))}
                     />
                   ) : (
-                    <span>${item.rate_inclusive.toFixed(2)}</span>
+                    <span>${(item.rate_inclusive || item.unit_price || 0).toFixed(2)}</span>
                   )}
                 </div>
                 <div className="col-span-1 flex items-center justify-center">
@@ -510,7 +502,7 @@ export default function InvoiceEditClient({ id }: { id: string }) {
                   )}
                 </div>
                 <div className="col-span-1 flex items-center justify-end font-semibold">
-                  <span>${item.total_amount.toFixed(2)}</span>
+                  <span>${(item.line_total || 0).toFixed(2)}</span>
                 </div>
                 <div className="col-span-1 flex items-center justify-center gap-2">
                   {editingItemId === item.id ? (

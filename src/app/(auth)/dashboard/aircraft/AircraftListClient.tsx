@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 
 const statusMap: Record<string, { label: string; color: string }> = {
+  active: { label: "Active", color: "bg-green-500" },
   available: { label: "Available", color: "bg-green-500" },
   in_use: { label: "In Use", color: "bg-blue-600" },
   maintenance: { label: "Maintenance", color: "bg-red-500" },

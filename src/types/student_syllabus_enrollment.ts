@@ -2,7 +2,6 @@
 
 export type StudentSyllabusEnrollment = {
   id: string;
-  organization_id: string;
   user_id: string;
   syllabus_id: string;
   enrolled_at: string;
@@ -15,7 +14,6 @@ export type StudentSyllabusEnrollment = {
 
 export type StudentSyllabusEnrollmentInsert = {
   id?: string;
-  organization_id: string;
   user_id: string;
   syllabus_id: string;
   enrolled_at?: string;
@@ -28,7 +26,6 @@ export type StudentSyllabusEnrollmentInsert = {
 
 export type StudentSyllabusEnrollmentUpdate = {
   id?: string;
-  organization_id?: string;
   user_id?: string;
   syllabus_id?: string;
   enrolled_at?: string;

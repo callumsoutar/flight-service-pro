@@ -5,7 +5,6 @@ import { createClient } from "@/lib/SupabaseServerClient";
 // TODO: Enforce RLS/auth for all operations
 
 const insertSchema = z.object({
-  organization_id: z.string().uuid(),
   name: z.string(),
   description: z.string().nullable().optional(),
   number_of_exams: z.number().optional(),
@@ -17,11 +16,9 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
-  const orgId = searchParams.get("organization_id");
 
   let query = supabase.from("syllabus").select("*");
   if (id) query = query.eq("id", id);
-  if (orgId) query = query.eq("organization_id", orgId);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

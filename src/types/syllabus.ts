@@ -2,7 +2,6 @@
 
 export type Syllabus = {
   id: string;
-  organization_id: string;
   name: string;
   description: string | null;
   created_at: string;
@@ -12,7 +11,6 @@ export type Syllabus = {
 
 export type SyllabusInsert = {
   id?: string;
-  organization_id: string;
   name: string;
   description?: string | null;
   created_at?: string;
@@ -22,7 +20,6 @@ export type SyllabusInsert = {
 
 export type SyllabusUpdate = {
   id?: string;
-  organization_id?: string;
   name?: string;
   description?: string | null;
   created_at?: string;

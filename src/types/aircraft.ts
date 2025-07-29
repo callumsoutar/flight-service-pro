@@ -1,37 +1,29 @@
-export type TotalTimeMethod =
-  | 'airswitch'
-  | 'hobbs'
-  | 'hobbs less 5%'
-  | 'hobbs less 10%'
-  | 'tacho'
-  | 'tacho less 5%'
-  | 'tacho less 10%';
+export type TotalTimeMethod = "hobbs" | "tacho" | "airswitch" | "hobbs less 5%" | "hobbs less 10%" | "tacho less 5%" | "tacho less 10%";
 
 export interface Aircraft {
   id: string;
-  organization_id: string;
   registration: string;
   type?: string;
+  model?: string | null;
   manufacturer?: string | null;
   year_manufactured?: number | null;
-  total_hours: string;
+  total_hours?: number | null;
   last_maintenance_date?: string | null; 
   next_maintenance_date?: string | null;
   status?: string;
   capacity?: number | null;
   created_at?: string;
   updated_at: string;
-  current_tach: string;
-  current_hobbs: string;
-  record_tacho: boolean;
-  record_hobbs: boolean;
-  record_airswitch: boolean;
-  on_line: boolean;
-  for_ato: boolean;
+  current_tach?: number | null;
+  current_hobbs?: number | null;
+  record_tacho?: boolean;
+  record_hobbs?: boolean;
+  record_airswitch?: boolean;
+  on_line?: boolean;
+  for_ato?: boolean;
   fuel_consumption?: number | null;
-  engine_count: number;
-  prioritise_scheduling: boolean;
+  engine_count?: number;
+  prioritise_scheduling?: boolean;
   aircraft_image_url?: string | null;
   total_time_method?: TotalTimeMethod | null;
-  // Add other fields as needed
 } 

@@ -3,6 +3,8 @@ export type Exam = {
   name: string;
   description?: string | null;
   syllabus_id: string;
-  organization_id: string;
+  passing_score: number;
+  is_active: boolean;
   created_at: string;
+  updated_at: string;
 }; 

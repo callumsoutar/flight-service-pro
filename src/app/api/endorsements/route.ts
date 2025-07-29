@@ -5,19 +5,14 @@ import { createClient } from "@/lib/SupabaseServerClient";
 const endorsementSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  organization_id: z.string().uuid(),
 });
 
-// GET: List all endorsements for the org
-export async function GET(req: NextRequest) {
+// GET: List all endorsements
+export async function GET() {
   const supabase = await createClient();
-  const { searchParams } = new URL(req.url);
-  const orgId = searchParams.get("organization_id");
-  if (!orgId) return NextResponse.json({ endorsements: [], error: "Missing organization_id" }, { status: 400 });
   const { data, error } = await supabase
     .from("endorsements")
-    .select("*")
-    .eq("organization_id", orgId);
+    .select("*");
   if (error) return NextResponse.json({ endorsements: [], error: error.message }, { status: 500 });
   return NextResponse.json({ endorsements: data ?? [] });
 }

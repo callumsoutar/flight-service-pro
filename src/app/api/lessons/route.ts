@@ -8,18 +8,13 @@ export async function GET(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Org check
-  const orgId = req.cookies.get("current_org_id")?.value;
-  if (!orgId) {
-    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
-  }
+  
   const searchParams = req.nextUrl.searchParams;
   const lessonId = searchParams.get("id");
 
   let query = supabase
     .from("lessons")
-    .select("*")
-    .eq("organization_id", orgId);
+    .select("*");
 
   if (lessonId) {
     query = query.eq("id", lessonId);

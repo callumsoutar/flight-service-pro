@@ -1,4 +1,5 @@
-export type GenderEnum = "male" | "female";
+export type GenderEnum = "male" | "female" | "other" | "prefer_not_to_say";
+export type UserRole = "admin" | "instructor" | "member" | "student";
 
 export interface User {
   id: string; // uuid
@@ -23,4 +24,5 @@ export interface User {
   employer?: string;
   notes?: string;
   account_balance?: number;
+  // Role is now handled via user_roles junction table
 } 

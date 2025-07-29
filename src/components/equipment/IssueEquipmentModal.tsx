@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { getCurrentUserClient } from "@/lib/SupabaseBrowserClient";
 import MemberSelect from "@/components/invoices/MemberSelect";
@@ -12,16 +10,13 @@ interface IssueEquipmentModalProps {
   open: boolean;
   onClose: () => void;
   equipment: Equipment;
-  orgId: string;
   refresh?: () => void;
-  member?: UserResult;
-  issuedBy?: UserResult;
 }
 
-export const IssueEquipmentModal: React.FC<IssueEquipmentModalProps> = ({ open, onClose, equipment, orgId, refresh }) => {
+export const IssueEquipmentModal: React.FC<IssueEquipmentModalProps> = ({ open, onClose, equipment, refresh }) => {
   const [member, setMember] = useState<UserResult | null>(null);
   const [notes, setNotes] = useState("");
-  const [expectedReturnDate, setExpectedReturnDate] = useState<Date | null>(null);
+  const [expectedReturn, setExpectedReturn] = useState(""); // Added expected return state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -43,9 +38,19 @@ export const IssueEquipmentModal: React.FC<IssueEquipmentModalProps> = ({ open, 
     fetchUser();
   }, []);
 
+  // Reset form when modal opens/closes
+  useEffect(() => {
+    if (!open) {
+      setMember(null);
+      setNotes("");
+      setExpectedReturn("");
+      setError(null);
+    }
+  }, [open]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!member || !userId || !orgId) {
+    if (!member || !userId) {
       setError("Please select a member and ensure you are logged in.");
       return;
     }
@@ -53,12 +58,10 @@ export const IssueEquipmentModal: React.FC<IssueEquipmentModalProps> = ({ open, 
     setError(null);
     const payload = {
       equipment_id: equipment.id,
-      issued_to: member.id,
-      issued_by: userId,
+      user_id: member.id,
       issued_at: new Date().toISOString(),
-      notes,
-      organization_id: orgId,
-      expected_return_date: expectedReturnDate ? expectedReturnDate.toISOString().slice(0, 10) : null,
+      expected_return: expectedReturn || null, // Added expected_return to payload
+      notes: notes || null,
     };
     const res = await fetch("/api/equipment_issuance", {
       method: "POST",
@@ -70,7 +73,24 @@ export const IssueEquipmentModal: React.FC<IssueEquipmentModalProps> = ({ open, 
       onClose();
     } else {
       const data = await res.json();
-      setError(data.error || "Failed to issue equipment");
+      // Handle different error formats
+      if (typeof data.error === 'string') {
+        setError(data.error);
+      } else if (data.error && typeof data.error === 'object') {
+        // Handle Zod validation errors
+        if (data.error.formErrors && Array.isArray(data.error.formErrors)) {
+          setError(data.error.formErrors.join(', '));
+        } else if (data.error.fieldErrors && typeof data.error.fieldErrors === 'object') {
+          const fieldErrors = Object.entries(data.error.fieldErrors)
+            .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+            .join(', ');
+          setError(fieldErrors);
+        } else {
+          setError('An error occurred while issuing equipment');
+        }
+      } else {
+        setError("Failed to issue equipment");
+      }
     }
     setLoading(false);
   }
@@ -106,33 +126,19 @@ export const IssueEquipmentModal: React.FC<IssueEquipmentModalProps> = ({ open, 
               </div>
             </div>
           </div>
-          {/* Member select, expected return date, and notes outside the grey div */}
+          {/* Member select and notes outside the grey div */}
           <div className="mb-4">
             <label className="block text-sm font-semibold mb-2">Member</label>
             <MemberSelect value={member} onSelect={setMember} />
           </div>
           <div className="mb-4">
-            <label className="block text-sm font-semibold mb-2">Expected Return Date <span className="text-xs text-gray-400">(optional)</span></label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={"w-full justify-start text-left font-normal " + (expectedReturnDate ? "" : "text-muted-foreground")}
-                  type="button"
-                >
-                  {expectedReturnDate ? format(expectedReturnDate, "yyyy-MM-dd") : "Pick a date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={expectedReturnDate || undefined}
-                  onSelect={date => setExpectedReturnDate(date ?? null)}
-                  initialFocus
-                  required={false}
-                />
-              </PopoverContent>
-            </Popover>
+            <label className="block text-sm font-semibold mb-2">Expected Return Date</label>
+            <input
+              type="date"
+              value={expectedReturn}
+              onChange={(e) => setExpectedReturn(e.target.value)}
+              className="w-full border rounded p-2 text-sm"
+            />
           </div>
           <div className="mb-4">
             <label className="block text-sm font-medium mb-2 text-muted-foreground">Notes</label>

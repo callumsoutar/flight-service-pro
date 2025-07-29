@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Booking } from "@/types/bookings";
 import MemberSelect, { UserResult } from "@/components/invoices/MemberSelect";
+import InstructorSelect, { InstructorResult } from "@/components/invoices/InstructorSelect";
 
 interface BookingDetailsFormData {
   start_date: string;
@@ -55,7 +56,7 @@ function getUtcIsoString(dateStr: string, timeStr: string): string | null {
 }
 
 export default function BookingDetails({ booking, members, instructors, aircraft, lessons, flightTypes }: BookingDetailsProps) {
-  const { control, handleSubmit, reset, formState } = useForm<BookingDetailsFormData>({
+  const { control, handleSubmit, reset, formState, watch } = useForm<BookingDetailsFormData>({
     defaultValues: {
       start_date: booking?.start_time ? format(parseISO(booking.start_time), "yyyy-MM-dd") : "",
       start_time: booking?.start_time ? format(parseISO(booking.start_time), "HH:mm") : "",
@@ -73,6 +74,191 @@ export default function BookingDetails({ booking, members, instructors, aircraft
   });
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [memberValue, setMemberValue] = useState<UserResult | null>(null);
+  const [instructorValue, setInstructorValue] = useState<InstructorResult | null>(null);
+  
+  // Watch the member and instructor field values
+  const memberFieldValue = watch("member");
+  const instructorFieldValue = watch("instructor");
+
+  // Effect to fetch member data when memberFieldValue changes
+  React.useEffect(() => {
+    if (!memberFieldValue) {
+      setMemberValue(null);
+      return;
+    }
+
+    // Find the selected member's details for display
+    const selectedMember = members.find(m => m.id === memberFieldValue);
+    
+    if (selectedMember) {
+      // Use the member from the list
+      setMemberValue({
+        id: selectedMember.id,
+        first_name: selectedMember.name.split(" ")[0] || "",
+        last_name: selectedMember.name.split(" ").slice(1).join(" ") || "",
+        email: "",
+      });
+    } else {
+      // Fetch the user data for the selected user_id
+      fetch(`/api/users?id=${memberFieldValue}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.users && data.users.length > 0) {
+            const user = data.users[0];
+            setMemberValue({
+              id: user.id,
+              first_name: user.first_name || "",
+              last_name: user.last_name || "",
+              email: user.email || "",
+              role: user.role || "",
+            });
+          }
+        })
+        .catch(() => {
+          // If fetch fails, create a basic user object
+          setMemberValue({
+            id: memberFieldValue,
+            first_name: "Unknown",
+            last_name: "User",
+            email: "",
+          });
+        });
+    }
+  }, [memberFieldValue, members]);
+
+  // Effect to fetch instructor data when instructorFieldValue changes
+  React.useEffect(() => {
+    if (!instructorFieldValue) {
+      setInstructorValue(null);
+      return;
+    }
+
+    // Find the selected instructor's details for display
+    const selectedInstructor = instructors.find(i => i.id === instructorFieldValue);
+    
+    if (selectedInstructor) {
+      // Use the instructor from the list
+      // Since we only have the instructor ID and name, we need to fetch the full details
+      fetch(`/api/instructors?id=${selectedInstructor.id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.instructor && data.instructor.users) {
+            const user = data.instructor.users;
+            setInstructorValue({
+              id: data.instructor.id,
+              user_id: data.instructor.user_id,
+              first_name: user.first_name || "",
+              last_name: user.last_name || "",
+              email: user.email || "",
+            });
+          }
+        })
+        .catch(() => {
+          // If fetch fails, create a basic instructor object
+          setInstructorValue({
+            id: selectedInstructor.id,
+            user_id: selectedInstructor.id, // Fallback to instructor ID
+            first_name: selectedInstructor.name.split(" ")[0] || "",
+            last_name: selectedInstructor.name.split(" ").slice(1).join(" ") || "",
+            email: "",
+          });
+        });
+    } else {
+      // Fetch the instructor data for the selected instructor_id
+      fetch(`/api/instructors?id=${instructorFieldValue}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.instructor && data.instructor.users) {
+            const user = data.instructor.users;
+            setInstructorValue({
+              id: data.instructor.id,
+              user_id: data.instructor.user_id,
+              first_name: user.first_name || "",
+              last_name: user.last_name || "",
+              email: user.email || "",
+            });
+          }
+        })
+        .catch(() => {
+          // If fetch fails, create a basic instructor object
+          setInstructorValue({
+            id: instructorFieldValue,
+            user_id: instructorFieldValue,
+            first_name: "Unknown",
+            last_name: "Instructor",
+            email: "",
+          });
+        });
+    }
+  }, [instructorFieldValue, instructors]);
+
+  // Initialize instructor value when component mounts (similar to CheckOutForm)
+  React.useEffect(() => {
+    const instructorId = booking?.instructor_id || null;
+    
+    if (instructorId) {
+      // Find the selected instructor's details for display
+      const selectedInstructor = instructors.find(i => i.id === instructorId);
+      
+      if (selectedInstructor) {
+        // Use the instructor from the list and fetch full details
+        fetch(`/api/instructors?id=${selectedInstructor.id}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.instructor && data.instructor.users) {
+              const user = data.instructor.users;
+              setInstructorValue({
+                id: data.instructor.id,
+                user_id: data.instructor.user_id,
+                first_name: user.first_name || "",
+                last_name: user.last_name || "",
+                email: user.email || "",
+              });
+            }
+          })
+          .catch(() => {
+            // If fetch fails, create a basic instructor object
+            setInstructorValue({
+              id: selectedInstructor.id,
+              user_id: selectedInstructor.id, // Fallback to instructor ID
+              first_name: selectedInstructor.name.split(" ")[0] || "",
+              last_name: selectedInstructor.name.split(" ").slice(1).join(" ") || "",
+              email: "",
+            });
+          });
+      } else {
+        // Fetch the instructor data directly by ID
+        fetch(`/api/instructors?id=${instructorId}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.instructor && data.instructor.users) {
+              const user = data.instructor.users;
+              setInstructorValue({
+                id: data.instructor.id,
+                user_id: data.instructor.user_id,
+                first_name: user.first_name || "",
+                last_name: user.last_name || "",
+                email: user.email || "",
+              });
+            }
+          })
+          .catch(() => {
+            // If fetch fails, create a basic instructor object
+            setInstructorValue({
+              id: instructorId,
+              user_id: instructorId,
+              first_name: "Unknown",
+              last_name: "Instructor",
+              email: "",
+            });
+          });
+      }
+    } else {
+      // No instructor found, clear the value
+      setInstructorValue(null);
+    }
+  }, [booking?.instructor_id, instructors]);
 
   const onSubmit = async (data: BookingDetailsFormData) => {
     setSaving(true);
@@ -270,45 +456,30 @@ export default function BookingDetails({ booking, members, instructors, aircraft
               <Controller
                 name="member"
                 control={control}
-                render={({ field }) => {
-                  // Find the selected member's details for display
-                  const selectedMember = field.value
-                    ? members.find(m => m.id === field.value)
-                    : null;
-                  // Adapt to MemberSelect's expected value shape
-                  const memberValue: UserResult | null = selectedMember
-                    ? {
-                        id: selectedMember.id,
-                        first_name: selectedMember.name.split(" ")[0] || "",
-                        last_name: selectedMember.name.split(" ").slice(1).join(" ") || "",
-                        email: "",
-                      }
-                    : null;
-                  return (
-                    <MemberSelect
-                      value={memberValue}
-                      onSelect={user => {
-                        field.onChange(user ? user.id : "");
-                      }}
-                    />
-                  );
-                }}
+                render={({ field }) => (
+                  <MemberSelect
+                    value={memberValue}
+                    onSelect={user => {
+                      field.onChange(user ? user.id : "");
+                    }}
+                  />
+                )}
               />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Instructor</label>
-              <Controller name="instructor" control={control} render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select instructor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {instructors.map(i => (
-                      <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )} />
+              <Controller
+                name="instructor"
+                control={control}
+                render={({ field }) => (
+                  <InstructorSelect
+                    value={instructorValue}
+                    onSelect={instructor => {
+                      field.onChange(instructor ? instructor.id : "");
+                    }}
+                  />
+                )}
+              />
             </div>
           </div>
 

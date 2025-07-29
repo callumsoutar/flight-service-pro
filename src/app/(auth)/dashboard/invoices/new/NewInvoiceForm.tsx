@@ -165,20 +165,11 @@ export default function NewInvoiceForm() {
   useEffect(() => {
     if (selectedMember && !creating) {
       setCreating(true);
-      // Get org id from cookie
-      const orgId = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('current_org_id='))?.split('=')[1];
-      if (!orgId) {
-        alert('No organization selected.');
-        setCreating(false);
-        return;
-      }
+      
       fetch('/api/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          organization_id: orgId,
           user_id: selectedMember.id,
           status: 'draft',
         }),
@@ -201,8 +192,8 @@ export default function NewInvoiceForm() {
 
   // Calculate totals
   const subtotal = invoiceItems.reduce((sum, item) => sum + item.amount, 0);
-  const totalTax = invoiceItems.reduce((sum, item) => sum + item.tax_amount, 0);
-  const total = invoiceItems.reduce((sum, item) => sum + item.total_amount, 0);
+  const totalTax = invoiceItems.reduce((sum, item) => sum + (item.tax_amount || 0), 0);
+  const total = invoiceItems.reduce((sum, item) => sum + (item.line_total || 0), 0);
 
   return (
     <div className="flex flex-col gap-8 p-6 md:p-10 max-w-4xl mx-auto">
@@ -295,8 +286,7 @@ export default function NewInvoiceForm() {
                   className="w-full max-w-xs justify-start text-left font-normal focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}
-                </Button>
+                  {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}</Button>
               </PopoverTrigger>
               <PopoverContent align="start" className="p-0">
                 <Calendar
@@ -325,9 +315,9 @@ export default function NewInvoiceForm() {
                 <div className="col-span-3">
                   <div className="font-medium text-gray-900">{item.description}</div>
                 </div>
-                <div className="col-span-1 text-right">${item.rate_inclusive.toFixed(2)}</div>
+                <div className="col-span-1 text-right">${(item.rate_inclusive || item.unit_price || 0).toFixed(2)}</div>
                 <div className="col-span-1 text-right">{item.quantity}</div>
-                <div className="col-span-1 text-right font-semibold">${item.total_amount.toFixed(2)}</div>
+                <div className="col-span-1 text-right font-semibold">${(item.line_total || 0).toFixed(2)}</div>
               </div>
             ))
           )}
@@ -347,12 +337,13 @@ export default function NewInvoiceForm() {
                 chargeable_id: item.id,
                 description: item.name,
                 quantity,
-                rate: item.rate,
+                unit_price: item.rate,
                 rate_inclusive,
                 amount,
                 tax_rate: taxRate,
                 tax_amount,
-                total_amount,
+                line_total: total_amount,
+                notes: null,
                 created_at: '',
                 updated_at: '',
               },

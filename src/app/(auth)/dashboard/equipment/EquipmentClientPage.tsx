@@ -8,11 +8,11 @@ import type { UserResult } from '@/components/invoices/MemberSelect';
 export default function EquipmentClientPage({ equipment }: { equipment: Equipment[] }) {
   const [openIssuanceByEquipmentId, setOpenIssuanceByEquipmentId] = useState<Record<string, EquipmentIssuance>>({});
   const [issuedUsers, setIssuedUsers] = useState<Record<string, UserResult>>({});
-  const [loading, setLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
     async function fetchData() {
-      setLoading(true);
       // Fetch open issuances
       const issuanceRes = await fetch('/api/equipment_issuance?open_only=true');
       const issuanceData = await issuanceRes.json();
@@ -20,8 +20,8 @@ export default function EquipmentClientPage({ equipment }: { equipment: Equipmen
       const map: Record<string, EquipmentIssuance> = {};
       arr.forEach((i: EquipmentIssuance) => { map[i.equipment_id] = i; });
       setOpenIssuanceByEquipmentId(map);
-      // Fetch users for issued_to and issued_by
-      const userIds = Array.from(new Set(arr.flatMap((i: EquipmentIssuance) => [i.issued_to, i.issued_by])));
+      // Fetch users for user_id and issued_by
+      const userIds = Array.from(new Set(arr.flatMap((i: EquipmentIssuance) => [i.user_id, i.issued_by])));
       if (userIds.length > 0) {
         const usersRes = await fetch(`/api/users?ids=${userIds.join(',')}`);
         const usersData = await usersRes.json();
@@ -32,7 +32,6 @@ export default function EquipmentClientPage({ equipment }: { equipment: Equipmen
       } else {
         setIssuedUsers({});
       }
-      setLoading(false);
     }
     fetchData();
   }, []);
@@ -46,7 +45,7 @@ export default function EquipmentClientPage({ equipment }: { equipment: Equipmen
         </div>
       </div>
       <EquipmentStatsCards equipment={equipment} openIssuanceByEquipmentId={openIssuanceByEquipmentId} />
-      {loading ? (
+      {!isClient ? (
         <div className="p-6 text-center text-muted-foreground">Loading equipment...</div>
       ) : (
         <EquipmentTable equipment={equipment} openIssuanceByEquipmentId={openIssuanceByEquipmentId} issuedUsers={issuedUsers} />
