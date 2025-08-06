@@ -14,9 +14,10 @@ export type InstructorResult = {
 type InstructorSelectProps = {
   onSelect: (instructor: InstructorResult | null) => void;
   value: InstructorResult | null;
+  disabled?: boolean;
 };
 
-export default function InstructorSelect({ onSelect, value }: InstructorSelectProps) {
+export default function InstructorSelect({ onSelect, value, disabled = false }: InstructorSelectProps) {
   const [instructors, setInstructors] = useState<InstructorResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,10 +52,11 @@ export default function InstructorSelect({ onSelect, value }: InstructorSelectPr
     <div className="relative w-full">
       <Select 
         value={selectedInstructor?.id || ""} 
-        onValueChange={(instructor_id) => {
+        onValueChange={disabled ? undefined : (instructor_id) => {
           const instructor = instructors.find(i => i.id === instructor_id);
           onSelect(instructor || null);
         }}
+        disabled={disabled}
       >
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Select instructor" />

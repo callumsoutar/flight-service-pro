@@ -1,6 +1,5 @@
 import { BookingStages, BOOKING_STAGES } from "@/components/bookings/BookingStages";
 import BookingActions from "@/components/bookings/BookingActions";
-import { Badge } from "@/components/ui/badge";
 import { Booking } from "@/types/bookings";
 import React from "react";
 import { createClient } from "@/lib/SupabaseServerClient";
@@ -9,7 +8,7 @@ import CheckOutForm from "@/components/bookings/CheckOutForm";
 import { BookingDetails } from "@/types/booking_details";
 import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
-import { STATUS_BADGE } from "@/components/bookings/statusBadge";
+import { StatusBadge } from "@/components/bookings/StatusBadge";
 
 interface BookingCheckOutPageProps {
   params: Promise<{ id: string }>;
@@ -44,14 +43,24 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
     name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.id,
   }));
 
-  // Fetch all instructors (users with instructor/admin role)
+  // Fetch all instructors from the instructors table (consistent with booking view page)
   const { data: instructorRows } = await supabase
-    .from("users")
-    .select("id, first_name, last_name, email, role")
-    .in("role", ["instructor", "admin"]);
-  instructors = (instructorRows || []).map((user) => {
-    let name = user.id;
-    if (user.first_name || user.last_name) {
+    .from("instructors")
+    .select(`
+      id,
+      user_id,
+      users!instructors_user_id_fkey (
+        id,
+        first_name,
+        last_name,
+        email
+      )
+    `);
+  
+  instructors = (instructorRows || []).map((instructor) => {
+    const user = instructor.users?.[0]; // users is an array, get first element
+    let name = instructor.id;
+    if (user?.first_name || user?.last_name) {
       const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim();
       if (fullName) {
         name = fullName;
@@ -60,7 +69,7 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
       }
     }
     return {
-      id: user.id,
+      id: instructor.id, // This is now the instructor ID, not user ID
       name,
     };
   });
@@ -114,7 +123,7 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
               />
             )}
           </div>
-          <Badge className={STATUS_BADGE[status].color + " text-lg px-4 py-2 font-semibold"}>{STATUS_BADGE[status].label}</Badge>
+          <StatusBadge status={status} className="text-lg px-4 py-2 font-semibold" />
           <div className="flex-none flex items-center justify-end gap-3">
             {booking && booking.id && (
               <BookingActions status={status} bookingId={booking.id} hideCheckOutButton={true} />

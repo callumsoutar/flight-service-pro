@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { User } from "@/types/users";
+import { MembershipStatus } from "@/types/memberships";
 import MemberProfileCard from "@/components/members/MemberProfileCard";
 import MemberTabs from "@/components/members/MemberTabs";
 import { ArrowLeft } from "lucide-react";
@@ -57,6 +58,39 @@ export default async function MemberViewPage({ params }: { params: Promise<{ id:
   
   const joinDate = formatJoinDate(member.created_at);
 
+  // Fetch membership status directly from database
+  let membershipStatus: MembershipStatus = "none";
+  try {
+    const { data: membershipData } = await supabase
+      .from("memberships")
+      .select("*, membership_types(*)")
+      .eq("user_id", id)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (membershipData) {
+      // Calculate status based on membership data
+      const now = new Date();
+      const expiryDate = new Date(membershipData.expiry_date);
+      const gracePeriodEnd = new Date(expiryDate.getTime() + (membershipData.grace_period_days * 24 * 60 * 60 * 1000));
+      
+      if (!membershipData.fee_paid) {
+        membershipStatus = "unpaid";
+      } else if (now <= expiryDate) {
+        membershipStatus = "active";
+      } else if (now <= gracePeriodEnd) {
+        membershipStatus = "grace";
+      } else {
+        membershipStatus = "expired";
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch membership status:', error);
+    // membershipStatus remains "none" as fallback
+  }
+
   return (
     <main className="w-full min-h-screen flex flex-col p-6 gap-8">
       <div className="w-full max-w-6xl mx-auto flex flex-col gap-8">
@@ -67,7 +101,7 @@ export default async function MemberViewPage({ params }: { params: Promise<{ id:
           </a>
         </div>
         {/* Member header and actions */}
-        <MemberProfileCard member={member} joinDate={joinDate} />
+        <MemberProfileCard member={member} joinDate={joinDate} membershipStatus={membershipStatus} />
         {/* Tabs area: fixed height so parent never grows taller than viewport */}
         <div className="w-full">
           <MemberTabs member={member} />

@@ -14,9 +14,10 @@ export type UserResult = {
 type MemberSelectProps = {
   onSelect: (user: UserResult | null) => void;
   value: UserResult | null;
+  disabled?: boolean;
 };
 
-export default function MemberSelect({ onSelect, value }: MemberSelectProps) {
+export default function MemberSelect({ onSelect, value, disabled = false }: MemberSelectProps) {
   const [search, setSearch] = useState("");
   const [focused, setFocused] = useState(false);
   const [users, setUsers] = useState<UserResult[]>([]);
@@ -53,17 +54,18 @@ export default function MemberSelect({ onSelect, value }: MemberSelectProps) {
           <CommandInput
             placeholder="Click to select member"
             value={search}
-            onValueChange={val => {
+            onValueChange={disabled ? undefined : (val => {
               setSearch(val);
               onSelect(null);
-            }}
+            })}
             className="text-base bg-white border-0 shadow-none px-3 py-2 rounded-t-lg rounded-b-none focus:ring-0 focus:outline-none cursor-pointer"
-            onFocus={() => setFocused(true)}
-            onBlur={() => setTimeout(() => setFocused(false), 100)}
-            readOnly={!!value}
+            onFocus={disabled ? undefined : () => setFocused(true)}
+            onBlur={disabled ? undefined : () => setTimeout(() => setFocused(false), 100)}
+            readOnly={!!value || disabled}
+            disabled={disabled}
           />
         )}
-        {focused && !value && (
+        {focused && !value && !disabled && (
           <div className="absolute left-0 right-0 z-10" style={{ top: '100%' }}>
             <CommandList className="bg-white border-x border-b border-gray-200 rounded-b-lg shadow-md rounded-t-none">
               {loading ? (
@@ -75,7 +77,7 @@ export default function MemberSelect({ onSelect, value }: MemberSelectProps) {
                   <CommandItem
                     key={u.id}
                     value={`${u.first_name} ${u.last_name}`}
-                    onSelect={() => {
+                    onSelect={disabled ? undefined : () => {
                       onSelect(u);
                       setFocused(false);
                     }}

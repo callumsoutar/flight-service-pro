@@ -3,9 +3,8 @@ import * as React from "react";
 import type { Booking } from "@/types/bookings";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/bookings/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
 interface BookingsTableProps {
@@ -15,12 +14,7 @@ interface BookingsTableProps {
   aircraftList: { id: string; registration: string; type: string }[];
 }
 
-const statusColor: Record<string, string> = {
-  confirmed: "bg-blue-100 text-blue-700",
-  flying: "bg-green-100 text-green-700",
-  complete: "bg-gray-100 text-gray-700",
-  unconfirmed: "bg-orange-100 text-orange-700",
-};
+
 
 function formatDateTime(dateStr: string) {
   if (!dateStr) return "--";
@@ -132,7 +126,7 @@ export default function BookingsTable({ bookings, members, instructors, aircraft
                 <TableCell>{b.purpose || "--"}</TableCell>
                 <TableCell>{getAircraftReg(b.aircraft_id ?? "")}</TableCell>
                 <TableCell>
-                  <Badge className={cn("capitalize font-semibold px-3 py-1 text-sm", statusColor[b.status] || "bg-gray-100 text-gray-700")}>{b.status}</Badge>
+                  <StatusBadge status={b.status} className="font-semibold px-3 py-1 text-sm" />
                 </TableCell>
               </TableRow>
             ))}

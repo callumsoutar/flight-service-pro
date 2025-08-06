@@ -13,8 +13,8 @@ import type { StudentSyllabusEnrollment } from "@/types/student_syllabus_enrollm
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Command, CommandInput, CommandList, CommandEmpty } from "@/components/ui/command";
-import { Loader2, Info } from "lucide-react";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandItem } from "@/components/ui/command";
+import { Loader2, Info, User, Check } from "lucide-react";
 import { toast } from "sonner";
 
 const enrollSchema = z.object({
@@ -24,6 +24,17 @@ const enrollSchema = z.object({
 
 type EnrollForm = z.infer<typeof enrollSchema>;
 
+interface InstructorWithUser {
+  id: string;
+  user_id: string;
+  users: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
+}
+
 interface MemberSyllabusEnrollmentTabProps {
   memberId: string;
 }
@@ -31,6 +42,7 @@ interface MemberSyllabusEnrollmentTabProps {
 export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabusEnrollmentTabProps) {
   const [enrollments, setEnrollments] = useState<StudentSyllabusEnrollment[]>([]);
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
+  const [instructors, setInstructors] = useState<InstructorWithUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
@@ -48,29 +60,31 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
     resolver: zodResolver(enrollSchema),
   });
 
-  // Fetch syllabi and enrollments
+  // Fetch syllabi, enrollments, and instructors
   useEffect(() => {
     if (!memberId) return;
     setLoading(true);
     setError(null);
     Promise.all([
-      fetch(`/api/syllabus`).then(res => res.json()).then(data => Array.isArray(data.data) ? data.data : []),
+      fetch(`/api/syllabus`).then(res => res.json()).then(data => Array.isArray(data.syllabi) ? data.syllabi : []),
       fetch(`/api/student_syllabus_enrollment?user_id=${memberId}`).then(res => res.json()).then(data => Array.isArray(data.data) ? data.data : []),
+      fetch(`/api/instructors`).then(res => res.json()).then(data => Array.isArray(data.instructors) ? data.instructors : []),
     ])
-      .then(([syllabiData, enrollmentsData]) => {
+      .then(([syllabiData, enrollmentsData, instructorsData]) => {
         setSyllabi(syllabiData);
         setEnrollments(enrollmentsData);
-        // Fetch instructor details for each enrollment
-        const instructorIds = enrollmentsData.map((e: StudentSyllabusEnrollment) => e.primary_instructor_id).filter(Boolean);
-        if (instructorIds.length > 0) {
-          fetch(`/api/users?ids=${instructorIds.join(",")}`)
-            .then(res => res.json())
-            .then(data => {
-              const map: Record<string, UserResult> = {};
-              (data.users || []).forEach((u: UserResult) => { map[u.id] = u; });
-              setInstructorMap(map);
-            });
-        }
+        setInstructors(instructorsData);
+        // Create instructor map using instructor IDs as keys
+        const map: Record<string, UserResult> = {};
+        instructorsData.forEach((instructor: InstructorWithUser) => {
+          map[instructor.id] = {
+            id: instructor.users.id,
+            first_name: instructor.users.first_name,
+            last_name: instructor.users.last_name,
+            email: instructor.users.email,
+          };
+        });
+        setInstructorMap(map);
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to load syllabus enrollments"))
       .finally(() => setLoading(false));
@@ -110,6 +124,45 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
   // Syllabi not yet enrolled in
   const availableSyllabi = syllabi.filter(s => !enrollments.some(e => e.syllabus_id === s.id));
 
+  // Handle instructor change for enrollment
+  const handleInstructorChange = async (enrollmentId: string, instructor: InstructorWithUser) => {
+    try {
+      const res = await fetch("/api/student_syllabus_enrollment", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: enrollmentId,
+          primary_instructor_id: instructor.id,
+        }),
+      });
+      
+      if (!res.ok) throw new Error("Failed to update instructor");
+      
+      // Update local state
+      setEnrollments(prev => prev.map(e => 
+        e.id === enrollmentId 
+          ? { ...e, primary_instructor_id: instructor.id }
+          : e
+      ));
+      
+      // Update instructor map
+      setInstructorMap(prev => ({
+        ...prev,
+        [instructor.id]: {
+          id: instructor.users.id,
+          first_name: instructor.users.first_name,
+          last_name: instructor.users.last_name,
+          email: instructor.users.email,
+        }
+      }));
+      
+      toast.success("Primary instructor updated successfully!");
+    } catch (e: unknown) {
+      const errorMsg = e instanceof Error ? e.message : "Failed to update instructor";
+      toast.error(errorMsg);
+    }
+  };
+
   // Helper for instructor chip
   function InstructorChip({ instructor }: { instructor: UserResult }) {
     return (
@@ -119,7 +172,6 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
           <AvatarFallback>{(instructor.first_name?.[0] || "").toUpperCase()}</AvatarFallback>
         </Avatar>
         <span className="font-medium text-sm">{instructor.first_name} {instructor.last_name}</span>
-        <span className="text-xs text-gray-500">{instructor.email}</span>
       </div>
     );
   }
@@ -241,15 +293,13 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
                               <CommandInput placeholder="Search instructor..." />
                               <CommandList>
                                 <CommandEmpty>No instructors found</CommandEmpty>
-                                {/* Fetch and list instructors here, on select call handleInstructorChange */}
-                                {/* Example: */}
-                                {/* instructors.map(i => (
+                                {instructors.map(i => (
                                   <CommandItem key={i.id} onSelect={() => handleInstructorChange(row.id, i)}>
-                                    <UserIcon className="w-4 h-4 mr-2" />
-                                    {i.first_name} {i.last_name} <span className="ml-2 text-xs text-gray-500">{i.email}</span>
+                                    <User className="w-4 h-4 mr-2" />
+                                    {i.users.first_name} {i.users.last_name} 
                                     {row.primary_instructor_id === i.id && <Check className="ml-auto w-4 h-4 text-green-500" />}
                                   </CommandItem>
-                                )) */}
+                                ))}
                               </CommandList>
                             </Command>
                           </PopoverContent>

@@ -82,11 +82,16 @@ export async function POST(req: NextRequest) {
   
   // Map frontend fields to database fields
   const dbData = {
-    ...parse.data,
+    aircraft_id: parse.data.aircraft_id,
+    name: parse.data.name,
+    description: parse.data.description,
     stage: parse.data.observation_stage,
     reported_by: parse.data.user_id,
     priority: parse.data.status, // Map frontend status to database priority
-    status: 'active' // Default observation status
+    status: 'active', // Default observation status
+    resolution_comments: parse.data.resolution_comments,
+    closed_by: parse.data.closed_by,
+    resolved_at: parse.data.resolved_at
   };
   
   const { data, error } = await supabase

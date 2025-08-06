@@ -1,169 +1,64 @@
 "use client";
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import CheckInDetails from "@/components/bookings/CheckInDetails";
 import type { Booking } from "@/types/bookings";
-import type { Invoice } from "@/types/invoices";
 import type { Chargeable } from "@/types/chargeables";
 import type { InvoiceItem } from "@/types/invoice_items";
-import type { InstructorFlightTypeRate } from "@/types/instructor_flight_type_rates";
-import type { FlightType } from "@/types/flight_types";
 import { Pencil, PlaneLanding, AirVent, Grid, Trash2, Loader2, CheckCircle2, MessageSquare, X } from "lucide-react";
 import ChargeableSearchDropdown from "@/components/invoices/ChargeableSearchDropdown";
 import { useRouter } from "next/navigation";
+import { 
+  useBookingCheckIn, 
+  useInvoiceData, 
+  useInvoiceItems, 
+  useFlightTypes, 
+  useAircraftData, 
+  useInstructorRate 
+} from "@/hooks/use-booking-check-in";
+import { useInvoiceItems as useInvoiceItemsManagement } from "@/hooks/use-invoice-items";
 
 interface BookingCheckInClientProps {
   booking: Booking;
   instructors: { id: string; name: string }[];
 }
 
-// Hook to get instructor rate for a booking
-function useInstructorRate(instructorId: string | null, flightTypeId: string | null) {
-  const [instructorRate, setInstructorRate] = useState<InstructorFlightTypeRate | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchRate = useCallback(async () => {
-    if (!instructorId || !flightTypeId) {
-      setInstructorRate(null);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const rateUrl = `/api/instructor_flight_type_rates?instructor_id=${instructorId}&flight_type_id=${flightTypeId}`;
-      const rateRes = await fetch(rateUrl);
-      
-      if (!rateRes.ok) {
-        throw new Error("No instructor rate found for this instructor and flight type");
-      }
-      
-      const rateData = await rateRes.json();
-      setInstructorRate(rateData.rate || null);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to fetch instructor rate";
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  }, [instructorId, flightTypeId]);
-
-  useEffect(() => {
-    fetchRate();
-  }, [fetchRate]);
-
-  return { instructorRate, loading, error };
-}
-
-// Custom hook for data fetching
-function useCheckInData(booking: Booking) {
-  const [invoice, setInvoice] = useState<Invoice | null>(null);
-  const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
-  const [checkedOutAircraftReg, setCheckedOutAircraftReg] = useState<string | null>(null);
-  const [flightTypes, setFlightTypes] = useState<FlightType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Memoized fetch function to avoid unnecessary re-renders
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Parallel API calls for better performance
-      const [invoiceRes, flightTypesRes, aircraftRes] = await Promise.allSettled([
-        fetch(`/api/invoices?booking_id=${booking.id}`),
-        fetch('/api/flight_types'),
-        booking.checked_out_aircraft_id 
-          ? fetch(`/api/aircraft?id=${booking.checked_out_aircraft_id}`)
-          : Promise.resolve(null)
-      ]);
-
-      // Handle invoice data
-      if (invoiceRes.status === 'fulfilled') {
-        const invoiceData = await invoiceRes.value.json();
-        const found = invoiceData.invoices?.[0] || null;
-        setInvoice(found);
-        
-        if (found) {
-          // Fetch invoice items if invoice exists
-          const itemsRes = await fetch(`/api/invoice_items?invoice_id=${found.id}`);
-          const itemsData = await itemsRes.json();
-          setInvoiceItems(itemsData.invoice_items || []);
-        } else {
-          setInvoiceItems([]);
-        }
-      }
-
-      // Handle flight types
-      if (flightTypesRes.status === 'fulfilled') {
-        const flightTypesData = await flightTypesRes.value.json();
-        setFlightTypes(flightTypesData.flight_types || []);
-      }
-
-      // Handle aircraft registration
-      if (aircraftRes.status === 'fulfilled' && aircraftRes.value) {
-        const aircraftData = await aircraftRes.value.json();
-        setCheckedOutAircraftReg(aircraftData.aircraft?.registration || null);
-      } else {
-        setCheckedOutAircraftReg(null);
-      }
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to fetch data";
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  }, [booking.id, booking.checked_out_aircraft_id]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  return {
-    invoice,
-    setInvoice,
-    invoiceItems,
-    setInvoiceItems,
-    checkedOutAircraftReg,
-    flightTypes,
-    loading,
-    error,
-    refetch: fetchData
-  };
-}
-
 export default function BookingCheckInClient({ booking, instructors }: BookingCheckInClientProps) {
   const router = useRouter();
-  const { instructorRate, loading: instructorRateLoading, error: instructorRateError } = useInstructorRate(booking.instructor_id, booking.flight_type_id);
   
+  // Custom hooks for optimized data management
+  const { data: invoice, isLoading: invoiceLoading } = useInvoiceData(booking.id);
+  const { data: invoiceItems = [] } = useInvoiceItems(invoice?.id || null);
+  const { isLoading: flightTypesLoading } = useFlightTypes();
+  const { data: aircraft } = useAircraftData(booking.checked_out_aircraft_id);
+  const { data: instructorRate, isLoading: instructorRateLoading } = useInstructorRate(booking.instructor_id, booking.flight_type_id);
+  
+  // Check-in operations
   const {
-    invoice,
-    setInvoice,
-    invoiceItems,
-    setInvoiceItems,
-    checkedOutAircraftReg,
-    flightTypes,
-    loading: dataLoading,
-    error: dataError,
-    refetch
-  } = useCheckInData(booking);
+    calculateCharges,
+    completeBooking,
+    isCalculating,
+    isCompleting,
+    calculateError,
+    completeError,
+    completeSuccess,
+    optimisticData,
+    lastCalculateResult,
+    resetCalculate,
+    resetComplete,
+  } = useBookingCheckIn(booking.id);
+  
+  // Invoice item management
+  const {
+    addItem,
+    deleteItem,
+    isAdding,
+    isUpdating,
+    isDeleting,
+    addError,
+  } = useInvoiceItemsManagement(invoice?.id || null);
 
   const [chargeableTab, setChargeableTab] = useState<'landing_fee' | 'airways_fees' | 'other'>('landing_fee');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  
-  // Track current form values from CheckInDetails
-  const [currentFormValues, setCurrentFormValues] = useState<{
-    endHobbs: string;
-    endTacho: string;
-  }>({ endHobbs: "", endTacho: "" });
 
   const handleCalculateCharges = useCallback(async (details: {
     chargeTime: number;
@@ -179,302 +74,90 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
   }): Promise<void> => {
     // Prevent calculation if instructor rate is loading or missing
     if (instructorRateLoading) {
-      setSaveError("Instructor rate is still loading. Please wait.");
       return;
     }
     if (!instructorRate) {
-      setSaveError(instructorRateError || "No instructor rate found for this instructor.");
       return;
     }
 
-    setSaving(true);
-    setSaveError(null);
+    // Reset previous errors
+    resetCalculate();
     
-    try {
-      let chargeTime = details.chargeTime;
-
-      // 1. PATCH booking if there are meter values to update
-      const patchBody: Record<string, unknown> = { id: booking.id };
-      if (typeof details.hobbsStart === 'number') patchBody.hobbs_start = details.hobbsStart;
-      if (typeof details.hobbsEnd === 'number') patchBody.hobbs_end = details.hobbsEnd;
-      if (typeof details.tachStart === 'number') patchBody.tach_start = details.tachStart;
-      if (typeof details.tachEnd === 'number') patchBody.tach_end = details.tachEnd;
-
-      if (Object.keys(patchBody).length > 1) {
-        const patchRes = await fetch('/api/bookings', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(patchBody),
-        });
-        
-        if (patchRes.ok) {
-          const patchData = await patchRes.json();
-          chargeTime = patchData.booking?.flight_time ?? chargeTime;
-        } else {
-          const patchData = await patchRes.json();
-          if (!patchData.error?.includes('no valid fields to update')) {
-            throw new Error(patchData.error || 'Failed to update booking');
-          }
-        }
-      }
-
-      // 2. Create invoice (if not already created)
-      let invoiceId = invoice?.id;
-      if (!invoiceId) {
-        const res = await fetch("/api/invoices", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            user_id: booking?.user_id,
-            booking_id: booking?.id,
-            status: "draft",
-          }),
-        });
-        
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || "Failed to create invoice");
-        }
-        
-        const data = await res.json();
-        invoiceId = data.id;
-        
-        // Update local state
-        const invoiceRes = await fetch(`/api/invoices?booking_id=${booking.id}`);
-        const invoiceData = await invoiceRes.json();
-        const found = invoiceData.invoices?.[0] || null;
-        setInvoice(found);
-      }
-
-      // 3. Fetch current invoice items
-      const itemsRes = await fetch(`/api/invoice_items?invoice_id=${invoiceId}`);
-      const itemsData = await itemsRes.json();
-      const currentItems: InvoiceItem[] = itemsData.invoice_items || [];
-
-      // 4. Prepare line item descriptions
-      const selectedFlightTypeName = flightTypes.find(ft => ft.id === details.selectedFlightType)?.name || 'Flight';
-      const selectedInstructorName = instructors.find(i => i.id === details.selectedInstructor)?.name || 'Instructor';
-      const selectedAircraftReg = checkedOutAircraftReg || booking?.aircraft?.registration || 'Aircraft';
-      
-      const aircraftDesc = `${selectedFlightTypeName} - ${selectedAircraftReg}`;
-      const instructorDesc = `${selectedFlightTypeName} - ${selectedInstructorName}`;
-
-      // 5. Create/update line items in parallel
-      const aircraftQty = chargeTime;
-      const instructorQty = chargeTime;
-      const instructorRateValue = Number(instructorRate.rate);
-
-      const existingAircraft = currentItems.find(item => item.description === aircraftDesc);
-      const existingInstructor = currentItems.find(item => item.description === instructorDesc);
-
-      await Promise.all([
-        // Aircraft line item
-        existingAircraft 
-          ? fetch("/api/invoice_items", {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                id: existingAircraft.id,
-                quantity: aircraftQty,
-                unit_price: details.aircraftRate,
-                description: aircraftDesc,
-              }),
-            })
-          : fetch("/api/invoice_items", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                invoice_id: invoiceId,
-                description: aircraftDesc,
-                quantity: aircraftQty,
-                unit_price: details.aircraftRate,
-              }),
-            }),
-        
-        // Instructor line item
-        existingInstructor
-          ? fetch("/api/invoice_items", {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                id: existingInstructor.id,
-                quantity: instructorQty,
-                unit_price: instructorRateValue,
-                description: instructorDesc,
-              }),
-            })
-          : fetch("/api/invoice_items", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                invoice_id: invoiceId,
-                description: instructorDesc,
-                quantity: instructorQty,
-                unit_price: instructorRateValue,
-              }),
-            })
-      ]);
-
-      // 6. Refetch invoice items
-      const updatedItemsRes = await fetch(`/api/invoice_items?invoice_id=${invoiceId}`);
-      const updatedItemsData = await updatedItemsRes.json();
-      setInvoiceItems(updatedItemsData.invoice_items || []);
-      
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to calculate charges";
-      setSaveError(errorMessage);
-    } finally {
-      setSaving(false);
-    }
-  }, [booking, instructorRate, instructorRateLoading, instructorRateError, invoice, flightTypes, instructors, checkedOutAircraftReg, setInvoice, setInvoiceItems]);
+    // Use the optimized calculateCharges mutation
+    calculateCharges({
+      bookingId: booking.id,
+      chargeTime: details.chargeTime,
+      aircraftRate: details.aircraftRate,
+      instructorRate: details.instructorRate,
+      chargingBy: details.chargingBy,
+      selectedInstructor: details.selectedInstructor,
+      selectedFlightType: details.selectedFlightType,
+      hobbsStart: details.hobbsStart,
+      hobbsEnd: details.hobbsEnd,
+      tachStart: details.tachStart,
+      tachEnd: details.tachEnd,
+    });
+  }, [booking.id, instructorRate, instructorRateLoading, calculateCharges, resetCalculate]);
 
   const handleAddItem = useCallback(async (item: Chargeable, quantity: number): Promise<void> => {
     if (!invoice) return;
     
-    setSaving(true);
-    setSaveError(null);
-    
-    try {
-      await fetch("/api/invoice_items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          invoice_id: invoice.id,
-          chargeable_id: item.id,
-          description: item.name,
-          quantity,
-          unit_price: item.rate,
-        }),
-      });
-      
-      // Refetch items
-      const updatedItemsRes = await fetch(`/api/invoice_items?invoice_id=${invoice.id}`);
-      const updatedItemsData = await updatedItemsRes.json();
-      setInvoiceItems(updatedItemsData.invoice_items || []);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to add item";
-      setSaveError(errorMessage);
-    } finally {
-      setSaving(false);
-    }
-  }, [invoice, setInvoiceItems]);
-
-  // Handler for form values changes from CheckInDetails
-  const handleFormValuesChange = useCallback((values: { endHobbs: string; endTacho: string }): void => {
-    setCurrentFormValues(values);
-  }, []);
+    // Use the optimized addItem mutation
+    addItem({
+      invoiceId: invoice.id,
+      item,
+      quantity,
+    });
+  }, [invoice, addItem]);
 
   // Helper for invoice totals
   const { subtotal, totalTax, total } = useMemo(() => {
-    const subtotal = invoiceItems.reduce((sum, item) => sum + item.amount, 0);
-    const totalTax = invoiceItems.reduce((sum, item) => sum + (item.tax_amount || 0), 0);
-    const total = invoiceItems.reduce((sum, item) => sum + (item.line_total || 0), 0);
+    const subtotal = invoiceItems.reduce((sum: number, item: InvoiceItem) => sum + (item.amount || 0), 0);
+    const totalTax = invoiceItems.reduce((sum: number, item: InvoiceItem) => sum + (item.tax_amount || 0), 0);
+    const total = invoiceItems.reduce((sum: number, item: InvoiceItem) => sum + (item.line_total || 0), 0);
     return { subtotal, totalTax, total };
   }, [invoiceItems]);
 
   // Confirm and Save handler
   const handleConfirmAndSave = useCallback(async (): Promise<void> => {
-    setSaving(true);
-    setSaveError(null);
-    setSaveSuccess(false);
+    if (!invoice || invoiceItems.length === 0) return;
     
-    try {
-      // 1. PATCH all invoice items (persist any edits)
-      if (invoice && invoiceItems.length > 0) {
-        await Promise.all(
-          invoiceItems.map(async (item) => {
-            if (item.id) {
-              await fetch("/api/invoice_items", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  id: item.id,
-                  quantity: item.quantity,
-                  unit_price: item.unit_price,
-                  rate_inclusive: item.rate_inclusive,
-                  amount: item.amount,
-                  tax_rate: item.tax_rate,
-                  tax_amount: item.tax_amount,
-                  line_total: item.line_total,
-                  description: item.description,
-                  chargeable_id: item.chargeable_id ?? undefined,
-                }),
-              });
-            }
-          })
-        );
-      }
+    resetComplete();
+    
+    // Use the optimized completeBooking mutation
+    completeBooking({
+      bookingId: booking.id,
+      invoiceItems: invoiceItems.map((item: InvoiceItem) => ({
+        id: item.id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        rate_inclusive: item.rate_inclusive,
+        amount: item.amount,
+        tax_rate: item.tax_rate,
+        tax_amount: item.tax_amount,
+        line_total: item.line_total,
+        description: item.description,
+        chargeable_id: item.chargeable_id,
+      })),
+    });
+  }, [invoice, invoiceItems, booking.id, completeBooking, resetComplete]);
 
-      // 2. PATCH aircraft current_hobbs and current_tach if end values are present
-      if (booking.checked_out_aircraft_id) {
-        const patchBody: Record<string, unknown> = {};
-        
-        // Only update if we have valid numeric values
-        if (currentFormValues.endHobbs && !isNaN(parseFloat(currentFormValues.endHobbs))) {
-          const endHobbsValue = parseFloat(currentFormValues.endHobbs);
-          if (endHobbsValue >= 0) {
-            patchBody.current_hobbs = endHobbsValue;
-          }
-        }
-        
-        if (currentFormValues.endTacho && !isNaN(parseFloat(currentFormValues.endTacho))) {
-          const endTachoValue = parseFloat(currentFormValues.endTacho);
-          if (endTachoValue >= 0) {
-            patchBody.current_tach = endTachoValue;
-          }
-        }
-        
-        if (Object.keys(patchBody).length > 0) {
-          const aircraftRes = await fetch(`/api/aircraft`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id: booking.checked_out_aircraft_id,
-              ...patchBody
-            }),
-          });
-          
-          if (!aircraftRes.ok) {
-            const aircraftError = await aircraftRes.json();
-            throw new Error(`Failed to update aircraft meters: ${aircraftError.error || 'Unknown error'}`);
-          }
-        }
-      }
-
-      // 3. PATCH invoice to ensure booking_id is set and update status to 'pending'
-      if (invoice && booking?.id) {
-        const invoicePatchBody: Record<string, unknown> = { status: "pending" };
-        if (invoice.booking_id !== booking.id) {
-          invoicePatchBody.booking_id = booking.id;
-        }
-        await fetch(`/api/invoices`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: invoice.id, ...invoicePatchBody }),
-        });
-      }
-
-      // 4. PATCH booking status to 'complete'
-      await fetch("/api/bookings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: booking.id, status: "complete" }),
-      });
-
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
+  // Show success modal when booking is completed
+  React.useEffect(() => {
+    if (completeSuccess) {
       setShowSuccessModal(true);
-      
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to save changes. Please try again.";
-      setSaveError(errorMessage);
-    } finally {
-      setSaving(false);
     }
-  }, [invoice, invoiceItems, booking, currentFormValues]);
+  }, [completeSuccess]);
 
-  // Show loading state
-  if (dataLoading) {
+  // Use optimistic data if available, otherwise use actual data
+  const displayInvoiceItems = optimisticData?.invoiceItems || lastCalculateResult?.invoiceItems || invoiceItems;
+  const displayTotals = optimisticData?.totals || lastCalculateResult?.totals || { subtotal, totalTax, total };
+  const displayInvoice = optimisticData?.invoice || lastCalculateResult?.invoice || invoice;
+
+  // Show loading state only for critical data
+  const isLoading = invoiceLoading && flightTypesLoading;
+  
+  if (isLoading) {
     return (
       <div className="flex flex-row w-full max-w-6xl mx-auto gap-4">
         <div className="flex-[2] flex flex-col gap-6 min-w-0" style={{ flexBasis: '40%' }}>
@@ -497,36 +180,15 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
     );
   }
 
-  // Show error state
-  if (dataError) {
-    return (
-      <div className="flex flex-row w-full max-w-6xl mx-auto gap-4">
-        <div className="flex-[2] flex flex-col gap-6 min-w-0" style={{ flexBasis: '40%' }}>
-          <div className="bg-white border rounded-2xl p-6 shadow-sm">
-            <div className="text-center py-8">
-              <div className="text-red-600 mb-2">Failed to load data</div>
-              <button 
-                onClick={refetch}
-                className="text-blue-600 hover:text-blue-800 underline"
-              >
-                Try again
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-row w-full max-w-6xl mx-auto gap-4">
       {/* Left column (Check-In Details) */}
       <div className="flex-[2] flex flex-col gap-6 min-w-0" style={{ flexBasis: '40%' }}>
         <div className="bg-white border rounded-2xl p-6 shadow-sm">
-          {checkedOutAircraftReg && (
+          {aircraft?.registration && (
             <div className="mb-3 flex items-center gap-2">
               <span className="text-xs font-semibold text-muted-foreground">Checked-Out Aircraft:</span>
-              <span className="text-base font-bold text-blue-700">{checkedOutAircraftReg}</span>
+              <span className="text-base font-bold text-blue-700">{aircraft.registration}</span>
             </div>
           )}
           <CheckInDetails 
@@ -541,7 +203,6 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
             bookingStartTacho={booking?.tach_start}
             initialEndHobbs={booking?.hobbs_end}
             initialEndTacho={booking?.tach_end}
-            onFormValuesChange={handleFormValuesChange}
           />
         </div>
       </div>
@@ -550,11 +211,23 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
         <div className="bg-white border rounded-2xl p-6 shadow-lg">
           <h2 className="font-bold text-lg mb-4">Invoice</h2>
           {/* Invoice Table */}
-          {saving ? (
-            <div className="text-muted-foreground">Calculating...</div>
-          ) : saveError ? (
-            <div className="text-destructive">{saveError}</div>
-          ) : invoice && invoiceItems.length > 0 ? (
+          {isCalculating && (
+            <div className="flex items-center gap-2 text-blue-600 mb-4">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Calculating charges...</span>
+            </div>
+          )}
+          {calculateError && (
+            <div className="text-red-600 mb-4 p-3 bg-red-50 rounded-lg">
+              {calculateError}
+            </div>
+          )}
+          {addError && (
+            <div className="text-red-600 mb-4 p-3 bg-red-50 rounded-lg">
+              {addError}
+            </div>
+          )}
+          {displayInvoice && displayInvoiceItems.length > 0 ? (
             <div className="w-full border rounded-lg overflow-hidden mb-4">
               <div className="grid grid-cols-6 gap-0 bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-600">
                 <div className="col-span-2 pl-2">Item</div>
@@ -563,10 +236,13 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
                 <div className="col-span-1 text-right">Total</div>
                 <div className="col-span-1 flex justify-center">Actions</div>
               </div>
-              {invoiceItems.map((item, idx) => (
+              {displayInvoiceItems.map((item: InvoiceItem, idx: number) => (
                 <div key={item.id + idx} className="grid grid-cols-6 gap-0 px-4 py-1.5 border-t text-sm items-center min-h-[40px]">
                   <div className="col-span-2 flex items-center pl-2">
                     <span className="font-medium text-gray-900 truncate">{item.description}</span>
+                    {item.id?.startsWith('optimistic') && (
+                      <span className="ml-2 text-xs text-blue-500 opacity-75">●</span>
+                    )}
                   </div>
                   <div className="col-span-1 flex items-center justify-center text-xs">
                     <span>{item.quantity}</span>
@@ -578,10 +254,19 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
                     <span>${(item.line_total || 0).toFixed(2)}</span>
                   </div>
                   <div className="col-span-1 flex items-center justify-center gap-2">
-                    <button className="text-blue-600 hover:text-blue-800 p-1 rounded transition-colors" title="Edit">
+                    <button 
+                      className="text-blue-600 hover:text-blue-800 p-1 rounded transition-colors disabled:opacity-50" 
+                      title="Edit"
+                      disabled={item.id?.startsWith('optimistic') || isUpdating}
+                    >
                       <Pencil className="w-4 h-4" />
                     </button>
-                    <button className="text-red-500 hover:text-red-700 p-1 rounded transition-colors" title="Delete">
+                    <button 
+                      className="text-red-500 hover:text-red-700 p-1 rounded transition-colors disabled:opacity-50" 
+                      title="Delete"
+                      disabled={item.id?.startsWith('optimistic') || isDeleting}
+                      onClick={() => item.id && !item.id.startsWith('optimistic') && deleteItem({ itemId: item.id, invoiceId: displayInvoice.id })}
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -598,7 +283,7 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
             </div>
           )}
           {/* Add Extra Charges directly below the table */}
-          {invoice && (
+          {displayInvoice && (
             <div className="pt-2 pb-4">
               <hr className="border-t border-gray-200 mt-6 mb-4" />
               <div className="flex gap-3 mt-4 mb-2">
@@ -643,42 +328,49 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
               <div className="mt-2">
                 <ChargeableSearchDropdown
                   onAdd={handleAddItem}
-                  taxRate={invoice.tax_rate ?? 0.15}
+                  taxRate={displayInvoice.tax_rate ?? 0.15}
                   category={chargeableTab}
                 />
               </div>
+              {isAdding && (
+                <div className="mt-2 text-sm text-blue-600 flex items-center gap-2">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Adding item...
+                </div>
+              )}
             </div>
           )}
           {/* Invoice Footer */}
           <div className="border-t pt-4 mt-4 flex flex-col items-end gap-1">
             <div className="flex gap-8 text-sm">
               <div className="text-muted-foreground">Subtotal (excl. Tax):</div>
-              <div className="font-medium">${subtotal.toFixed(2)}</div>
+              <div className="font-medium">${displayTotals.subtotal.toFixed(2)}</div>
             </div>
             <div className="flex gap-8 text-sm">
-              <div className="text-muted-foreground">Tax ({Math.round((invoice?.tax_rate ?? 0.15) * 100)}%):</div>
-              <div className="font-medium">${totalTax.toFixed(2)}</div>
+              <div className="text-muted-foreground">Tax ({Math.round((displayInvoice?.tax_rate ?? 0.15) * 100)}%):</div>
+              <div className="font-medium">${displayTotals.totalTax.toFixed(2)}</div>
             </div>
             <div className="flex gap-8 text-lg mt-2">
               <div className="font-bold">Total:</div>
-              <div className="font-bold text-green-600">${total.toFixed(2)}</div>
+              <div className="font-bold text-green-600">${displayTotals.total.toFixed(2)}</div>
             </div>
           </div>
           {/* Confirm and Save Button */}
           <div className="mt-6 flex flex-col items-end gap-2">
-            {saveError && <div className="text-destructive text-sm">{saveError}</div>}
-            {saveSuccess && (
+            {calculateError && <div className="text-red-600 text-sm">{calculateError}</div>}
+            {completeError && <div className="text-red-600 text-sm">{completeError}</div>}
+            {completeSuccess && (
               <div className="flex items-center gap-1 text-green-600 text-sm font-medium">
-                <CheckCircle2 className="w-4 h-4" /> Saved successfully
+                <CheckCircle2 className="w-4 h-4" /> Booking completed successfully!
               </div>
             )}
             <button
               className={`inline-flex items-center gap-2 px-6 py-2 rounded-lg font-semibold bg-indigo-600 text-white shadow hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed`}
               onClick={handleConfirmAndSave}
-              disabled={saving || invoiceItems.length === 0}
+              disabled={isCompleting || displayInvoiceItems.length === 0 || !displayInvoice}
               type="button"
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               Confirm and Save
             </button>
           </div>

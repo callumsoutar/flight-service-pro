@@ -2,6 +2,7 @@
 "use client";
 
 import { User } from "@/types/users";
+import { MembershipStatus } from "@/types/memberships";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -11,8 +12,15 @@ import { ChevronDown, FileText, Calendar, AlertTriangle, Menu, UserPlus } from "
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useState } from "react";
+import { getStatusBadgeClasses, getStatusText } from "@/lib/membership-utils";
 
-export default function MemberProfileCard({ member, joinDate }: { member: User; joinDate: string }) {
+interface MemberProfileCardProps {
+  member: User;
+  joinDate: string;
+  membershipStatus?: MembershipStatus;
+}
+
+export default function MemberProfileCard({ member, joinDate, membershipStatus = "none" }: MemberProfileCardProps) {
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +40,9 @@ export default function MemberProfileCard({ member, joinDate }: { member: User; 
               <span className="text-2xl font-bold text-gray-900">
                 {member.first_name} {member.last_name}
               </span>
-              <Badge className="bg-black text-white">Active</Badge>
+              <Badge className={getStatusBadgeClasses(membershipStatus)}>
+                {getStatusText(membershipStatus)}
+              </Badge>
             </div>
             <div className="flex flex-wrap gap-4 text-gray-600 text-sm mt-1">
               <span>{member.email}</span>

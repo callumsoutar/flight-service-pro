@@ -1,5 +1,4 @@
 import { Card } from '@/components/ui/card';
-import { Calendar, User, DollarSign } from 'lucide-react';
 import PaymentHistory from '@/components/invoices/PaymentHistory';
 import DraftRedirector from '@/components/invoices/DraftRedirector';
 import { createClient } from '@/lib/SupabaseServerClient';
@@ -48,38 +47,8 @@ export default async function InvoiceViewPage({ params }: { params: Promise<{ id
         invoiceNumber={invoice.invoice_number}
         status={invoice.status}
         memberName={memberName}
+        bookingId={invoice.booking_id}
       />
-
-      {/* Stat Cards */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Card className="flex flex-row items-center gap-4 p-5">
-          <div className="bg-indigo-100 text-indigo-600 rounded-full p-2">
-            <User className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground font-medium">Member</div>
-            <div className="font-semibold text-base">{memberName}</div>
-          </div>
-        </Card>
-        <Card className="flex flex-row items-center gap-4 p-5">
-          <div className="bg-blue-100 text-blue-600 rounded-full p-2">
-            <Calendar className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground font-medium">Due Date</div>
-            <div className="font-semibold text-base">{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : '-'}</div>
-          </div>
-        </Card>
-        <Card className="flex flex-row items-center gap-4 p-5">
-          <div className="bg-green-100 text-green-600 rounded-full p-2">
-            <DollarSign className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground font-medium">Total Amount</div>
-            <div className="font-semibold text-base">${invoice.total_amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-          </div>
-        </Card>
-      </section>
 
       {/* Invoice Document */}
       <Card className="p-8 shadow-md">

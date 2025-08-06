@@ -11,9 +11,11 @@ import type { Aircraft } from "@/types/aircraft";
 import type { Lesson } from "@/types/lessons";
 import type { Booking } from "@/types/bookings";
 import type { LessonProgress } from "@/types/lesson_progress";
+import type { Invoice } from "@/types/invoices";
 
 export interface DebriefFormClientHandle {
   saveAllFormData: () => Promise<void>;
+  getInvoiceId: () => string | null;
 }
 
 interface DebriefFormClientProps {
@@ -32,6 +34,9 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
     // State for lesson progress
     const [lessonProgress, setLessonProgress] = useState<LessonProgress | null>(null);
     const [lessonProgressLoading, setLessonProgressLoading] = useState(false);
+    
+    // State for invoice
+    const [invoice, setInvoice] = useState<Invoice | null>(null);
     
     // Form state
     const [lessonStatus, setLessonStatus] = useState<'pass' | 'not yet competent'>('pass');
@@ -109,6 +114,23 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
       fetchLessonProgress();
     }, [booking?.id]);
 
+    // Fetch invoice by booking_id
+    useEffect(() => {
+      const fetchInvoice = async () => {
+        if (!booking?.id) return;
+        try {
+          const res = await fetch(`/api/invoices?booking_id=${booking.id}`);
+          const data = await res.json();
+          if (data.invoices && data.invoices.length > 0) {
+            setInvoice(data.invoices[0]);
+          }
+        } catch {
+          setInvoice(null);
+        }
+      };
+      fetchInvoice();
+    }, [booking?.id]);
+
     // Handle instructor comments update
     const handleInstructorCommentsChange = (value: string) => {
       setInstructorComments(value);
@@ -153,6 +175,8 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
               user_id: booking.user_id,
               booking_id: booking.id,
               lesson_id: booking.lesson_id,
+              instructor_id: booking.instructor_id,
+              syllabus_id: lesson?.syllabus_id || null,
               status: lessonStatus,
               instructor_comments: instructorComments,
               lesson_highlights: lessonHighlights,
@@ -188,6 +212,8 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
           },
           body: JSON.stringify({
             id: lessonProgress.id,
+            instructor_id: booking.instructor_id,
+            syllabus_id: lesson?.syllabus_id || null,
             status: lessonStatus,
             instructor_comments: instructorComments,
             lesson_highlights: lessonHighlights,
@@ -196,6 +222,7 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
             focus_next_lesson: nextSteps,
             weather_conditions: weatherConditions,
             safety_concerns: safetyObservations,
+            date: new Date().toISOString().split('T')[0],
           }),
         });
         
@@ -215,6 +242,7 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
 
     useImperativeHandle(ref, () => ({
       saveAllFormData,
+      getInvoiceId: () => invoice?.id || null,
     }));
 
     return (

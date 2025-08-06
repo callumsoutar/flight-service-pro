@@ -3,15 +3,19 @@ import { Badge } from '@/components/ui/badge';
 import InvoiceOptionsDropdown from '@/components/invoices/InvoiceOptionsDropdown';
 import * as React from 'react';
 
+interface InvoiceViewHeaderProps {
+  invoiceNumber: string;
+  status: string;
+  memberName: string;
+  bookingId?: string | null;
+}
+
 export default function InvoiceViewHeader({
   invoiceNumber,
   status,
   memberName,
-}: {
-  invoiceNumber: string;
-  status: string;
-  memberName: string;
-}) {
+  bookingId,
+}: InvoiceViewHeaderProps) {
   return (
     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
       <div>
@@ -22,8 +26,8 @@ export default function InvoiceViewHeader({
         <div className="text-muted-foreground text-base mt-1">Invoice for {memberName}</div>
       </div>
       <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mt-2 md:mt-0">
-        <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 px-3 py-1.5 text-sm font-semibold">{status}</Badge>
-        <InvoiceOptionsDropdown />
+        <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 text-lg px-4 py-2 font-semibold">{status}</Badge>
+        <InvoiceOptionsDropdown bookingId={bookingId} />
       </div>
     </div>
   );

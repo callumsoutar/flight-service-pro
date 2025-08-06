@@ -7,6 +7,7 @@ export type Syllabus = {
   created_at: string;
   updated_at: string;
   number_of_exams: number;
+  is_active: boolean;
 };
 
 export type SyllabusInsert = {
@@ -16,6 +17,7 @@ export type SyllabusInsert = {
   created_at?: string;
   updated_at?: string;
   number_of_exams?: number;
+  is_active?: boolean;
 };
 
 export type SyllabusUpdate = {
@@ -25,4 +27,5 @@ export type SyllabusUpdate = {
   created_at?: string;
   updated_at?: string;
   number_of_exams?: number;
+  is_active?: boolean;
 }; 

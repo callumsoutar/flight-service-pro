@@ -64,7 +64,7 @@ export default function RenewMembershipModal({
     }
   }, [open, currentMembership]);
 
-  const selectedType = membershipTypes.find(t => t.id === selectedTypeId) || currentMembership.membership_type;
+  const selectedType = membershipTypes.find(t => t.id === selectedTypeId) || currentMembership.membership_types;
   const isChangingType = selectedTypeId !== currentMembership.membership_type_id;
 
   // Calculate new expiry date
@@ -110,10 +110,10 @@ export default function RenewMembershipModal({
                 </Badge>
               </div>
               <div className="text-sm text-gray-600">
-                <span className="font-medium">{currentMembership.membership_type?.name}</span>
-                {currentMembership.membership_type?.price === 0 
+                <span className="font-medium">{currentMembership.membership_types?.name}</span>
+                {currentMembership.membership_types?.price === 0 
                   ? " • Free" 
-                  : ` • $${currentMembership.membership_type?.price}/year`}
+                  : ` • $${currentMembership.membership_types?.price}/year`}
               </div>
             </CardContent>
           </Card>
@@ -143,7 +143,7 @@ export default function RenewMembershipModal({
               <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
                 <div className="flex items-center gap-2 text-sm text-blue-800">
                   <CheckCircle className="h-4 w-4" />
-                  <span>You&apos;re changing from <strong>{currentMembership.membership_type?.name}</strong> to <strong>{selectedType?.name}</strong></span>
+                  <span>You&apos;re changing from <strong>{currentMembership.membership_types?.name}</strong> to <strong>{selectedType?.name}</strong></span>
                 </div>
               </div>
             )}

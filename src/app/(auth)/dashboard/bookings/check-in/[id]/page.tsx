@@ -1,11 +1,10 @@
 import { BookingStages, BOOKING_STAGES } from "@/components/bookings/BookingStages";
 import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
-import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/SupabaseServerClient";
 import BookingCheckInClient from "./BookingCheckInClient";
 import BookingActions from "@/components/bookings/BookingActions";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
-import { STATUS_BADGE } from "@/components/bookings/statusBadge";
+import { StatusBadge } from "@/components/bookings/StatusBadge";
 import { notFound } from "next/navigation";
 
 interface BookingCheckInPageProps {
@@ -75,7 +74,7 @@ export default async function BookingCheckInPage({ params }: BookingCheckInPageP
     };
   });
 
-  const status = (booking?.status as keyof typeof STATUS_BADGE) ?? "unconfirmed";
+  const status = booking?.status ?? "unconfirmed";
 
   return (
     <div className="w-full min-h-screen flex flex-col items-center">
@@ -90,7 +89,7 @@ export default async function BookingCheckInPage({ params }: BookingCheckInPageP
               lastName={booking.user?.last_name}
             />
           </div>
-          <Badge className={STATUS_BADGE[status].color + " text-lg px-4 py-2 font-semibold"}>{STATUS_BADGE[status].label}</Badge>
+          <StatusBadge status={status} className="text-lg px-4 py-2 font-semibold" />
           <div className="flex-none flex items-center justify-end gap-3">
             <BookingActions status={status} bookingId={booking.id} mode="check-in" />
             <BookingStagesOptions bookingId={bookingId} instructorCommentsCount={instructorCommentsCount} />

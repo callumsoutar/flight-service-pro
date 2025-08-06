@@ -1,11 +1,12 @@
 "use client";
-import React, { useRef } from "react";
-import { Badge } from "@/components/ui/badge";
+import React, { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 import DebriefFormClient, { DebriefFormClientHandle } from "./DebriefFormClient";
-import { STATUS_BADGE } from "@/components/bookings/statusBadge";
+import { StatusBadge } from "@/components/bookings/StatusBadge";
 import { Booking, BookingStatus } from "@/types/bookings";
+import { useRouter } from "next/navigation";
+import { Receipt } from "lucide-react";
 
 interface DebriefClientShellProps {
   booking: Booking;
@@ -16,10 +17,41 @@ interface DebriefClientShellProps {
 
 const DebriefClientShell: React.FC<DebriefClientShellProps> = ({ booking, member, status, BookingStages }) => {
   const debriefFormRef = useRef<DebriefFormClientHandle>(null);
+  const router = useRouter();
+  const [hasInvoice, setHasInvoice] = useState<boolean | null>(null);
 
-  const handleSaveAndContinue = () => {
+  // Check if invoice exists when component mounts for button text
+  useEffect(() => {
+    const checkInvoice = async () => {
+      try {
+        const res = await fetch(`/api/invoices?booking_id=${booking.id}`);
+        const data = await res.json();
+        setHasInvoice(data.invoices && data.invoices.length > 0);
+      } catch {
+        setHasInvoice(false);
+      }
+    };
+    if (booking.id) {
+      checkInvoice();
+    }
+  }, [booking.id]);
+
+  const handleSaveAndContinue = async () => {
     if (debriefFormRef.current) {
-      debriefFormRef.current.saveAllFormData();
+      await debriefFormRef.current.saveAllFormData();
+    }
+  };
+
+  const handleSaveAndViewInvoice = async () => {
+    if (debriefFormRef.current) {
+      await debriefFormRef.current.saveAllFormData();
+      const invoiceId = debriefFormRef.current.getInvoiceId();
+      if (invoiceId) {
+        router.push(`/dashboard/invoices/view/${invoiceId}`);
+      } else {
+        // If no invoice exists, navigate to booking check-in to create one
+        router.push(`/dashboard/bookings/check-in/${booking.id}`);
+      }
     }
   };
 
@@ -35,13 +67,24 @@ const DebriefClientShell: React.FC<DebriefClientShellProps> = ({ booking, member
             lastName={member.last_name}
           />
         </div>
-        <Badge className={STATUS_BADGE[status as BookingStatus].color + " text-lg px-4 py-2 font-semibold"}>{STATUS_BADGE[status as BookingStatus].label}</Badge>
-        <Button
-          className="h-10 px-6 text-base font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-indigo-300"
-          onClick={handleSaveAndContinue}
-        >
-          Save and Continue
-        </Button>
+                  <StatusBadge status={status as BookingStatus} className="text-lg px-4 py-2 font-semibold" />
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            className="h-10 px-6 text-base font-semibold border-gray-300 text-gray-700 hover:bg-gray-50 rounded-xl shadow-sm transition-all"
+            onClick={handleSaveAndContinue}
+          >
+            Save
+          </Button>
+          <Button
+            className="h-10 px-6 text-base font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-indigo-300"
+            onClick={handleSaveAndViewInvoice}
+            title={hasInvoice ? "Save debrief and view invoice" : "Save debrief and go to check-in to create invoice"}
+          >
+            <Receipt className="w-4 h-4" />
+            {hasInvoice ? "Save & View Invoice" : "Save & Create Invoice"}
+          </Button>
+        </div>
       </div>
       {BookingStages}
       <DebriefFormClient ref={debriefFormRef} booking={booking} member={member} />

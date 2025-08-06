@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/SupabaseServerClient";
+import { User } from "@/types/users";
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
@@ -14,10 +15,10 @@ export async function GET(req: NextRequest) {
   const id = searchParams.get("id");
   const ids = searchParams.get("ids");
 
-  // Simple fetch of all users - minimal fields to avoid stack depth issues
+  // Fetch all users with all fields
   const { data, error } = await supabase
     .from("users")
-    .select("id, first_name, last_name, email, account_balance")
+    .select("id, first_name, last_name, email, phone, date_of_birth, gender, street_address, city, state, postal_code, country, next_of_kin_name, next_of_kin_phone, emergency_contact_relationship, medical_certificate_number, medical_certificate_expiry, pilot_license_number, pilot_license_type, pilot_license_expiry, date_of_last_flight, company_name, occupation, employer, notes, account_balance, is_active, created_at, updated_at")
     .order("last_name", { ascending: true });
 
   if (error) {
@@ -25,12 +26,36 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ users: [] }, { status: 500 });
   }
 
-  let users = (data || []).map((user: { id: string; first_name?: string; last_name?: string; email: string; account_balance?: number }) => ({
+  let users = (data || []).map((user: User) => ({
     id: user.id,
     first_name: user.first_name || "",
     last_name: user.last_name || "",
     email: user.email || "",
+    phone: user.phone || "",
+    date_of_birth: user.date_of_birth || null,
+    gender: user.gender || null,
+    street_address: user.street_address || "",
+    city: user.city || "",
+    state: user.state || "",
+    postal_code: user.postal_code || "",
+    country: user.country || "",
+    next_of_kin_name: user.next_of_kin_name || "",
+    next_of_kin_phone: user.next_of_kin_phone || "",
+    emergency_contact_relationship: user.emergency_contact_relationship || "",
+    medical_certificate_number: user.medical_certificate_number || "",
+    medical_certificate_expiry: user.medical_certificate_expiry || null,
+    pilot_license_number: user.pilot_license_number || "",
+    pilot_license_type: user.pilot_license_type || "",
+    pilot_license_expiry: user.pilot_license_expiry || null,
+    date_of_last_flight: user.date_of_last_flight || null,
+    company_name: user.company_name || "",
+    occupation: user.occupation || "",
+    employer: user.employer || "",
+    notes: user.notes || "",
     account_balance: user.account_balance || 0,
+    is_active: user.is_active !== undefined ? user.is_active : true,
+    created_at: user.created_at,
+    updated_at: user.updated_at,
     role: 'member', // Default role for now
   }));
 
@@ -60,7 +85,32 @@ export async function POST(req: NextRequest) {
   }
   
   const body = await req.json();
-  const { email, first_name, last_name, phone, date_of_birth, notes, role = "member" } = body;
+  const { 
+    email, 
+    first_name, 
+    last_name, 
+    phone, 
+    date_of_birth, 
+    gender,
+    street_address,
+    city,
+    state,
+    postal_code,
+    country,
+    next_of_kin_name,
+    next_of_kin_phone,
+    emergency_contact_relationship,
+    medical_certificate_number,
+    medical_certificate_expiry,
+    pilot_license_number,
+    pilot_license_type,
+    pilot_license_expiry,
+    company_name,
+    occupation,
+    employer,
+    notes, 
+    role = "member" 
+  } = body;
   
   if (!email) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
@@ -85,7 +135,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
   }
 
-  // Create user record in users table (without role column)
+  // Create user record in users table with all fields
   const { data: userData, error: userError } = await supabase
     .from("users")
     .insert([{
@@ -95,6 +145,23 @@ export async function POST(req: NextRequest) {
       last_name,
       phone,
       date_of_birth,
+      gender,
+      street_address,
+      city,
+      state,
+      postal_code,
+      country,
+      next_of_kin_name,
+      next_of_kin_phone,
+      emergency_contact_relationship,
+      medical_certificate_number,
+      medical_certificate_expiry,
+      pilot_license_number,
+      pilot_license_type,
+      pilot_license_expiry,
+      company_name,
+      occupation,
+      employer,
       notes,
     }])
     .select()

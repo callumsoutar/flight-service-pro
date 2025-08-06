@@ -18,8 +18,8 @@ export interface MembershipType {
 export interface Membership {
   id: string;
   user_id: string;
-  membership_type_id: string;
-  membership_type?: MembershipType; // Joined data
+  membership_type_id: string; // UUID foreign key to membership_types.id
+  membership_types?: MembershipType; // Joined data from Supabase
   start_date: string;
   end_date?: string;
   expiry_date: string;
@@ -73,11 +73,4 @@ export interface RenewMembershipRequest {
 }
 
 // Constants
-export const DEFAULT_GRACE_PERIOD_DAYS = 30;
-export const MEMBERSHIP_TYPE_CODES = {
-  FLYING_MEMBER: 'flying_member',
-  NON_FLYING_MEMBER: 'non_flying_member',
-  STAFF_MEMBERSHIP: 'staff_membership',
-  JUNIOR_MEMBER: 'junior_member',
-  LIFE_MEMBER: 'life_member',
-} as const; 
+export const DEFAULT_GRACE_PERIOD_DAYS = 30; 

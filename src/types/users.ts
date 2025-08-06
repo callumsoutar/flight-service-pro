@@ -1,4 +1,4 @@
-export type GenderEnum = "male" | "female" | "other" | "prefer_not_to_say";
+export type GenderEnum = "male" | "female";
 export type UserRole = "admin" | "instructor" | "member" | "student";
 
 export interface User {
@@ -8,21 +8,28 @@ export interface User {
   email: string;
   phone?: string;
   date_of_birth?: string; // date (YYYY-MM-DD)
-  license_number?: string;
-  license_expiry?: string; // date (YYYY-MM-DD)
-  medical_expiry?: string; // date (YYYY-MM-DD)
-  date_of_last_flight?: string; // timestamptz (ISO string)
-  profile_image_url?: string;
-  created_at: string; // timestamptz (ISO string)
-  updated_at: string; // timestamptz (ISO string)
-  street_address?: string;
   gender?: GenderEnum;
+  street_address?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
   next_of_kin_name?: string;
   next_of_kin_phone?: string;
+  emergency_contact_relationship?: string;
+  medical_certificate_number?: string;
+  medical_certificate_expiry?: string; // date (YYYY-MM-DD)
+  pilot_license_number?: string;
+  pilot_license_type?: string;
+  pilot_license_expiry?: string; // date (YYYY-MM-DD)
+  date_of_last_flight?: string; // timestamptz (ISO string)
   company_name?: string;
   occupation?: string;
   employer?: string;
   notes?: string;
-  account_balance?: number;
+  account_balance: number; // numeric, not nullable, default 0.00
+  is_active: boolean; // boolean, not nullable, default true
+  created_at: string; // timestamptz (ISO string)
+  updated_at: string; // timestamptz (ISO string)
   // Role is now handled via user_roles junction table
 } 

@@ -1,7 +1,6 @@
 import BookingDetails from "../BookingDetails";
 import BookingResources from "../BookingResources";
 import { BookingStages, BOOKING_STAGES, STATUS_TO_STAGE_IDX } from "@/components/bookings/BookingStages";
-import { Badge } from "@/components/ui/badge";
 import { Booking } from "@/types/bookings";
 import React from "react";
 import { createClient } from "@/lib/SupabaseServerClient";
@@ -12,7 +11,7 @@ import { Aircraft } from "@/types/aircraft";
 import BookingActions from "@/components/bookings/BookingActions";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 import BookingConfirmActionClient from "@/components/bookings/BookingConfirmActionClient";
-import { STATUS_BADGE } from "@/components/bookings/statusBadge";
+import { StatusBadge } from "@/components/bookings/StatusBadge";
 import { JoinedInstructor } from "../BookingResources";
 
 interface BookingViewPageProps {
@@ -122,6 +121,8 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
         first_name: u.name.split(" ")[0] || "", 
         last_name: u.name.split(" ").slice(1).join(" ") || "", 
         email: "", 
+        account_balance: 0,
+        is_active: true,
         created_at: "", 
         updated_at: "" 
       } : null;
@@ -191,7 +192,7 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
               />
             )}
           </div>
-          <Badge className={STATUS_BADGE[status].color + " text-lg px-4 py-2 font-semibold"}>{STATUS_BADGE[status].label}</Badge>
+          <StatusBadge status={status} className="text-lg px-4 py-2 font-semibold" />
           <div className="flex-none flex items-center justify-end gap-3">
             {/* Render Confirm button if booking is unconfirmed (client component wrapper) */}
             {booking && booking.id && (

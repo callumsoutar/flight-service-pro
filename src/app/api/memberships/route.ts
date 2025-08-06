@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     .from("memberships")
     .select(`
       *,
-      membership_types (
+      membership_types!memberships_membership_type_id_fkey (
         id, name, code, description, price, duration_months, benefits
       )
     `)
@@ -75,9 +75,10 @@ export async function GET(req: NextRequest) {
 
   if (summary) {
     // Return summary with status calculation
+    // Include unpaid memberships as current - they just need payment
     const current_membership = memberships?.find(m => {
       const status = calculateMembershipStatus(m);
-      return status === "active" || status === "grace";
+      return status === "active" || status === "grace" || status === "unpaid";
     });
 
     const status = current_membership ? calculateMembershipStatus(current_membership) : "none";
@@ -97,7 +98,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const can_renew = current_membership && (status === "active" || status === "grace");
+    const can_renew = current_membership && (status === "active" || status === "grace" || status === "unpaid");
 
     return NextResponse.json({
       summary: {
@@ -133,7 +134,7 @@ export async function POST(req: NextRequest) {
       // Get the current membership
       const { data: currentMembership, error: fetchError } = await supabase
         .from("memberships")
-        .select("*, membership_types(*)")
+        .select("*, membership_types!memberships_membership_type_id_fkey(*)")
         .eq("id", validatedData.membership_id)
         .single();
 
@@ -161,7 +162,7 @@ export async function POST(req: NextRequest) {
       // Create new membership record
       const newMembershipData = {
         user_id: currentMembership.user_id,
-        membership_type_id: membershipTypeId,
+        membership_type_id: membershipTypeId, // Use UUID foreign key
         start_date: startDate.toISOString(),
         expiry_date: expiryDate.toISOString().split('T')[0], // Date only
         purchased_date: startDate.toISOString(),
@@ -222,7 +223,7 @@ export async function POST(req: NextRequest) {
 
       const membershipData = {
         user_id: validatedData.user_id,
-        membership_type_id: validatedData.membership_type_id,
+        membership_type_id: validatedData.membership_type_id, // Use UUID foreign key
         start_date: startDate.toISOString(),
         expiry_date: expiryDate.toISOString().split('T')[0], // Date only
         purchased_date: new Date().toISOString(),

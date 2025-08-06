@@ -170,14 +170,14 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-600">Type</p>
-                    <p className="font-medium">{membershipSummary.current_membership.membership_type?.name}</p>
+                    <p className="font-medium">{membershipSummary.current_membership.membership_types?.name}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Annual Fee</p>
                     <p className="font-medium">
-                      {membershipSummary.current_membership.membership_type?.price === 0 
+                      {membershipSummary.current_membership.membership_types?.price === 0 
                         ? 'Free' 
-                        : `$${membershipSummary.current_membership.membership_type?.price}`}
+                        : `$${membershipSummary.current_membership.membership_types?.price}`}
                     </p>
                   </div>
                   <div>
@@ -204,7 +204,18 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
                   </div>
                 </div>
 
-                {isMembershipExpiringSoon(membershipSummary.current_membership) && (
+                {membershipSummary.status === 'unpaid' && (
+                  <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-red-600" />
+                      <span className="text-sm text-red-800">
+                        Payment required! Membership benefits are suspended until payment is received.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {membershipSummary.status !== 'unpaid' && isMembershipExpiringSoon(membershipSummary.current_membership) && (
                   <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4 text-orange-600" />
@@ -222,7 +233,8 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
                     className="flex items-center gap-2"
                   >
                     <RefreshCw className={`h-4 w-4 ${isRenewing ? 'animate-spin' : ''}`} />
-                    {isRenewing ? 'Processing...' : 'Renew Membership'}
+                    {isRenewing ? 'Processing...' : 
+                     membershipSummary.status === 'unpaid' ? 'Pay / Renew Membership' : 'Renew Membership'}
                   </Button>
                   <Button variant="outline" onClick={() => {}}>
                     View Invoice
@@ -253,49 +265,61 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
                 </h3>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {membershipSummary.membership_history.map((membership) => {
-                    const membershipStatus = calculateMembershipStatus(membership);
-                    const statusClasses = getStatusBadgeClasses(membershipStatus);
-                    
-                    return (
-                      <div key={membership.id} className="border rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{membership.membership_type?.name}</span>
-                            <Badge className={statusClasses}>
-                              {getStatusText(membershipStatus)}
-                            </Badge>
-                          </div>
-                          <span className="text-sm text-gray-500">
-                            {format(new Date(membership.start_date), 'MMM dd, yyyy')} - {format(new Date(membership.expiry_date), 'MMM dd, yyyy')}
-                          </span>
-                        </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 pr-4 font-medium text-gray-900">Type</th>
+                        <th className="text-left py-3 pr-4 font-medium text-gray-900">Status</th>
+                        <th className="text-left py-3 pr-4 font-medium text-gray-900">Period</th>
+                        <th className="text-left py-3 pr-4 font-medium text-gray-900">Fee</th>
+                        <th className="text-left py-3 pr-4 font-medium text-gray-900">Payment</th>
+                        <th className="text-left py-3 font-medium text-gray-900">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {membershipSummary.membership_history.map((membership) => {
+                        const membershipStatus = calculateMembershipStatus(membership);
+                        const statusClasses = getStatusBadgeClasses(membershipStatus);
                         
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <span className="text-gray-600">Fee: </span>
-                            <span className="font-medium">
-                              {membership.membership_type?.price === 0 ? 'Free' : `$${membership.membership_type?.price}`}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-gray-600">Payment: </span>
-                            <Badge variant={membership.fee_paid ? "default" : "secondary"} className="text-xs">
-                              {membership.fee_paid ? "Paid" : "Unpaid"}
-                            </Badge>
-                          </div>
-                        </div>
-
-                        {membership.notes && (
-                          <div className="mt-2 text-sm text-gray-600">
-                            <span className="font-medium">Notes: </span>
-                            {membership.notes}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                        return (
+                          <tr key={membership.id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-3 pr-4 font-medium text-gray-900">
+                              {membership.membership_types?.name}
+                            </td>
+                            <td className="py-3 pr-4">
+                              <Badge className={statusClasses}>
+                                {getStatusText(membershipStatus)}
+                              </Badge>
+                            </td>
+                            <td className="py-3 pr-4 text-sm text-gray-600">
+                              <div className="flex flex-col">
+                                <span>{format(new Date(membership.start_date), 'MMM dd, yyyy')}</span>
+                                <span className="text-xs text-gray-500">to {format(new Date(membership.expiry_date), 'MMM dd, yyyy')}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 pr-4 font-medium">
+                              {membership.membership_types?.price === 0 ? 'Free' : `$${membership.membership_types?.price}`}
+                            </td>
+                            <td className="py-3 pr-4">
+                              <Badge variant={membership.fee_paid ? "default" : "secondary"} className="text-xs">
+                                {membership.fee_paid ? "Paid" : "Unpaid"}
+                              </Badge>
+                            </td>
+                            <td className="py-3 text-sm text-gray-600 max-w-xs">
+                              {membership.notes ? (
+                                <span className="truncate block" title={membership.notes}>
+                                  {membership.notes}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </CardContent>
             </Card>
