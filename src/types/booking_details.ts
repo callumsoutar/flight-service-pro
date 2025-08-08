@@ -7,7 +7,6 @@ export interface BookingDetails {
   remarks?: string | null;
   authorization_completed: boolean;
   booking_id: string;
-  organization_id: string;
   created_at: string;
   updated_at: string;
   override_conflict: boolean;

@@ -9,6 +9,9 @@ import MemberTrainingTab from "./tabs/MemberTrainingTab";
 import MemberSyllabusEnrollmentTab from "./tabs/MemberSyllabusEnrollmentTab";
 import MemberTrainingHistoryTab from "./tabs/MemberTrainingHistoryTab";
 import MemberAccountTab from "./tabs/MemberAccountTab";
+import MemberPilotDetailsTab from "./tabs/MemberPilotDetailsTab";
+import MemberFlightHistoryTab from "./tabs/MemberFlightHistoryTab";
+import MemberBookingsTab from "./tabs/MemberBookingsTab";
 import * as Tabs from "@radix-ui/react-tabs";
 import {
   DropdownMenu,
@@ -109,10 +112,7 @@ export default function MemberTabs({ member }: { member: User }) {
             <MemberContactTab member={member} />
           </Tabs.Content>
           <Tabs.Content value="pilot" className="h-full w-full">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Pilot Details</h3>
-              <p className="text-gray-600">Pilot certification and licensing information will be displayed here.</p>
-            </div>
+            <MemberPilotDetailsTab memberId={member.id} />
           </Tabs.Content>
           <Tabs.Content value="memberships" className="h-full w-full">
             <MemberMembershipsTab memberId={member.id} />
@@ -121,16 +121,10 @@ export default function MemberTabs({ member }: { member: User }) {
             <MemberAccountTab memberId={member.id} />
           </Tabs.Content>
           <Tabs.Content value="flight" className="h-full w-full">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Flight History</h3>
-              <p className="text-gray-600">Flight logs and history will be displayed here.</p>
-            </div>
+            <MemberFlightHistoryTab memberId={member.id} />
           </Tabs.Content>
           <Tabs.Content value="bookings" className="h-full w-full">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Bookings</h3>
-              <p className="text-gray-600">Current and past bookings will be displayed here.</p>
-            </div>
+            <MemberBookingsTab memberId={member.id} />
           </Tabs.Content>
           <Tabs.Content value="exams" className="h-full w-full">
             <MemberTrainingTab memberId={member.id} />

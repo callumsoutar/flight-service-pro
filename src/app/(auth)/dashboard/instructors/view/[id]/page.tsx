@@ -1,22 +1,17 @@
 import InstructorDetailsClient from "./InstructorDetailsClient";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/SupabaseServerClient";
-import { cookies } from "next/headers";
 import { ArrowLeft } from "lucide-react";
 
 export default async function InstructorViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const cookieStore = await cookies();
-  const currentOrgId = cookieStore.get("current_org_id")?.value;
-  if (!currentOrgId) return notFound();
 
   // Fetch instructor with joined user fields
   const { data: instructor, error } = await supabase
     .from("instructors")
-    .select(`*, user:user_id(id, email, first_name, last_name, profile_image_url)`)
+    .select(`*, user:user_id(id, email, first_name, last_name)`)
     .eq("id", id)
-    .eq("organization_id", currentOrgId)
     .single();
 
   if (error || !instructor) return notFound();
@@ -28,7 +23,7 @@ export default async function InstructorViewPage({ params }: { params: Promise<{
     first_name: user?.first_name ?? "",
     last_name: user?.last_name ?? "",
     email: user?.email ?? "",
-    profile_image_url: user?.profile_image_url ?? "/public/file.svg",
+    profile_image_url: "/public/file.svg", // Default placeholder since profile_image_url doesn't exist
     // Optionally, add status logic if needed
     status: instructor.status,
   };

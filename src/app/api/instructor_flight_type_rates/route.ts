@@ -5,34 +5,29 @@ import { createClient } from "@/lib/supabase/server";
 const rateSchema = z.object({
   instructor_id: z.string().uuid(),
   flight_type_id: z.string().uuid(),
-  organization_id: z.string().uuid(),
   rate: z.number().min(0),
-  currency: z.string().min(1),
-  effective_from: z.string().min(1),
+  currency: z.string().min(1).optional(),
+  effective_from: z.string().min(1).optional(),
 });
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { searchParams } = new URL(req.url);
-  const organization_id = searchParams.get("organization_id");
   const instructor_id = searchParams.get("instructor_id");
   const flight_type_id = searchParams.get("flight_type_id");
-  if (!organization_id) {
-    return NextResponse.json({ error: "organization_id required" }, { status: 400 });
-  }
+
   let query = supabase
     .from("instructor_flight_type_rates")
     .select("*");
-  query = query.eq("organization_id", organization_id);
   if (instructor_id) query = query.eq("instructor_id", instructor_id);
   if (flight_type_id) query = query.eq("flight_type_id", flight_type_id);
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  // If all three are provided, return a single rate (or null)
+  // If both are provided, return a single rate (or null)
   if (instructor_id && flight_type_id) {
     return NextResponse.json({ rate: data?.[0] || null }, { status: 200 });
   }
-  // Otherwise, return all rates for the org (optionally filtered)
+  // Otherwise, return all rates (optionally filtered)
   return NextResponse.json({ rates: data }, { status: 200 });
 }
 

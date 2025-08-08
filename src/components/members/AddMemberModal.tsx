@@ -20,12 +20,11 @@ import { format } from "date-fns";
 interface AddMemberModalProps {
   open: boolean;
   onClose: () => void;
-  orgId: string;
   refresh?: () => void;
   onAdd?: (user: User) => void;
 }
 
-export const AddMemberModal: React.FC<AddMemberModalProps> = ({ open, onClose, orgId, refresh, onAdd }) => {
+export const AddMemberModal: React.FC<AddMemberModalProps> = ({ open, onClose, refresh, onAdd }) => {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -58,13 +57,13 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ open, onClose, o
       return;
     }
     const payload = {
-      organization_id: orgId,
       first_name: firstName || null,
       last_name: lastName || null,
       email,
       phone: phone || null,
       date_of_birth: dateOfBirth ? format(dateOfBirth, "yyyy-MM-dd") : null,
       notes: notes || null,
+      role: "member", // Default role for new members (will be assigned via user_roles table)
     };
     const res = await fetch("/api/users", {
       method: "POST",

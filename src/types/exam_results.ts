@@ -4,9 +4,8 @@ export type ExamResult = {
   user_id: string;
   score?: number | null;
   result: 'PASS' | 'FAIL';
-  date_completed?: string | null;
-  kdrs_completed?: boolean | null;
-  kdrs_signed_by?: string | null;
-  organization_id: string;
+  exam_date?: string | null;
+  notes?: string | null;
   created_at: string;
+  updated_at: string;
 }; 

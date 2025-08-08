@@ -1,11 +1,9 @@
 import BookingDetails from "../BookingDetails";
 import BookingResources from "../BookingResources";
 import { BookingStages, BOOKING_STAGES, STATUS_TO_STAGE_IDX } from "@/components/bookings/BookingStages";
-import { Badge } from "@/components/ui/badge";
 import { Booking } from "@/types/bookings";
 import React from "react";
 import { createClient } from "@/lib/SupabaseServerClient";
-import { cookies } from "next/headers";
 import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
 import BookingHistoryCollapse from "../BookingHistoryCollapse";
 import { User } from "@/types/users";
@@ -13,7 +11,8 @@ import { Aircraft } from "@/types/aircraft";
 import BookingActions from "@/components/bookings/BookingActions";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 import BookingConfirmActionClient from "@/components/bookings/BookingConfirmActionClient";
-import { STATUS_BADGE } from "@/components/bookings/statusBadge";
+import { StatusBadge } from "@/components/bookings/StatusBadge";
+import { JoinedInstructor } from "../BookingResources";
 
 interface BookingViewPageProps {
   params: Promise<{ id: string }>;
@@ -22,12 +21,10 @@ interface BookingViewPageProps {
 export default async function BookingViewPage({ params }: BookingViewPageProps) {
   const { id: bookingId } = await params;
   const supabase = await createClient();
-  const cookiesList = await cookies();
-  const orgId = cookiesList.get("current_org_id")?.value;
 
   let booking: Booking | null = null;
   let member: User | null = null;
-  let instructor: User | null = null;
+  let instructor: JoinedInstructor | null = null;
   const lesson: Record<string, unknown> | null = null;
   let aircraft: Aircraft | null = null;
   const flightType: Record<string, unknown> | null = null;
@@ -37,88 +34,131 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
   let lessons: { id: string; name: string }[] = [];
   let flightTypes: { id: string; name: string }[] = [];
 
-  if (orgId) {
-    // Fetch booking with full user, instructor, and aircraft objects, plus lesson_id and flight_type_id
-    const { data: bookingData } = await supabase
-      .from("bookings")
-      .select(`*, user:user_id(*), instructor:instructor_id(*), aircraft:aircraft_id(*), lesson_id, flight_type_id`)
-      .eq("organization_id", orgId)
-      .eq("id", bookingId)
-      .single();
-    booking = bookingData;
+  // Fetch booking with full user, instructor, and aircraft objects, plus lesson_id and flight_type_id
+  const { data: bookingData } = await supabase
+    .from("bookings")
+    .select(`*, user:user_id(*), instructor:instructor_id(*, users:users!instructors_user_id_fkey(*)), aircraft:aircraft_id(*), lesson_id, flight_type_id`)
+    .eq("id", bookingId)
+    .single();
+  booking = bookingData;
 
-    // Fetch all members (users in org)
-    const { data: memberRows } = await supabase
-      .from("user_organizations")
-      .select("user_id, users(first_name, last_name)")
-      .eq("organization_id", orgId);
-    members = (memberRows || []).map((row: { user_id: string; users?: { first_name?: string; last_name?: string } | { first_name?: string; last_name?: string }[] }) => {
-      const userObj = Array.isArray(row.users) ? row.users[0] : row.users;
-      return {
-        id: row.user_id,
-        name: userObj ? `${userObj.first_name || ""} ${userObj.last_name || ""}`.trim() : row.user_id,
-      };
-    });
+  // Fetch all members (users) with their roles
+  const { data: memberRows } = await supabase
+    .from("users")
+    .select(`
+      id, 
+      first_name, 
+      last_name,
+      user_roles(
+        roles(name)
+      )
+    `);
+  members = (memberRows || []).map((user) => ({
+    id: user.id,
+    name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.id,
+  }));
 
-    // Fetch all instructors (users in org with instructor/admin/owner role)
-    const { data: instructorRows } = await supabase
-      .from("user_organizations")
-      .select("user_id, users(first_name, last_name, email), role")
-      .eq("organization_id", orgId)
-      .in("role", ["instructor", "admin", "owner"]);
-    instructors = (instructorRows || []).map((row: { user_id: string; users?: { first_name?: string; last_name?: string; email?: string } | { first_name?: string; last_name?: string; email?: string }[]; role: string }) => {
-      let name = row.user_id;
-      const userObj = Array.isArray(row.users) ? row.users[0] : row.users;
-      if (userObj) {
-        const fullName = `${userObj.first_name || ""} ${userObj.last_name || ""}`.trim();
-        if (fullName) {
-          name = fullName;
-        } else if (userObj.email) {
-          name = userObj.email;
-        }
+  // Fetch all instructors from the instructors table
+  const { data: instructorRows } = await supabase
+    .from("instructors")
+    .select(`
+      id,
+      user_id,
+      users!instructors_user_id_fkey (
+        id,
+        first_name,
+        last_name,
+        email
+      )
+    `);
+  
+  instructors = (instructorRows || []).map((instructor) => {
+    const user = instructor.users?.[0]; // users is an array, get first element
+    let name = instructor.id;
+    if (user?.first_name || user?.last_name) {
+      const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim();
+      if (fullName) {
+        name = fullName;
+      } else if (user.email) {
+        name = user.email;
       }
-      return {
-        id: row.user_id,
-        name,
-      };
-    });
-    console.log("INSTRUCTORS FOR DEBUG:", instructors);
+    }
+    return {
+      id: instructor.id, // This is now the instructor ID, not user ID
+      name,
+    };
+  });
+  console.log("INSTRUCTORS FOR DEBUG:", instructors);
 
-    // Fetch all aircraft
-    const { data: aircraftRows } = await supabase
-      .from("aircraft")
-      .select("id, registration, type")
-      .eq("organization_id", orgId);
-    aircraftList = (aircraftRows || []).map((a: { id: string; registration: string; type: string }) => ({
-      id: a.id,
-      registration: a.registration,
-      type: a.type,
-    }));
+  // Fetch all aircraft
+  const { data: aircraftRows } = await supabase
+    .from("aircraft")
+    .select("id, registration, type");
+  aircraftList = (aircraftRows || []).map((a: { id: string; registration: string; type: string }) => ({
+    id: a.id,
+    registration: a.registration,
+    type: a.type,
+  }));
 
-    // Fetch all lessons
-    const { data: lessonRows } = await supabase
-      .from("lessons")
-      .select("id, name")
-      .eq("organization_id", orgId);
-    lessons = (lessonRows || []).map((l: { id: string; name: string }) => ({ id: l.id, name: l.name }));
+  // Fetch all lessons
+  const { data: lessonRows } = await supabase
+    .from("lessons")
+    .select("id, name");
+  lessons = (lessonRows || []).map((l: { id: string; name: string }) => ({ id: l.id, name: l.name }));
 
-    // Fetch all flight types
-    const { data: flightTypeRows } = await supabase
-      .from("flight_types")
-      .select("id, name")
-      .eq("organization_id", orgId);
-    flightTypes = (flightTypeRows || []).map((f: { id: string; name: string }) => ({ id: f.id, name: f.name }));
-  }
+  // Fetch all flight types
+  const { data: flightTypeRows } = await supabase
+    .from("flight_types")
+    .select("id, name");
+  flightTypes = (flightTypeRows || []).map((f: { id: string; name: string }) => ({ id: f.id, name: f.name }));
 
   // Assign member, instructor, and aircraft only if booking is not null
   if (booking) {
     // Use booking.user, booking.instructor, and booking.aircraft if present (from Supabase join), else fallback to lookup and expand to full object
     const fallbackUser = (u: { id: string; name: string } | undefined): User | null =>
-      u ? { id: u.id, first_name: u.name.split(" ")[0] || "", last_name: u.name.split(" ").slice(1).join(" ") || "", email: "", created_at: "", updated_at: "" } : null;
+      u ? { 
+        id: u.id, 
+        first_name: u.name.split(" ")[0] || "", 
+        last_name: u.name.split(" ").slice(1).join(" ") || "", 
+        email: "", 
+        account_balance: 0,
+        is_active: true,
+        created_at: "", 
+        updated_at: "" 
+      } : null;
     const fallbackAircraft = (a: { id: string; registration: string; type: string } | undefined): Aircraft | null =>
-      a ? { id: a.id, registration: a.registration, type: a.type, organization_id: orgId || "", total_hours: "0", updated_at: "", current_tach: "0", current_hobbs: "0", manufacturer: null, year_manufactured: null, last_maintenance_date: null, next_maintenance_date: null, status: "active", capacity: null, for_ato: false, fuel_consumption: null, prioritise_scheduling: false, record_tacho: false, record_hobbs: false, record_airswitch: false, on_line: true, aircraft_image_url: null, engine_count: 1 } : null;
+      a ? { 
+        id: a.id, 
+        registration: a.registration, 
+        type: a.type, 
+        total_hours: 0, 
+        updated_at: "", 
+        current_tach: 0, 
+        current_hobbs: 0, 
+        manufacturer: null, 
+        year_manufactured: null, 
+        last_maintenance_date: null, 
+        next_maintenance_date: null, 
+        status: "active", 
+        capacity: null, 
+        for_ato: false, 
+        fuel_consumption: null, 
+        prioritise_scheduling: false, 
+        record_tacho: false, 
+        record_hobbs: false, 
+        record_airswitch: false, 
+        on_line: true, 
+        aircraft_image_url: null, 
+        engine_count: 1 
+      } : null;
     member = booking.user ?? fallbackUser(members.find((m) => m.id === booking.user_id));
-    instructor = booking.instructor ?? fallbackUser(instructors.find((i) => i.id === booking.instructor_id));
+    instructor =
+      booking.instructor &&
+      typeof booking.instructor === "object" &&
+      "users" in booking.instructor &&
+      "user_id" in booking.instructor
+        ? (booking.instructor as JoinedInstructor)
+        : null;
     aircraft = booking.aircraft ?? fallbackAircraft(aircraftList.find((a) => a.id === booking.aircraft_id));
   }
 
@@ -152,7 +192,7 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
               />
             )}
           </div>
-          <Badge className={STATUS_BADGE[status].color + " text-lg px-4 py-2 font-semibold"}>{STATUS_BADGE[status].label}</Badge>
+          <StatusBadge status={status} className="text-lg px-4 py-2 font-semibold" />
           <div className="flex-none flex items-center justify-end gap-3">
             {/* Render Confirm button if booking is unconfirmed (client component wrapper) */}
             {booking && booking.id && (
@@ -195,7 +235,7 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
         </div>
       </div>
       {/* Booking History Collapsible */}
-      <BookingHistoryCollapse bookingId={bookingId || ""} organizationId={orgId || ""} lessons={lessons} />
+      <BookingHistoryCollapse bookingId={bookingId || ""} lessons={lessons} />
     </div>
   );
 } 

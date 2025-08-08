@@ -1,51 +1,43 @@
 // Types generated from Supabase schema
 
-export type EquipmentStatus = 'active' | 'lost' | 'maintenance' | 'retired';
-export type EquipmentType =
-  | 'AIP'
-  | 'Stationery'
-  | 'Headset'
-  | 'Technology'
-  | 'Maps'
-  | 'Radio'
-  | 'Transponder'
-  | 'ELT'
-  | 'Lifejacket'
-  | 'FirstAidKit'
-  | 'FireExtinguisher'
-  | 'Other';
+export type EquipmentStatus = "active" | "lost" | "maintenance" | "retired";
+export type EquipmentType = "AIP" | "Stationery" | "Headset" | "Technology" | "Maps" | "Radio" | "Transponder" | "ELT" | "Lifejacket" | "FirstAidKit" | "FireExtinguisher" | "Other";
 
 export interface Equipment {
   id: string;
-  organization_id: string;
   name: string;
-  serial_number: string | null;
+  label?: string | null;
+  type: EquipmentType;
   status: EquipmentStatus;
-  type: EquipmentType | null;
+  serial_number?: string | null;
+  purchase_date?: string | null;
+  warranty_expiry?: string | null;
+  notes?: string | null;
   created_at: string | null;
   updated_at: string | null;
-  location: string | null;
-  year_purchased: number | null;
+  location?: string | null;
+  year_purchased?: number | null;
 }
 
-export interface EquipmentIssuance {
+export interface EquipmentIssuance {   
   id: string;
   equipment_id: string;
-  issued_to: string;
-  issued_by: string;
-  issued_at: string;
+  user_id: string; // Database uses user_id, not issued_to
+  issued_at: string;  
   returned_at: string | null;
+  expected_return: string | null; // Added expected return date field
   notes: string | null;
-  expected_return_date: string | null;
+  issued_by: string;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface EquipmentUpdate {
   id: string;
   equipment_id: string;
-  updated_by: string;
   updated_at: string;
   notes: string | null;
   next_due_at: string | null;
+  updated_by: string;
   created_at: string | null;
-  organization_id: string;
 } 

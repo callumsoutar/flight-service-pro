@@ -1,11 +1,10 @@
 // Types for the observations table and related enums
 
 export type ObservationStatus = 'low' | 'medium' | 'high';
-export type ObservationStage = 'open' | 'investigating' | 'monitoring' | 'closed';
+export type ObservationStage = 'open' | 'investigation' | 'resolution' | 'closed';
 
 export interface Observation {
   id: string;
-  organization_id: string;
   user_id: string;
   name: string;
   description?: string | null;
@@ -20,7 +19,6 @@ export interface Observation {
 }
 
 export interface ObservationInsert {
-  organization_id: string;
   user_id: string;
   name: string;
   description?: string | null;
@@ -36,7 +34,6 @@ export interface ObservationInsert {
 
 export interface ObservationUpdate {
   id?: string;
-  organization_id?: string;
   user_id?: string;
   name?: string;
   description?: string | null;

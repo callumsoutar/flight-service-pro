@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { User } from "@/types/users";
+import { MembershipStatus } from "@/types/memberships";
 import MemberProfileCard from "@/components/members/MemberProfileCard";
 import MemberTabs from "@/components/members/MemberTabs";
 import { ArrowLeft } from "lucide-react";
-import { cookies } from "next/headers";
 
 function formatJoinDate(dateString: string): string {
   const date = new Date(dateString);
@@ -14,13 +14,6 @@ function formatJoinDate(dateString: string): string {
 export default async function MemberViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-
-  // Get current org from cookie
-  const cookieStore = await cookies();
-  const currentOrgId = cookieStore.get("current_org_id")?.value;
-  if (!currentOrgId) {
-    notFound();
-  }
 
   // Fetch the currently logged-in user
   const { data: authUserData, error: authUserError } = await supabase.auth.getUser();
@@ -33,26 +26,70 @@ export default async function MemberViewPage({ params }: { params: Promise<{ id:
       email: user.email,
       name: user.user_metadata?.full_name || user.user_metadata?.name,
       metadata: user.user_metadata,
-      organization_id: user.user_metadata?.organization_id,
     });
   }
 
-  // Enforce org membership: join user_organizations and filter by org and user id
+  // Fetch user with roles - specify the exact relationship
   const { data, error } = await supabase
-    .from("user_organizations")
-    .select(`user:users(*)`)
-    .eq("user_id", id)
-    .eq("organization_id", currentOrgId)
+    .from("users")
+    .select(`
+      *,
+      user_roles!user_roles_user_id_fkey (
+        roles (
+          name
+        )
+      )
+    `)
+    .eq("id", id)
     .limit(1)
     .single();
 
-  if (error || !data?.user) {
+  if (error || !data) {
     notFound();
   }
 
-  // Defensive: if data.user is an array, take the first element
-  const member: User = Array.isArray(data.user) ? data.user[0] : data.user;
+  // Add role information to the user object
+  const member: User = {
+    ...data,
+    role: data.user_roles && data.user_roles.length > 0 
+      ? data.user_roles[0]?.roles?.name || 'member'
+      : 'member'
+  };
+  
   const joinDate = formatJoinDate(member.created_at);
+
+  // Fetch membership status directly from database
+  let membershipStatus: MembershipStatus = "none";
+  try {
+    const { data: membershipData } = await supabase
+      .from("memberships")
+      .select("*, membership_types(*)")
+      .eq("user_id", id)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (membershipData) {
+      // Calculate status based on membership data
+      const now = new Date();
+      const expiryDate = new Date(membershipData.expiry_date);
+      const gracePeriodEnd = new Date(expiryDate.getTime() + (membershipData.grace_period_days * 24 * 60 * 60 * 1000));
+      
+      if (!membershipData.fee_paid) {
+        membershipStatus = "unpaid";
+      } else if (now <= expiryDate) {
+        membershipStatus = "active";
+      } else if (now <= gracePeriodEnd) {
+        membershipStatus = "grace";
+      } else {
+        membershipStatus = "expired";
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch membership status:', error);
+    // membershipStatus remains "none" as fallback
+  }
 
   return (
     <main className="w-full min-h-screen flex flex-col p-6 gap-8">
@@ -64,7 +101,7 @@ export default async function MemberViewPage({ params }: { params: Promise<{ id:
           </a>
         </div>
         {/* Member header and actions */}
-        <MemberProfileCard member={member} joinDate={joinDate} />
+        <MemberProfileCard member={member} joinDate={joinDate} membershipStatus={membershipStatus} />
         {/* Tabs area: fixed height so parent never grows taller than viewport */}
         <div className="w-full">
           <MemberTabs member={member} />

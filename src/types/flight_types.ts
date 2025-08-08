@@ -1,6 +1,5 @@
 export interface FlightType {
   id: string;
-  organization_id: string;
   name: string;
   description?: string | null;
   created_at: string;

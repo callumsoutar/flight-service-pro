@@ -1,16 +1,14 @@
 import { BookingStages, BOOKING_STAGES } from "@/components/bookings/BookingStages";
 import BookingActions from "@/components/bookings/BookingActions";
-import { Badge } from "@/components/ui/badge";
 import { Booking } from "@/types/bookings";
 import React from "react";
 import { createClient } from "@/lib/SupabaseServerClient";
-import { cookies } from "next/headers";
 import BookingHistoryCollapse from "../../view/BookingHistoryCollapse";
 import CheckOutForm from "@/components/bookings/CheckOutForm";
 import { BookingDetails } from "@/types/booking_details";
 import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
-import { STATUS_BADGE } from "@/components/bookings/statusBadge";
+import { StatusBadge } from "@/components/bookings/StatusBadge";
 
 interface BookingCheckOutPageProps {
   params: Promise<{ id: string }>;
@@ -19,8 +17,6 @@ interface BookingCheckOutPageProps {
 export default async function BookingCheckOutPage({ params }: BookingCheckOutPageProps) {
   const { id: bookingId } = await params;
   const supabase = await createClient();
-  const cookiesList = await cookies();
-  const orgId = cookiesList.get("current_org_id")?.value;
 
   let booking: Booking | null = null;
   let members: { id: string; name: string }[] = [];
@@ -30,86 +26,84 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
   let flightTypes: { id: string; name: string }[] = [];
   let bookingDetails: BookingDetails | null = null;
 
-  if (orgId) {
-    // Fetch booking with full user, instructor, and aircraft objects, plus lesson_id and flight_type_id
-    const { data: bookingData } = await supabase
-      .from("bookings")
-      .select(`*, user:user_id(*), instructor:instructor_id(*), aircraft:aircraft_id(*), lesson_id, flight_type_id`)
-      .eq("organization_id", orgId)
-      .eq("id", bookingId)
-      .single();
-    booking = bookingData;
+  // Fetch booking with full user, instructor, and aircraft objects, plus lesson_id and flight_type_id
+  const { data: bookingData } = await supabase
+    .from("bookings")
+    .select(`*, user:user_id(*), instructor:instructor_id(*), aircraft:aircraft_id(*), lesson_id, flight_type_id`)
+    .eq("id", bookingId)
+    .single();
+  booking = bookingData;
 
-    // Fetch all members (users in org)
-    const { data: memberRows } = await supabase
-      .from("user_organizations")
-      .select("user_id, users(first_name, last_name)")
-      .eq("organization_id", orgId);
-    members = (memberRows || []).map((row: { user_id: string; users?: { first_name?: string; last_name?: string } | { first_name?: string; last_name?: string }[] }) => {
-      const userObj = Array.isArray(row.users) ? row.users[0] : row.users;
-      return {
-        id: row.user_id,
-        name: userObj ? `${userObj.first_name || ""} ${userObj.last_name || ""}`.trim() : row.user_id,
-      };
-    });
+  // Fetch all members (users)
+  const { data: memberRows } = await supabase
+    .from("users")
+    .select("id, first_name, last_name");
+  members = (memberRows || []).map((user) => ({
+    id: user.id,
+    name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.id,
+  }));
 
-    // Fetch all instructors (users in org with instructor/admin/owner role)
-    const { data: instructorRows } = await supabase
-      .from("user_organizations")
-      .select("user_id, users(first_name, last_name, email), role")
-      .eq("organization_id", orgId)
-      .in("role", ["instructor", "admin", "owner"]);
-    instructors = (instructorRows || []).map((row: { user_id: string; users?: { first_name?: string; last_name?: string; email?: string } | { first_name?: string; last_name?: string; email?: string }[]; role: string }) => {
-      let name = row.user_id;
-      const userObj = Array.isArray(row.users) ? row.users[0] : row.users;
-      if (userObj) {
-        const fullName = `${userObj.first_name || ""} ${userObj.last_name || ""}`.trim();
-        if (fullName) {
-          name = fullName;
-        } else if (userObj.email) {
-          name = userObj.email;
-        }
+  // Fetch all instructors from the instructors table (consistent with booking view page)
+  const { data: instructorRows } = await supabase
+    .from("instructors")
+    .select(`
+      id,
+      user_id,
+      users!instructors_user_id_fkey (
+        id,
+        first_name,
+        last_name,
+        email
+      )
+    `);
+  
+  instructors = (instructorRows || []).map((instructor) => {
+    const user = instructor.users?.[0]; // users is an array, get first element
+    let name = instructor.id;
+    if (user?.first_name || user?.last_name) {
+      const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim();
+      if (fullName) {
+        name = fullName;
+      } else if (user.email) {
+        name = user.email;
       }
-      return {
-        id: row.user_id,
-        name,
-      };
-    });
-
-    // Fetch all aircraft
-    const { data: aircraftRows } = await supabase
-      .from("aircraft")
-      .select("id, registration, type")
-      .eq("organization_id", orgId);
-    aircraftList = (aircraftRows || []).map((a: { id: string; registration: string; type: string }) => ({
-      id: a.id,
-      registration: a.registration,
-      type: a.type,
-    }));
-
-    // Fetch all lessons
-    const { data: lessonRows } = await supabase
-      .from("lessons")
-      .select("id, name")
-      .eq("organization_id", orgId);
-    lessons = (lessonRows || []).map((l: { id: string; name: string }) => ({ id: l.id, name: l.name }));
-
-    // Fetch all flight types
-    const { data: flightTypeRows } = await supabase
-      .from("flight_types")
-      .select("id, name")
-      .eq("organization_id", orgId);
-    flightTypes = (flightTypeRows || []).map((f: { id: string; name: string }) => ({ id: f.id, name: f.name }));
-
-    // Fetch booking_details for this booking
-    if (booking && booking.id) {
-      const { data: detailsData } = await supabase
-        .from("booking_details")
-        .select("*")
-        .eq("booking_id", booking.id)
-        .single();
-      bookingDetails = detailsData;
     }
+    return {
+      id: instructor.id, // This is now the instructor ID, not user ID
+      name,
+    };
+  });
+
+  // Fetch all aircraft
+  const { data: aircraftRows } = await supabase
+    .from("aircraft")
+    .select("id, registration, type");
+  aircraftList = (aircraftRows || []).map((a: { id: string; registration: string; type: string }) => ({
+    id: a.id,
+    registration: a.registration,
+    type: a.type,
+  }));
+
+  // Fetch all lessons
+  const { data: lessonRows } = await supabase
+    .from("lessons")
+    .select("id, name");
+  lessons = (lessonRows || []).map((l: { id: string; name: string }) => ({ id: l.id, name: l.name }));
+
+  // Fetch all flight types
+  const { data: flightTypeRows } = await supabase
+    .from("flight_types")
+    .select("id, name");
+  flightTypes = (flightTypeRows || []).map((f: { id: string; name: string }) => ({ id: f.id, name: f.name }));
+
+  // Fetch booking_details for this booking
+  if (booking && booking.id) {
+    const { data: detailsData } = await supabase
+      .from("booking_details")
+      .select("*")
+      .eq("booking_id", booking.id)
+      .single();
+    bookingDetails = detailsData;
   }
 
   const status = booking?.status ?? "unconfirmed";
@@ -129,7 +123,7 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
               />
             )}
           </div>
-          <Badge className={STATUS_BADGE[status].color + " text-lg px-4 py-2 font-semibold"}>{STATUS_BADGE[status].label}</Badge>
+          <StatusBadge status={status} className="text-lg px-4 py-2 font-semibold" />
           <div className="flex-none flex items-center justify-end gap-3">
             {booking && booking.id && (
               <BookingActions status={status} bookingId={booking.id} hideCheckOutButton={true} />
@@ -153,7 +147,7 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
         )}
       </div>
       {/* Booking History Collapsible */}
-      <BookingHistoryCollapse bookingId={bookingId || ""} organizationId={orgId || ""} lessons={lessons} />
+      <BookingHistoryCollapse bookingId={bookingId || ""} lessons={lessons} />
     </div>
   );
 } 

@@ -8,10 +8,9 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, X, Mail, MessageCircle } from "lucide-react";
+import { ChevronDown, X, MessageCircle } from "lucide-react";
 import InstructorCommentsModal from "@/components/bookings/InstructorCommentsModal";
 import { CancelBookingModal } from "@/components/bookings/CancelBookingModal";
-import { useOrgContext } from "@/components/OrgContextProvider";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -23,14 +22,13 @@ interface BookingStagesOptionsProps {
 export default function BookingStagesOptions({ bookingId, instructorCommentsCount = 0 }: BookingStagesOptionsProps) {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const { currentOrgId } = useOrgContext();
   const [cancellationCategories, setCancellationCategories] = useState<{ id: string; name: string }[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!cancelOpen || !currentOrgId) return;
+    if (!cancelOpen) return;
     setLoadingCategories(true);
     fetch(`/api/cancellation_categories`)
       .then((res) => res.json())
@@ -42,7 +40,7 @@ export default function BookingStagesOptions({ bookingId, instructorCommentsCoun
         setCancellationCategories([]);
         setLoadingCategories(false);
       });
-  }, [cancelOpen, currentOrgId]);
+  }, [cancelOpen]);
 
   const handleCancelSubmit = async (data: { categoryId: string; reason: string }) => {
     setCancelling(true);
@@ -77,34 +75,34 @@ export default function BookingStagesOptions({ bookingId, instructorCommentsCoun
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            className="h-10 px-6 text-base font-bold flex items-center gap-2 rounded-xl border border-gray-200 shadow-sm bg-white transition-colors duration-150 hover:bg-gray-100 hover:border-gray-300 focus-visible:ring-2 focus-visible:ring-blue-400 cursor-pointer"
-          >
-            Options <ChevronDown className="w-5 h-5" />
+          <Button variant="outline" className="h-10 px-6 text-base font-bold rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-gray-300">
+            Options <ChevronDown className="w-4 h-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[200px]">
-          <DropdownMenuItem onClick={() => setCancelOpen(true)} className="text-destructive text-sm py-2 flex items-center gap-2 w-full">
-            <X className="w-4 h-4" />
-            <span className="flex-1 text-left">Cancel Booking</span>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setCommentsOpen(true)}>
+            <MessageCircle className="w-4 h-4 mr-2" />
+            Instructor Comments
+            {instructorCommentsCount > 0 && (
+              <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                {instructorCommentsCount}
+              </span>
+            )}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => {/* TODO: Email confirmation logic */}} className="text-sm py-2 flex items-center gap-2 w-full">
-            <Mail className="w-4 h-4" />
-            <span className="flex-1 text-left">Email Confirmation</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setCommentsOpen(true)} className="text-sm py-2 flex items-center gap-2 w-full">
-            <MessageCircle className="w-4 h-4" />
-            <span className="flex-1 text-left">Instructor Comments</span>
-            <span className={`ml-2 inline-flex items-center justify-center rounded-full font-bold text-white text-xs h-5 w-5 ${instructorCommentsCount >= 1 ? 'bg-red-600' : 'bg-blue-600'}`}
-              aria-label={`Instructor comments count: ${instructorCommentsCount}`}
-            >
-              {instructorCommentsCount}
-            </span>
+          <DropdownMenuItem onClick={() => setCancelOpen(true)} className="text-red-600">
+            <X className="w-4 h-4 mr-2" />
+            Cancel Booking
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <InstructorCommentsModal
+        open={commentsOpen}
+        onOpenChange={setCommentsOpen}
+        bookingId={bookingId}
+      />
+
       <CancelBookingModal
         open={cancelOpen}
         onOpenChange={setCancelOpen}
@@ -112,7 +110,6 @@ export default function BookingStagesOptions({ bookingId, instructorCommentsCoun
         categories={cancellationCategories}
         loading={loadingCategories || cancelling}
       />
-      <InstructorCommentsModal bookingId={bookingId} open={commentsOpen} onOpenChange={setCommentsOpen} />
     </>
   );
 } 

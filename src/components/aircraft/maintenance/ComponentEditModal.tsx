@@ -151,7 +151,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[1200px] max-w-[98vw] mx-auto p-10 bg-white rounded-2xl shadow-xl border border-muted overflow-y-auto max-h-[90vh]">
+      <DialogContent className="w-[700px] max-w-[98vw] mx-auto p-10 bg-white rounded-2xl shadow-xl border border-muted overflow-y-auto max-h-[90vh]">
         <DialogHeader className="mb-2">
           <DialogTitle className="text-2xl font-bold mb-1 tracking-tight">Edit Component</DialogTitle>
           <DialogDescription className="mb-2 text-base text-muted-foreground font-normal">Update all details for this aircraft component.</DialogDescription>

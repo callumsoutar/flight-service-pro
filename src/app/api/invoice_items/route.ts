@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   // Fetch invoice_items for the invoice
   const { data, error } = await supabase
     .from("invoice_items")
-    .select("id, invoice_id, chargeable_id, description, quantity, rate, rate_inclusive, amount, tax_rate, tax_amount, total_amount, created_at, updated_at")
+    .select("id, invoice_id, chargeable_id, description, quantity, unit_price, rate_inclusive, amount, tax_rate, tax_amount, line_total, notes, created_at, updated_at")
     .eq("invoice_id", invoice_id)
     .order("created_at", { ascending: true });
   if (error) {
@@ -37,16 +37,25 @@ export async function POST(req: NextRequest) {
     chargeable_id,
     description,
     quantity,
-    rate,
-    rate_inclusive,
-    amount,
+    unit_price,
     tax_rate,
-    tax_amount,
-    total_amount,
   } = body;
-  if (!invoice_id || !description || !quantity || !rate) {
+  if (!invoice_id || !description || !quantity || !unit_price) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
+  
+  // Get the invoice to use its tax rate if not provided
+  let finalTaxRate = tax_rate;
+  if (!finalTaxRate) {
+    const { data: invoice } = await supabase
+      .from('invoices')
+      .select('tax_rate')
+      .eq('id', invoice_id)
+      .single();
+    finalTaxRate = invoice?.tax_rate || 0.15;
+  }
+  
+  // Let the database trigger calculate the derived fields
   const { data, error } = await supabase
     .from('invoice_items')
     .insert([
@@ -55,17 +64,14 @@ export async function POST(req: NextRequest) {
         chargeable_id,
         description,
         quantity,
-        rate,
-        rate_inclusive,
-        amount,
-        tax_rate,
-        tax_amount,
-        total_amount,
+        unit_price,
+        tax_rate: finalTaxRate,
       },
     ])
-    .select('id')
+    .select('id, amount, tax_amount, line_total, rate_inclusive')
     .single();
   if (error) {
+    console.error('Invoice item creation error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ id: data.id });
@@ -80,7 +86,7 @@ export async function PATCH(req: NextRequest) {
   }
   // Only allow updating certain fields
   const updatableFields = [
-    'quantity', 'rate', 'rate_inclusive', 'amount', 'tax_rate', 'tax_amount', 'total_amount', 'description', 'chargeable_id'
+    'quantity', 'unit_price', 'tax_rate', 'description', 'chargeable_id', 'notes'
   ];
   const updateData: Record<string, string | number | undefined> = {};
   for (const key of updatableFields) {

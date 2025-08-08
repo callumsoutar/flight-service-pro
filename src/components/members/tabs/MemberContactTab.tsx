@@ -69,21 +69,35 @@ export default function MemberContactTab({ member }: MemberContactTabProps) {
   const onSubmit = async (data: ContactFormValues) => {
     setIsSaving(true);
     setError(null);
+    
+    console.log('Submitting form data:', data);
+    console.log('Member ID:', member.id);
+    
     try {
       const res = await fetch(`/api/members?id=${member.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
+      
+      console.log('Response status:', res.status);
+      console.log('Response ok:', res.ok);
+      
       if (!res.ok) {
         const err = await res.json();
-        setError(err.error || "Failed to update member");
+        console.error('API Error:', err);
+        setError(err.error || `Failed to update member (${res.status})`);
+        toast.error(err.error || "Failed to update member");
       } else {
+        const result = await res.json();
+        console.log('Success response:', result);
         reset(data); // reset dirty state
         toast.success("Contact information saved!");
       }
-    } catch {
-      setError("Failed to update member");
+    } catch (err) {
+      console.error('Network error:', err);
+      setError("Failed to update member - network error");
+      toast.error("Failed to update member - network error");
     } finally {
       setIsSaving(false);
     }

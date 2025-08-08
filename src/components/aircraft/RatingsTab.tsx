@@ -7,7 +7,6 @@ import { X } from "lucide-react";
 
 interface RatingsTabProps {
   instructorId: string;
-  organizationId: string;
 }
 
 interface Endorsement {
@@ -20,10 +19,10 @@ interface InstructorEndorsement {
   id: string;
   instructor_id: string;
   endorsement_id: string;
-  granted_at: string;
+  issued_date: string;
 }
 
-export default function RatingsTab({ instructorId, organizationId }: RatingsTabProps) {
+export default function RatingsTab({ instructorId }: RatingsTabProps) {
   const [endorsements, setEndorsements] = useState<Endorsement[]>([]);
   const [instructorEndorsements, setInstructorEndorsements] = useState<InstructorEndorsement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +37,7 @@ export default function RatingsTab({ instructorId, organizationId }: RatingsTabP
       setError(null);
       try {
         const [endorsementsRes, instructorEndorsementsRes] = await Promise.all([
-          fetch(`/api/endorsements?organization_id=${organizationId}`),
+          fetch(`/api/endorsements`),
           fetch(`/api/instructor_endorsements?instructor_id=${instructorId}`),
         ]);
         const endorsementsData = await endorsementsRes.json();
@@ -52,7 +51,7 @@ export default function RatingsTab({ instructorId, organizationId }: RatingsTabP
       }
     }
     fetchData();
-  }, [instructorId, organizationId]);
+  }, [instructorId]);
 
   // Map assigned endorsements for fast lookup
   const assignedIds = new Set(instructorEndorsements.map((ie) => ie.endorsement_id));

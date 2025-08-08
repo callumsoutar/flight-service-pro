@@ -1,13 +1,11 @@
 import { BookingStages, BOOKING_STAGES } from "@/components/bookings/BookingStages";
 import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
-import { Badge } from "@/components/ui/badge";
-import { Booking } from "@/types/bookings";
 import { createClient } from "@/lib/SupabaseServerClient";
-import { cookies } from "next/headers";
 import BookingCheckInClient from "./BookingCheckInClient";
 import BookingActions from "@/components/bookings/BookingActions";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
-import { STATUS_BADGE } from "@/components/bookings/statusBadge";
+import { StatusBadge } from "@/components/bookings/StatusBadge";
+import { notFound } from "next/navigation";
 
 interface BookingCheckInPageProps {
   params: Promise<{ id: string }>;
@@ -16,74 +14,65 @@ interface BookingCheckInPageProps {
 export default async function BookingCheckInPage({ params }: BookingCheckInPageProps) {
   const { id: bookingId } = await params;
   const supabase = await createClient();
-  const cookiesList = await cookies();
-  const orgId = cookiesList.get("current_org_id")?.value;
 
-  let booking: Booking | null = null;
-  let member: { id: string; first_name?: string; last_name?: string } | null = null;
-  let instructorCommentsCount = 0;
-  let instructors: { id: string; name: string }[] = [];
+  // Fetch booking with user join in a single query
+  const { data: booking, error: bookingError } = await supabase
+    .from("bookings")
+    .select(`
+      *,
+      user:user_id(
+        id,
+        first_name,
+        last_name,
+        email
+      )
+    `)
+    .eq("id", bookingId)
+    .single();
 
-  if (orgId) {
-    // Fetch booking with user join
-    const { data: bookingData } = await supabase
-      .from("bookings")
-      .select(`*, user:user_id(*)`)
-      .eq("organization_id", orgId)
-      .eq("id", bookingId)
-      .single();
-    booking = bookingData;
-
-    // Fallback: fetch all members (users in org)
-    if (!booking?.user?.first_name || !booking?.user?.last_name) {
-      const { data: memberRows } = await supabase
-        .from("user_organizations")
-        .select("user_id, users(first_name, last_name)")
-        .eq("organization_id", orgId);
-      const members = (memberRows || []).map((row: { user_id: string; users?: { first_name?: string; last_name?: string } | { first_name?: string; last_name?: string }[] }) => {
-        const userObj = Array.isArray(row.users) ? row.users[0] : row.users;
-        return {
-          id: row.user_id,
-          first_name: userObj?.first_name,
-          last_name: userObj?.last_name,
-        };
-      });
-      member = members.find(m => m.id === booking?.user_id) || null;
-    }
-
-    // Fetch instructor comments count
-    if (booking && booking.id) {
-      const { count } = await supabase
-        .from("instructor_comments")
-        .select("id", { count: "exact", head: true })
-        .eq("booking_id", booking.id)
-        .eq("organization_id", orgId);
-      instructorCommentsCount = count || 0;
-    }
-
-    // Fetch all instructors (users in org with instructor/admin/owner role)
-    const { data: instructorRows } = await supabase
-      .from("user_organizations")
-      .select("user_id, users(first_name, last_name, email), role")
-      .eq("organization_id", orgId)
-      .in("role", ["instructor", "admin", "owner"]);
-    instructors = (instructorRows || []).map((row: { user_id: string; users?: { first_name?: string; last_name?: string; email?: string } | { first_name?: string; last_name?: string; email?: string }[]; role: string }) => {
-      let name = row.user_id;
-      const userObj = Array.isArray(row.users) ? row.users[0] : row.users;
-      if (userObj) {
-        const fullName = `${userObj.first_name || ""} ${userObj.last_name || ""}`.trim();
-        if (fullName) {
-          name = fullName;
-        } else if (userObj.email) {
-          name = userObj.email;
-        }
-      }
-      return {
-        id: row.user_id,
-        name,
-      };
-    });
+  if (bookingError || !booking) {
+    notFound();
   }
+
+  // Fetch instructor comments count and instructors in parallel
+  const [instructorCommentsResult, instructorsResult] = await Promise.all([
+    supabase
+      .from("instructor_comments")
+      .select("id", { count: "exact", head: true })
+      .eq("booking_id", booking.id),
+    supabase
+      .from("instructors")
+      .select(`
+        id,
+        user_id,
+        users!inner(
+          id,
+          first_name,
+          last_name,
+          email
+        )
+      `)
+      .eq("status", "active")
+  ]);
+
+  const instructorCommentsCount = instructorCommentsResult.count || 0;
+  const instructors = (instructorsResult.data || []).map((row) => {
+    // Use type assertion only for the user property since we know the structure
+    const user = (row as { users?: { id?: string; first_name?: string; last_name?: string; email?: string } }).users;
+    let name = user?.id || (row as { id: string }).id;
+    if (user?.first_name || user?.last_name) {
+      const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim();
+      if (fullName) {
+        name = fullName;
+      } else if (user.email) {
+        name = user.email;
+      }
+    }
+    return {
+      id: (row as { id: string }).id, // Use instructor table ID, not user ID
+      name,
+    };
+  });
 
   const status = booking?.status ?? "unconfirmed";
 
@@ -94,31 +83,24 @@ export default async function BookingCheckInPage({ params }: BookingCheckInPageP
         <div className="flex flex-row items-center w-full mb-2 gap-4">
           <div className="flex-1 min-w-0 flex flex-col items-start gap-0">
             <h1 className="text-[3rem] font-extrabold tracking-tight text-gray-900" style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1 }}>Check-In Booking</h1>
-            {booking && (
-              <BookingMemberLink
-                userId={booking.user_id}
-                firstName={booking.user?.first_name || member?.first_name}
-                lastName={booking.user?.last_name || member?.last_name}
-              />
-            )}
+            <BookingMemberLink
+              userId={booking.user_id}
+              firstName={booking.user?.first_name}
+              lastName={booking.user?.last_name}
+            />
           </div>
-          <Badge className={STATUS_BADGE[status].color + " text-lg px-4 py-2 font-semibold"}>{STATUS_BADGE[status].label}</Badge>
+          <StatusBadge status={status} className="text-lg px-4 py-2 font-semibold" />
           <div className="flex-none flex items-center justify-end gap-3">
-            {booking && booking.id && (
-              <BookingActions status={status} bookingId={booking.id} mode="check-in" />
-            )}
+            <BookingActions status={status} bookingId={booking.id} mode="check-in" />
             <BookingStagesOptions bookingId={bookingId} instructorCommentsCount={instructorCommentsCount} />
           </div>
         </div>
         <BookingStages stages={BOOKING_STAGES} currentStage={3} />
         {/* Main content row: 40% left, 60% right */}
-        {booking && orgId && (
-          <BookingCheckInClient
-            booking={booking}
-            instructors={instructors}
-            orgId={orgId}
-          />
-        )}
+        <BookingCheckInClient
+          booking={booking}
+          instructors={instructors}
+        />
       </div>
     </div>
   );

@@ -12,6 +12,10 @@ import {
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { AircraftComponent } from "@/types/aircraft_components";
 import { format } from 'date-fns';
+import ComponentEditModal from "@/components/aircraft/maintenance/ComponentEditModal";
+import LogMaintenanceModal from "@/components/aircraft/maintenance/LogMaintenanceModal";
+import { toast } from "sonner";
+import ComponentNewModal from "@/components/aircraft/maintenance/ComponentNewModal";
 
 interface UpcomingMaintenanceTableProps {
   aircraft_id: string;
@@ -45,6 +49,13 @@ export default function UpcomingMaintenanceTable({ aircraft_id }: UpcomingMainte
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentHours, setCurrentHours] = useState<number | null>(null);
+  
+  // Modal state
+  const [logMaintenanceModalOpen, setLogMaintenanceModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedComponent, setSelectedComponent] = useState<AircraftComponent | null>(null);
+  const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
+  const [newModalOpen, setNewModalOpen] = useState(false);
 
   useEffect(() => {
     if (!aircraft_id) return;
@@ -70,6 +81,52 @@ export default function UpcomingMaintenanceTable({ aircraft_id }: UpcomingMainte
       .catch(() => {});
   }, [aircraft_id]);
 
+  const handleLogMaintenance = (componentId: string) => {
+    setSelectedComponentId(componentId);
+    setLogMaintenanceModalOpen(true);
+  };
+
+  const handleScheduleMaintenance = (component: AircraftComponent) => {
+    void component; // Explicitly mark as intentionally unused
+    // TODO: Implement schedule maintenance functionality
+    toast.info("Schedule maintenance functionality coming soon!");
+  };
+
+  const handleViewDetails = (component: AircraftComponent) => {
+    setSelectedComponent(component);
+    setEditModalOpen(true);
+  };
+
+  const handleEditSave = async (updated: Partial<AircraftComponent>) => {
+    if (!selectedComponent) return;
+    // Convert empty string dates to null
+    const cleanUpdate = { ...updated };
+    if (cleanUpdate.current_due_date === "") cleanUpdate.current_due_date = null;
+    if (cleanUpdate.last_completed_date === "") cleanUpdate.last_completed_date = null;
+    try {
+      const res = await fetch(`/api/aircraft_components`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedComponent.id, ...cleanUpdate }),
+      });
+      if (!res.ok) {
+        await res.json(); // consume body, but do not assign
+        return;
+      }
+      const updatedComponent = await res.json();
+      setComponents((prev) => prev.map((c) => c.id === selectedComponent.id ? updatedComponent : c));
+      setEditModalOpen(false);
+    } catch {
+      // Optionally set error state here
+    }
+  };
+
+  const handleNewComponentSave = async (newComponent: Partial<AircraftComponent>) => {
+    // Optionally, you could POST to the API here, but for now just add to local state
+    setComponents(prev => [...prev, { ...newComponent, id: Math.random().toString() } as AircraftComponent]);
+    setNewModalOpen(false);
+  };
+
   // Sort by soonest due (hours or date)
   const sortedComponents = [...components].sort((a, b) => {
     function dueScore(comp: AircraftComponent): number {
@@ -88,6 +145,7 @@ export default function UpcomingMaintenanceTable({ aircraft_id }: UpcomingMainte
     <div className="flex flex-col gap-6 mt-8">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold">Upcoming Maintenance</h2>
+        <Button className="bg-indigo-600 text-white font-semibold" onClick={() => setNewModalOpen(true)}>+ Add Component</Button>
       </div>
       <div className="overflow-x-auto rounded-lg border border-muted bg-white">
         <table className="min-w-full text-sm">
@@ -198,14 +256,16 @@ export default function UpcomingMaintenanceTable({ aircraft_id }: UpcomingMainte
                           <Button variant="ghost" size="icon" className="h-7 w-7 p-0"><MoreHorizontal className="w-4 h-4" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            handleLogMaintenance(comp.id);
+                          }}>
                             <ClipboardList className="w-4 h-4 mr-2" /> Log Maintenance
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleScheduleMaintenance(comp)}>
                             <CalendarCheck className="w-4 h-4 mr-2" /> Schedule Maintenance
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleViewDetails(comp)}>
                             <Eye className="w-4 h-4 mr-2" /> View Details
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -218,6 +278,25 @@ export default function UpcomingMaintenanceTable({ aircraft_id }: UpcomingMainte
           </tbody>
         </table>
       </div>
+      
+      {/* Modals */}
+      <ComponentEditModal
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        component={selectedComponent}
+        onSave={handleEditSave}
+      />
+      <LogMaintenanceModal
+        open={logMaintenanceModalOpen}
+        onOpenChange={setLogMaintenanceModalOpen}
+        aircraft_id={aircraft_id}
+        component_id={selectedComponentId}
+      />
+      <ComponentNewModal
+        open={newModalOpen}
+        onOpenChange={setNewModalOpen}
+        onSave={handleNewComponentSave}
+      />
     </div>
   );
 } 

@@ -5,13 +5,33 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { CalendarIcon, UserIcon, CheckIcon, Loader2, Plane, BadgeCheck, BookOpen, ClipboardList, StickyNote, AlignLeft } from "lucide-react";
 import { useForm, Controller } from "react-hook-form";
 import { format, parseISO } from "date-fns";
-import React, { useState } from "react";
+import React from "react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import { Booking } from "@/types/bookings";
-import MemberSelect, { UserResult } from "@/components/invoices/MemberSelect";
+import MemberSelect from "@/components/invoices/MemberSelect";
+import InstructorSelect from "@/components/invoices/InstructorSelect";
+import { useBookingUpdate, useMemberValue, useInstructorValue } from "@/hooks/use-booking-view";
+import type { User } from "@/types/users";
+
+// Types to match what the hooks expect
+type MemberForHook = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+} | null;
+
+type InstructorForHook = {
+  id: string;
+  user_id: string;
+  users?: {
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
+} | null;
 
 interface BookingDetailsFormData {
   start_date: string;
@@ -54,8 +74,51 @@ function getUtcIsoString(dateStr: string, timeStr: string): string | null {
   return local.toISOString();
 }
 
+// Helper to convert User to MemberForHook
+function convertUserToMemberForHook(user?: User): MemberForHook {
+  if (!user) return null;
+  return {
+    id: user.id,
+    first_name: user.first_name || "",
+    last_name: user.last_name || "",
+    email: user.email,
+  };
+}
+
+// Helper to convert instructor data to InstructorForHook
+function convertInstructorForHook(instructor?: unknown): InstructorForHook {
+  if (!instructor || typeof instructor !== 'object') return null;
+  
+  const obj = instructor as Record<string, unknown>;
+  
+  // Check if the object has the expected JoinedInstructor structure
+  if (typeof obj.id === 'string' && 
+      typeof obj.user_id === 'string' && 
+      obj.users && 
+      typeof obj.users === 'object' && 
+      obj.users !== null) {
+    
+    const users = obj.users as Record<string, unknown>;
+    
+    return {
+      id: obj.id,
+      user_id: obj.user_id,
+      users: {
+        first_name: typeof users.first_name === 'string' ? users.first_name : "",
+        last_name: typeof users.last_name === 'string' ? users.last_name : "",
+        email: typeof users.email === 'string' ? users.email : "",
+      },
+    };
+  }
+  
+  return null;
+}
+
 export default function BookingDetails({ booking, members, instructors, aircraft, lessons, flightTypes }: BookingDetailsProps) {
-  const { control, handleSubmit, reset, formState } = useForm<BookingDetailsFormData>({
+  // Check if booking is read-only (completed bookings cannot be edited)
+  const isReadOnly = booking.status === 'complete';
+  
+  const { control, handleSubmit, reset, formState, watch } = useForm<BookingDetailsFormData>({
     defaultValues: {
       start_date: booking?.start_time ? format(parseISO(booking.start_time), "yyyy-MM-dd") : "",
       start_time: booking?.start_time ? format(parseISO(booking.start_time), "HH:mm") : "",
@@ -71,47 +134,47 @@ export default function BookingDetails({ booking, members, instructors, aircraft
       booking_type: booking?.booking_type || "flight",
     },
   });
-  const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  
+  // Watch the member and instructor field values
+  const memberFieldValue = watch("member");
+  const instructorFieldValue = watch("instructor");
+  
+  // Use optimized hooks for data fetching
+  const memberValue = useMemberValue(
+    memberFieldValue, 
+    members, 
+    convertUserToMemberForHook(booking?.user)
+  );
+  const instructorValue = useInstructorValue(
+    instructorFieldValue, 
+    instructors, 
+    convertInstructorForHook(booking?.instructor)
+  );
+  
+  // Use optimized mutation for saving
+  const { mutate: updateBooking, isPending: saving, isSuccess: saveSuccess } = useBookingUpdate();
 
   const onSubmit = async (data: BookingDetailsFormData) => {
-    setSaving(true);
-    setSaveSuccess(false);
-    try {
-      // Compose ISO strings for start_time and end_time (robust local-to-UTC conversion)
-      const start_time = getUtcIsoString(data.start_date, data.start_time);
-      const end_time = getUtcIsoString(data.end_date, data.end_time);
-      const payload = {
-        id: booking.id,
-        start_time,
-        end_time,
-        purpose: data.purpose,
-        remarks: data.remarks,
-        instructor_id: data.instructor,
-        user_id: data.member,
-        aircraft_id: data.aircraft,
-        lesson_id: data.lesson,
-        flight_type_id: data.flight_type,
-        booking_type: data.booking_type,
-      };
-      const res = await fetch("/api/bookings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        toast.error(err.error || "Failed to save booking");
-      } else {
-        toast.success("Booking updated successfully");
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 1500);
-      }
-    } catch {
-      toast.error("An error occurred while saving");
-    } finally {
-      setSaving(false);
-    }
+    // Compose ISO strings for start_time and end_time (robust local-to-UTC conversion)
+    const start_time = getUtcIsoString(data.start_date, data.start_time);
+    const end_time = getUtcIsoString(data.end_date, data.end_time);
+    
+    // Convert empty strings to null for UUID fields to prevent PostgreSQL errors
+    const sanitizeUuid = (value: string) => value.trim() === "" ? null : value;
+    
+    updateBooking({
+      id: booking.id,
+      start_time,
+      end_time,
+      purpose: data.purpose,
+      remarks: data.remarks,
+      instructor_id: sanitizeUuid(data.instructor),
+      user_id: sanitizeUuid(data.member),
+      aircraft_id: sanitizeUuid(data.aircraft),
+      lesson_id: sanitizeUuid(data.lesson),
+      flight_type_id: sanitizeUuid(data.flight_type),
+      booking_type: data.booking_type,
+    });
   };
 
   return (
@@ -121,23 +184,30 @@ export default function BookingDetails({ booking, members, instructors, aircraft
           <CardTitle className="text-2xl font-extrabold flex items-center gap-2">
             <span className="inline-block"><CalendarIcon className="w-6 h-6 text-primary" /></span>
             Booking Details
+            {isReadOnly && (
+              <span className="ml-3 px-3 py-1 bg-gray-100 text-gray-600 text-sm font-normal rounded-lg border">
+                Read Only - Booking Complete
+              </span>
+            )}
           </CardTitle>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => reset()} disabled={!formState.isDirty}>Undo Changes</Button>
-            <Button type="submit" className="bg-black text-white flex items-center gap-2 min-w-[90px] justify-center" disabled={!formState.isDirty || saving || saveSuccess}>
-              {saving ? (
-                <>
-                  <Loader2 className="animate-spin w-4 h-4" /> Saving…
-                </>
-              ) : saveSuccess ? (
-                <>
-                  <CheckIcon className="w-4 h-4 text-green-400" /> Saved!
-                </>
-              ) : (
-                "Save"
-              )}
-            </Button>
-          </div>
+          {!isReadOnly && (
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => reset()} disabled={!formState.isDirty}>Undo Changes</Button>
+              <Button type="submit" className="bg-black text-white flex items-center gap-2 min-w-[90px] justify-center" disabled={!formState.isDirty || saving || saveSuccess}>
+                {saving ? (
+                  <>
+                    <Loader2 className="animate-spin w-4 h-4" /> Saving…
+                  </>
+                ) : saveSuccess ? (
+                  <>
+                    <CheckIcon className="w-4 h-4 text-green-400" /> Saved!
+                  </>
+                ) : (
+                  "Save"
+                )}
+              </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-8 p-6">
           {/* Scheduled Times */}
@@ -159,6 +229,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
+                              disabled={isReadOnly}
                               className={cn(
                                 "w-44 justify-start text-left font-normal overflow-hidden text-ellipsis whitespace-nowrap",
                                 !value && "text-muted-foreground"
@@ -186,7 +257,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                     name="start_time"
                     control={control}
                     render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
+                      <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
                         <SelectTrigger className="w-28">
                           <SelectValue placeholder="Select time" />
                         </SelectTrigger>
@@ -216,6 +287,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
+                              disabled={isReadOnly}
                               className={cn(
                                 "w-44 justify-start text-left font-normal overflow-hidden text-ellipsis whitespace-nowrap",
                                 !value && "text-muted-foreground"
@@ -243,7 +315,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                     name="end_time"
                     control={control}
                     render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
+                      <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
                         <SelectTrigger className="w-28">
                           <SelectValue placeholder="Select time" />
                         </SelectTrigger>
@@ -270,45 +342,46 @@ export default function BookingDetails({ booking, members, instructors, aircraft
               <Controller
                 name="member"
                 control={control}
-                render={({ field }) => {
-                  // Find the selected member's details for display
-                  const selectedMember = field.value
-                    ? members.find(m => m.id === field.value)
-                    : null;
-                  // Adapt to MemberSelect's expected value shape
-                  const memberValue: UserResult | null = selectedMember
-                    ? {
-                        id: selectedMember.id,
-                        first_name: selectedMember.name.split(" ")[0] || "",
-                        last_name: selectedMember.name.split(" ").slice(1).join(" ") || "",
-                        email: "",
-                      }
-                    : null;
-                  return (
+                render={({ field }) => (
+                  <div className="relative">
                     <MemberSelect
                       value={memberValue}
                       onSelect={user => {
                         field.onChange(user ? user.id : "");
                       }}
+                      disabled={isReadOnly}
                     />
-                  );
-                }}
+                    {memberFieldValue && !memberValue && (
+                      <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-md">
+                        <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                      </div>
+                    )}
+                  </div>
+                )}
               />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Instructor</label>
-              <Controller name="instructor" control={control} render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select instructor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {instructors.map(i => (
-                      <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )} />
+              <Controller
+                name="instructor"
+                control={control}
+                render={({ field }) => (
+                  <div className="relative">
+                    <InstructorSelect
+                      value={instructorValue}
+                      onSelect={instructor => {
+                        field.onChange(instructor ? instructor.id : "");
+                      }}
+                      disabled={isReadOnly}
+                    />
+                    {instructorFieldValue && !instructorValue && (
+                      <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-md">
+                        <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                      </div>
+                    )}
+                  </div>
+                )}
+              />
             </div>
           </div>
 
@@ -317,7 +390,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><Plane className="w-4 h-4" /> Aircraft</label>
               <Controller name="aircraft" control={control} render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select aircraft" />
                   </SelectTrigger>
@@ -332,7 +405,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BadgeCheck className="w-4 h-4" /> Flight Type</label>
               <Controller name="flight_type" control={control} render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select flight type" />
                   </SelectTrigger>
@@ -347,7 +420,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BookOpen className="w-4 h-4" /> Lesson</label>
               <Controller name="lesson" control={control} render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select lesson" />
                   </SelectTrigger>
@@ -362,7 +435,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="w-4 h-4" /> Booking Type</label>
               <Controller name="booking_type" control={control} render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select booking type" />
                   </SelectTrigger>
@@ -384,6 +457,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                 <textarea
                   {...field}
                   placeholder="Enter booking remarks"
+                  disabled={isReadOnly}
                   className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top"
                   rows={4}
                 />
@@ -395,6 +469,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                 <textarea
                   {...field}
                   placeholder="Description"
+                  disabled={isReadOnly}
                   className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top"
                   rows={4}
                 />

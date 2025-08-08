@@ -7,7 +7,6 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { useOrgContext } from "@/components/OrgContextProvider";
 import { format } from "date-fns";
 import Progress from "@/components/ui/progress";
 import type { Syllabus } from "@/types/syllabus";
@@ -22,11 +21,10 @@ interface ExamResultWithExamSyllabus {
   user_id: string;
   score?: number | null;
   result: 'PASS' | 'FAIL';
-  date_completed?: string | null;
-  kdrs_completed?: boolean | null;
-  kdrs_signed_by?: string | null;
-  organization_id: string;
+  exam_date?: string | null;
+  notes?: string | null;
   created_at: string;
+  updated_at: string;
   exam?: {
     id: string;
     name: string;
@@ -60,7 +58,6 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logModalOpen, setLogModalOpen] = useState(false);
-  const { currentOrgId } = useOrgContext();
 
   // Log Exam Result modal state
   const [syllabi, setSyllabi] = useState<{ id: string; name: string }[]>([]);
@@ -70,34 +67,55 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
   const [result, setResult] = useState<'PASS' | 'FAIL' | "">("");
   const [score, setScore] = useState<string>("");
   const [dateCompleted, setDateCompleted] = useState<Date | undefined>(undefined);
-  const [kdrsCompleted, setKdrsCompleted] = useState<boolean | null>(null);
-  const [kdrsSignedBy, setKdrsSignedBy] = useState<string>("");
   const [modalError, setModalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [syllabusMap, setSyllabusMap] = useState<Record<string, Syllabus>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  // Fetch syllabi on modal open and for progress
+  // Fetch syllabi on modal open and for progress calculation
   useEffect(() => {
-    if (!currentOrgId) return;
-    fetch(`/api/syllabus?organization_id=${currentOrgId}`)
+    fetch(`/api/syllabus`)
       .then(res => res.json())
       .then(data => {
-        const arr = Array.isArray(data.data) ? data.data : [];
+        const arr = Array.isArray(data.syllabi) ? data.syllabi : [];
         setSyllabi(arr);
         const map: Record<string, Syllabus> = {};
         arr.forEach((s: Syllabus) => { map[s.id] = s; });
         setSyllabusMap(map);
       });
-  }, [logModalOpen, currentOrgId]);
+  }, [logModalOpen]);
 
-  // Fetch exams when syllabus changes
+  // Fetch exams when syllabus changes (or fetch all exams if no syllabus), filtering out already passed exams
   useEffect(() => {
-    if (!selectedSyllabus) return setExams([]);
-    fetch(`/api/exam?syllabus_id=${selectedSyllabus}`)
-      .then(res => res.json())
-      .then(data => setExams(Array.isArray(data.data) ? data.data : []));
-  }, [selectedSyllabus]);
+    const fetchExams = () => {
+      const url = selectedSyllabus && selectedSyllabus !== "none"
+        ? `/api/exam?syllabus_id=${selectedSyllabus}` 
+        : `/api/exam`; // Fetch all exams if no syllabus selected or "none" is selected
+      
+      fetch(url)
+        .then(res => res.json())
+        .then(data => {
+          const allExams = Array.isArray(data.data) ? data.data : [];
+          
+          // Get exam IDs that user has already passed
+          const passedExamIds = new Set(
+            examResults
+              .filter(result => result.result === 'PASS')
+              .map(result => result.exam_id)
+          );
+          
+          // Filter out exams that have already been passed
+          const availableExams = allExams.filter((exam: { id: string; name: string }) => !passedExamIds.has(exam.id));
+          
+          setExams(availableExams);
+        });
+    };
+
+    // Always fetch exams when modal opens, regardless of syllabus selection
+    if (logModalOpen) {
+      fetchExams();
+    }
+  }, [selectedSyllabus, examResults, logModalOpen]);
 
   // Refresh table after logging
   const refreshResults = () => {
@@ -125,20 +143,17 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
     e.preventDefault();
     setSubmitting(true);
     setModalError(null);
-    if (!selectedExam || !result || !dateCompleted || !currentOrgId) {
-      setModalError("Please fill all required fields.");
+    if (!selectedExam || !result || !dateCompleted) {
+      setModalError("Please fill all required fields (Exam, Result, and Date).");
       setSubmitting(false);
       return;
     }
     const payload = {
       exam_id: selectedExam,
       user_id: memberId,
-      organization_id: currentOrgId,
       result,
       score: score ? Number(score) : null,
-      date_completed: dateCompleted.toISOString().split("T")[0],
-      kdrs_completed: kdrsCompleted,
-      kdrs_signed_by: kdrsSignedBy || null,
+      exam_date: dateCompleted.toISOString().split("T")[0],
     };
     try {
       const res = await fetch("/api/exam_results", {
@@ -152,7 +167,7 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
       }
       setLogModalOpen(false);
       // Reset modal state
-      setSelectedSyllabus(""); setSelectedExam(""); setResult(""); setScore(""); setDateCompleted(undefined); setKdrsCompleted(null); setKdrsSignedBy("");
+      setSelectedSyllabus(""); setSelectedExam(""); setResult(""); setScore(""); setDateCompleted(undefined);
       refreshResults();
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : "Failed to log exam result";
@@ -182,11 +197,10 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
       .finally(() => setLoading(false));
   }, [memberId]);
 
-  // Calculate progress per syllabus
+  // Calculate progress per syllabus and group exams without syllabus as "Other"
   const examsBySyllabus: Record<string, ExamResultWithExamSyllabus[]> = {};
   examResults.forEach((exam) => {
-    const syllabusId = exam.exam?.syllabus_id;
-    if (!syllabusId) return;
+    const syllabusId = exam.exam?.syllabus_id || "other";
     if (!examsBySyllabus[syllabusId]) examsBySyllabus[syllabusId] = [];
     examsBySyllabus[syllabusId].push(exam);
   });
@@ -206,12 +220,13 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
             </DialogHeader>
             <form className="flex flex-col gap-4 w-full" onSubmit={handleLogExamResult}>
               <div>
-                <label className="block text-base font-medium mb-1">Syllabus</label>
-                <Select value={selectedSyllabus} onValueChange={setSelectedSyllabus} required>
+                <label className="block text-base font-medium mb-1">Syllabus <span className="text-sm text-muted-foreground">(optional)</span></label>
+                <Select value={selectedSyllabus} onValueChange={setSelectedSyllabus}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select syllabus" />
+                    <SelectValue placeholder="Select syllabus (optional)" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">No syllabus</SelectItem>
                     {syllabi.map((s) => (
                       <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                     ))}
@@ -220,9 +235,9 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
               </div>
               <div>
                 <label className="block text-base font-medium mb-1">Exam</label>
-                <Select value={selectedExam} onValueChange={setSelectedExam} required disabled={!selectedSyllabus}>
+                <Select value={selectedExam} onValueChange={setSelectedExam} required>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder={selectedSyllabus ? "Select exam" : "Select syllabus first"} />
+                    <SelectValue placeholder="Select exam" />
                   </SelectTrigger>
                   <SelectContent>
                     {exams.map((e) => (
@@ -270,24 +285,6 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="block text-base font-medium mb-1">KDRs Completed</label>
-                  <Select value={kdrsCompleted === null ? "" : kdrsCompleted ? "yes" : "no"} onValueChange={val => setKdrsCompleted(val === "yes" ? true : val === "no" ? false : null)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="yes">Yes</SelectItem>
-                      <SelectItem value="no">No</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-base font-medium mb-1">KDRs Signed By</label>
-                  <Input value={kdrsSignedBy} onChange={e => setKdrsSignedBy(e.target.value)} placeholder="Instructor name" className="w-full" />
-                </div>
-              </div>
               {modalError && <div className="text-red-600 text-sm mt-2">{modalError}</div>}
               <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2 sm:gap-4 w-full">
                 <DialogClose asChild>
@@ -320,33 +317,40 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
                   </TableHeader>
                   <TableBody>
                     {Object.entries(examsBySyllabus).map(([syllabusId, exams]) => {
-                      const syllabus = syllabusMap[syllabusId];
-                      const total = syllabus?.number_of_exams || 0;
+                      const isOther = syllabusId === "other";
+                      const syllabus = isOther ? null : syllabusMap[syllabusId];
+                      const displayName = isOther ? "Other" : (syllabus?.name || syllabusId);
+                      
+                      const total = isOther ? exams.length : (syllabus?.number_of_exams || 0);
                       const passed = exams.filter(e => e.result === "PASS").length;
                       const percent = total > 0 ? Math.round((passed / total) * 100) : 0;
                       const isOpen = expanded[syllabusId] || false;
                       return (
                         <React.Fragment key={syllabusId}>
-                          <TableRow key={syllabusId} className="bg-muted/30">
-                            <TableCell style={{ width: 36 }}>
+                          <TableRow key={syllabusId} className="bg-muted/20 hover:bg-muted/30 transition-colors">
+                            <TableCell className="w-10 p-2">
                               <button
                                 type="button"
                                 aria-label={isOpen ? "Collapse" : "Expand"}
                                 onClick={() => setExpanded(e => ({ ...e, [syllabusId]: !isOpen }))}
-                                className="focus:outline-none"
+                                className="p-1 hover:bg-muted/50 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
                               >
                                 {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                               </button>
                             </TableCell>
-                            <TableCell>{syllabus?.name || syllabusId}</TableCell>
+                            <TableCell className="font-medium">{displayName}</TableCell>
                             <TableCell style={{ minWidth: 120 }}>
-                              <div className="flex items-center gap-2">
-                                <Progress value={percent} />
-                                <span className="text-xs text-muted-foreground ml-2">{percent}%</span>
-                              </div>
+                              {isOther ? (
+                                <span className="text-sm text-muted-foreground">-</span>
+                              ) : (
+                                <div className="flex items-center gap-3">
+                                  <Progress value={percent} className="flex-1" />
+                                  <span className="text-xs text-muted-foreground min-w-[35px]">{percent}%</span>
+                                </div>
+                              )}
                             </TableCell>
-                            <TableCell>{passed}</TableCell>
-                            <TableCell>{total}</TableCell>
+                            <TableCell className="text-center">{passed}</TableCell>
+                            <TableCell className="text-center">{isOther ? "-" : total}</TableCell>
                           </TableRow>
                           {isOpen && exams.length > 0 && (
                             <TableRow key={syllabusId + "-exams"}>
@@ -354,24 +358,20 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
                                 <div className="overflow-x-auto">
                                   <Table className="w-full min-w-[600px] border-none">
                                     <TableHeader>
-                                      <TableRow className="bg-muted/40">
-                                        <TableHead className="py-3 px-4 font-semibold text-gray-700">Exam</TableHead>
-                                        <TableHead className="py-3 px-4 font-semibold text-gray-700">Score</TableHead>
-                                        <TableHead className="py-3 px-4 font-semibold text-gray-700">Result</TableHead>
-                                        <TableHead className="py-3 px-4 font-semibold text-gray-700">Date Completed</TableHead>
-                                        <TableHead className="py-3 px-4 font-semibold text-gray-700">KDRs</TableHead>
+                                      <TableRow className="bg-muted/20 border-t">
+                                        <TableHead className="py-2 px-4 text-sm font-medium text-gray-600 w-[35%]">Exam</TableHead>
+                                        <TableHead className="py-2 px-4 text-sm font-medium text-gray-600 text-center w-[15%]">Score</TableHead>
+                                        <TableHead className="py-2 px-4 text-sm font-medium text-gray-600 text-center w-[15%]">Result</TableHead>
+                                        <TableHead className="py-2 px-4 text-sm font-medium text-gray-600 text-center w-[35%]">Date Completed</TableHead>
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                       {exams.map((row, i) => (
-                                        <TableRow key={row.id || i} className={row.result === "FAIL" ? "bg-red-50" : ""}>
-                                          <TableCell className="py-3 px-4">{row.exam?.name || "-"}</TableCell>
-                                          <TableCell className="py-3 px-4">{row.score != null ? `${row.score}%` : "-"}</TableCell>
-                                          <TableCell className="py-3 px-4"><ResultBadge result={row.result} /></TableCell>
-                                          <TableCell className="py-3 px-4">{row.date_completed || "-"}</TableCell>
-                                          <TableCell className="py-3 px-4">
-                                            {row.kdrs_completed === true ? <Badge variant="default">KDRs ✓</Badge> : row.kdrs_completed === false ? <Badge variant="secondary">No</Badge> : "-"}
-                                          </TableCell>
+                                        <TableRow key={row.id || i} className={`hover:bg-muted/10 transition-colors ${row.result === "FAIL" ? "bg-red-50/50" : ""}`}>
+                                          <TableCell className="py-2 px-4 text-sm w-[35%]">{row.exam?.name || "-"}</TableCell>
+                                          <TableCell className="py-2 px-4 text-sm text-center w-[15%]">{row.score != null ? `${row.score}%` : "-"}</TableCell>
+                                          <TableCell className="py-2 px-4 text-center w-[15%]"><ResultBadge result={row.result} /></TableCell>
+                                          <TableCell className="py-2 px-4 text-sm text-center w-[35%]">{row.exam_date ? format(new Date(row.exam_date), 'dd MMM yyyy') : "-"}</TableCell>
                                         </TableRow>
                                       ))}
                                     </TableBody>

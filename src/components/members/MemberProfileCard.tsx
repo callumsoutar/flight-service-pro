@@ -1,6 +1,8 @@
+
 "use client";
 
 import { User } from "@/types/users";
+import { MembershipStatus } from "@/types/memberships";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -9,21 +11,19 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { ChevronDown, FileText, Calendar, AlertTriangle, Menu, UserPlus } from "lucide-react";
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { getStatusBadgeClasses, getStatusText } from "@/lib/membership-utils";
 
-export default function MemberProfileCard({ member, joinDate }: { member: User; joinDate: string }) {
+interface MemberProfileCardProps {
+  member: User;
+  joinDate: string;
+  membershipStatus?: MembershipStatus;
+}
+
+export default function MemberProfileCard({ member, joinDate, membershipStatus = "none" }: MemberProfileCardProps) {
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [orgId, setOrgId] = useState<string>("");
-
-  // Get organization_id from cookies (client-side)
-  useEffect(() => {
-    if (typeof document !== "undefined") {
-      const match = document.cookie.match(/current_org_id=([^;]+)/);
-      if (match) setOrgId(match[1]);
-    }
-  }, []);
 
   return (
     <Card className="mb-6">
@@ -40,7 +40,9 @@ export default function MemberProfileCard({ member, joinDate }: { member: User; 
               <span className="text-2xl font-bold text-gray-900">
                 {member.first_name} {member.last_name}
               </span>
-              <Badge className="bg-black text-white">Active</Badge>
+              <Badge className={getStatusBadgeClasses(membershipStatus)}>
+                {getStatusText(membershipStatus)}
+              </Badge>
             </div>
             <div className="flex flex-wrap gap-4 text-gray-600 text-sm mt-1">
               <span>{member.email}</span>
@@ -101,7 +103,7 @@ export default function MemberProfileCard({ member, joinDate }: { member: User; 
           <DialogHeader>
             <DialogTitle>Are you sure?</DialogTitle>
             <p className="text-sm text-gray-500 mt-2">
-              This action will create {member.first_name} {member.last_name} as an instructor in your organization. No extra permissions will be granted yet.
+              This action will create {member.first_name} {member.last_name} as an instructor. No extra permissions will be granted yet.
             </p>
           </DialogHeader>
           <DialogFooter>
@@ -116,7 +118,6 @@ export default function MemberProfileCard({ member, joinDate }: { member: User; 
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       user_id: member.id,
-                      organization_id: orgId || "org-demo-uuid",
                       is_actively_instructing: false,
                     }),
                   });

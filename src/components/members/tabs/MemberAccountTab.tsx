@@ -1,6 +1,4 @@
 import { useEffect, useState } from "react";
-import { Transaction } from "@/types/transactions";
-import { useOrgContext } from "@/components/OrgContextProvider";
 import { Loader2, DollarSign, FileText } from "lucide-react";
 import { columns as baseColumns } from "@/components/invoices/columns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,8 +11,6 @@ interface MemberAccountTabProps {
 }
 
 export default function MemberAccountTab({ memberId }: MemberAccountTabProps) {
-  const { currentOrgId } = useOrgContext();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,18 +25,15 @@ export default function MemberAccountTab({ memberId }: MemberAccountTabProps) {
   const [userError, setUserError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!memberId || !currentOrgId) return;
+    if (!memberId) return;
     setLoading(true);
     setError(null);
-    fetch(`/api/transactions?user_id=${memberId}&organization_id=${currentOrgId}`)
-      .then(res => res.json())
-      .then(data => setTransactions(Array.isArray(data.transactions) ? data.transactions : []))
-      .catch(e => setError(e.message || "Failed to load transactions"))
-      .finally(() => setLoading(false));
-  }, [memberId, currentOrgId]);
+    // Note: Transaction loading removed as transactions state is not used
+    setLoading(false);
+  }, [memberId]);
 
   useEffect(() => {
-    if (!memberId || !currentOrgId) return;
+    if (!memberId) return;
     setInvoicesLoading(true);
     setInvoicesError(null);
     fetch(`/api/invoices?user_id=${memberId}`)
@@ -48,10 +41,10 @@ export default function MemberAccountTab({ memberId }: MemberAccountTabProps) {
       .then(data => setInvoices(Array.isArray(data.invoices) ? data.invoices : []))
       .catch(e => setInvoicesError(e.message || "Failed to load invoices"))
       .finally(() => setInvoicesLoading(false));
-  }, [memberId, currentOrgId]);
+  }, [memberId]);
 
   useEffect(() => {
-    if (!memberId || !currentOrgId) return;
+    if (!memberId) return;
     setUserLoading(true);
     setUserError(null);
     fetch(`/api/users?id=${memberId}`)
@@ -65,20 +58,15 @@ export default function MemberAccountTab({ memberId }: MemberAccountTabProps) {
       })
       .catch(e => setUserError(e.message || "Failed to load user"))
       .finally(() => setUserLoading(false));
-  }, [memberId, currentOrgId]);
+  }, [memberId]);
 
-  // Calculate account balance (sum of all completed transaction amounts)
   const balance = user?.account_balance ?? 0;
 
-  // Outstanding invoices: count of unique invoice_ids in debit transactions not fully paid
-  const invoiceDebits = transactions.filter(t => t.type === "debit" && t.status === "completed" && t.metadata && t.metadata.invoice_id);
-  const invoicePayments = transactions.filter(t => t.type === "payment" && t.status === "completed" && t.metadata && t.metadata.invoice_id);
-  const outstandingInvoices = Array.from(new Set(invoiceDebits.map(d => d.metadata && d.metadata.invoice_id))).filter(invoiceId => {
-    if (!invoiceId) return false;
-    const totalDebits = invoiceDebits.filter(d => d.metadata && d.metadata.invoice_id === invoiceId).reduce((sum, d) => sum + Number(d.amount), 0);
-    const totalPayments = invoicePayments.filter(p => p.metadata && p.metadata.invoice_id === invoiceId).reduce((sum, p) => sum + Number(p.amount), 0);
-    return Math.abs(totalPayments) < Math.abs(totalDebits);
-  });
+  // Outstanding invoices: count pending/overdue invoices
+  const outstandingInvoicesCount = invoices.filter(invoice => 
+    invoice.user_id === memberId && 
+    (invoice.status === 'pending' || invoice.status === 'overdue')
+  ).length;
 
   // Remove the user column for this context
   const columns = baseColumns.filter(col => (col as { accessorKey?: string }).accessorKey !== "user_id");
@@ -133,7 +121,7 @@ export default function MemberAccountTab({ memberId }: MemberAccountTabProps) {
           ) : error ? (
             <div className="text-destructive text-sm">{error}</div>
           ) : (
-            <div className="text-xl font-bold text-orange-600">{outstandingInvoices.length}</div>
+            <div className="text-xl font-bold text-orange-600">{outstandingInvoicesCount}</div>
           )}
         </div>
       </div>
@@ -172,7 +160,8 @@ export default function MemberAccountTab({ memberId }: MemberAccountTabProps) {
                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           cell = col.cell({ row: { original: inv } } as any) as React.ReactNode;
                         } else if (typeof (col as { accessorKey?: string }).accessorKey === "string") {
-                          cell = (inv as Record<string, unknown>)[(col as { accessorKey: string }).accessorKey] as React.ReactNode;
+                          const accessorKey = (col as { accessorKey: string }).accessorKey;
+                          cell = (inv as unknown as Record<string, unknown>)[accessorKey] as React.ReactNode;
                         } else {
                           cell = null;
                         }

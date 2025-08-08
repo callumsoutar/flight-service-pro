@@ -8,14 +8,13 @@ import type { EquipmentStatus, EquipmentType, Equipment } from '@/types/equipmen
 interface AddEquipmentModalProps {
   open: boolean;
   onClose: () => void;
-  orgId: string;
   refresh?: () => void;
   onAdd?: (equipment: Equipment) => void;
 }
 
 const EQUIPMENT_TYPES: EquipmentType[] = [
   "AIP",
-  "Stationery",
+  "Stationery", 
   "Headset",
   "Technology",
   "Maps",
@@ -35,8 +34,9 @@ const EQUIPMENT_STATUSES: EquipmentStatus[] = [
   "retired",
 ];
 
-export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ open, onClose, orgId, refresh, onAdd }) => {
+export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ open, onClose, refresh, onAdd }) => {
   const [name, setName] = useState("");
+  const [label, setLabel] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
   const [status, setStatus] = useState<EquipmentStatus>("active");
   const [type, setType] = useState<EquipmentType | "">("");
@@ -56,8 +56,8 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ open, onCl
       return;
     }
     const payload = {
-      organization_id: orgId,
       name,
+      label: label || null,
       serial_number: serialNumber || null,
       status,
       type,
@@ -92,6 +92,10 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ open, onCl
             <div className="flex flex-col">
               <label className="text-sm font-medium mb-1">Name *</label>
               <Input value={name} onChange={e => setName(e.target.value)} required autoFocus />
+            </div>
+            <div className="flex flex-col">
+              <label className="text-sm font-medium mb-1">Label</label>
+              <Input value={label} onChange={e => setLabel(e.target.value)} />
             </div>
             <div className="flex flex-col">
               <label className="text-sm font-medium mb-1">Serial Number</label>

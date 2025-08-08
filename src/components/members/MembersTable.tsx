@@ -7,7 +7,6 @@ import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { UserPlus } from "lucide-react";
 import { AddMemberModal } from "./AddMemberModal";
-import { useOrgContext } from "@/components/OrgContextProvider";
 
 interface MembersTableProps {
   initialData: {
@@ -24,15 +23,27 @@ export default function MembersTable({ initialData }: MembersTableProps) {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [modalOpen, setModalOpen] = useState(false);
-  const { currentOrgId } = useOrgContext();
-  const organizationId = currentOrgId;
+  const [members, setMembers] = useState(initialData.members);
+
+  // Refresh function to update the members list
+  const refreshMembers = async () => {
+    try {
+      const response = await fetch('/api/members');
+      const data = await response.json();
+      if (data.members) {
+        setMembers(data.members);
+      }
+    } catch (error) {
+      console.error('Failed to refresh members:', error);
+    }
+  };
 
   // In-memory filtering for search and role
   const filteredMembers = useMemo(() => {
-    let members = initialData.members;
+    let filtered = members;
     if (search) {
       const q = search.toLowerCase();
-      members = members.filter(
+      filtered = filtered.filter(
         (m) =>
           m.first_name?.toLowerCase().includes(q) ||
           m.last_name?.toLowerCase().includes(q) ||
@@ -40,12 +51,10 @@ export default function MembersTable({ initialData }: MembersTableProps) {
       );
     }
     if (roleFilter !== "All") {
-      members = members.filter((m) => m.role.toLowerCase() === roleFilter.toLowerCase());
+      filtered = filtered.filter((m) => m.role.toLowerCase() === roleFilter.toLowerCase());
     }
-    return members;
-  }, [initialData.members, search, roleFilter]);
-
-  // Stats
+    return filtered;
+  }, [members, search, roleFilter]);
 
   return (
     <div className="bg-white rounded-xl shadow p-6 flex flex-col gap-6">
@@ -85,7 +94,7 @@ export default function MembersTable({ initialData }: MembersTableProps) {
       <AddMemberModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        orgId={organizationId || ""}
+        refresh={refreshMembers}
       />
     </div>
   );

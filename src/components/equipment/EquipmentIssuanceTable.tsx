@@ -14,11 +14,10 @@ interface EquipmentIssuanceTableProps {
   loading?: boolean;
   error?: string | null;
   equipment?: Equipment;
-  orgId?: string;
   refresh?: () => void;
 }
 
-export const EquipmentIssuanceTable: React.FC<EquipmentIssuanceTableProps> = ({ issuances, userMap, loading, error, equipment, orgId, refresh }) => {
+export const EquipmentIssuanceTable: React.FC<EquipmentIssuanceTableProps> = ({ issuances, userMap, loading, error, equipment, refresh }) => {
   const [modalOpen, setModalOpen] = React.useState(false);
   return (
     <Card className="p-0 overflow-x-auto">
@@ -31,12 +30,11 @@ export const EquipmentIssuanceTable: React.FC<EquipmentIssuanceTableProps> = ({ 
           <LogIn className="w-4 h-4" /> Issue Equipment
         </Button>
       </div>
-      {equipment && orgId && (
+      {equipment && (
         <IssueEquipmentModal
           open={modalOpen}
           onClose={() => setModalOpen(false)}
           equipment={equipment}
-          orgId={orgId}
           refresh={refresh || (() => {})}
         />
       )}
@@ -48,29 +46,27 @@ export const EquipmentIssuanceTable: React.FC<EquipmentIssuanceTableProps> = ({ 
               <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Issued By</th>
               <th className="px-4 py-3 text-left font-semibold whitespace-nowrap"><span className="inline-flex items-center gap-1"><Calendar className="w-4 h-4 text-muted-foreground" /> Issued At</span></th>
               <th className="px-4 py-3 text-left font-semibold whitespace-nowrap"><span className="inline-flex items-center gap-1"><Clock className="w-4 h-4 text-muted-foreground" /> Returned At</span></th>
-              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap"><span className="inline-flex items-center gap-1"><Calendar className="w-4 h-4 text-muted-foreground" /> Expected Return</span></th>
               <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Notes</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="text-center py-8">Loading...</td></tr>
+              <tr><td colSpan={5} className="text-center py-8">Loading...</td></tr>
             ) : error ? (
-              <tr><td colSpan={6} className="text-center text-red-500 py-8">{error}</td></tr>
+              <tr><td colSpan={5} className="text-center text-red-500 py-8">{error}</td></tr>
             ) : issuances.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-8">No issuance records found.</td></tr>
+              <tr><td colSpan={5} className="text-center py-8">No issuance records found.</td></tr>
             ) : (
               issuances.map((row) => {
                 const issuedAt = row.issued_at ? format(new Date(row.issued_at), 'dd MMM yyyy · HH:mm') : null;
                 const returnedAt = row.returned_at ? format(new Date(row.returned_at), 'dd MMM yyyy · HH:mm') : null;
-                const expectedReturn = row.expected_return_date ? format(new Date(row.expected_return_date), 'dd MMM yyyy') : null;
                 const notesTruncated = row.notes && row.notes.length > 32 ? row.notes.slice(0, 32) + '…' : row.notes;
                 return (
                   <tr
                     key={row.id}
                     className="transition-colors bg-white hover:bg-indigo-50/60 group"
                   >
-                    <td className="px-4 py-3 whitespace-nowrap">{userMap[row.issued_to] || row.issued_to}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{userMap[row.user_id] || row.user_id}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{userMap[row.issued_by] || row.issued_by}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {issuedAt ? (
@@ -83,11 +79,6 @@ export const EquipmentIssuanceTable: React.FC<EquipmentIssuanceTableProps> = ({ 
                       ) : (
                         <Badge variant="secondary" className="bg-gray-200 text-gray-700">Issued</Badge>
                       )}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {expectedReturn ? (
-                        <span className="text-gray-900">{expectedReturn}</span>
-                      ) : <span className="text-muted-foreground">-</span>}
                     </td>
                     <td className="px-4 py-3 max-w-[180px] text-muted-foreground">
                       {row.notes && row.notes.length > 32 ? (

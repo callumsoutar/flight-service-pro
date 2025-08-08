@@ -59,7 +59,7 @@ export const columns: ColumnDef<Invoice>[] = [
   {
     accessorKey: "total_amount",
     header: "Total",
-    cell: ({ row }) => <span>${row.original.total_amount.toFixed(2)}</span>,
+    cell: ({ row }) => <span>${(row.original.total_amount ?? 0).toFixed(2)}</span>,
     enableSorting: true,
   },
 ]; 

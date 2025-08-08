@@ -21,7 +21,7 @@ import { ObservationStatus, ObservationStage } from '@/types/observations';
 import { toast } from "sonner";
 
 const OBSERVATION_STATUSES: ObservationStatus[] = ["low", "medium", "high"];
-const OBSERVATION_STAGES: ObservationStage[] = ["open", "investigating", "monitoring", "closed"];
+const OBSERVATION_STAGES: ObservationStage[] = ["open", "investigation", "resolution", "closed"];
 
 interface ViewObservationModalProps {
   open: boolean;
@@ -192,7 +192,7 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="w-[1200px] max-w-[98vw] mx-auto p-10 bg-white rounded-2xl shadow-xl border border-muted overflow-y-auto max-h-[90vh]">
+      <DialogContent className="w-[900px] max-w-[98vw] mx-auto p-10 bg-white rounded-2xl shadow-xl border border-muted overflow-y-auto max-h-[90vh]">
         <DialogHeader className="mb-2">
           <DialogTitle className="text-2xl font-bold mb-1 tracking-tight">Observation Details</DialogTitle>
           <DialogDescription className="mb-2 text-base text-muted-foreground font-normal">View details and comments for this observation.</DialogDescription>

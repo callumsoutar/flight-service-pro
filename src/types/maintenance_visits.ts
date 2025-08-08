@@ -13,7 +13,6 @@ export interface MaintenanceVisit {
   notes?: string | null;
   created_at: string;
   updated_at: string;
-  organization_id: string;
   booking_id?: string | null;
   scheduled_for?: string | null;
   scheduled_end?: string | null;

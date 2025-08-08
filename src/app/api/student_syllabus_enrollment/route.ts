@@ -5,7 +5,6 @@ import { createClient } from "@/lib/SupabaseServerClient";
 // TODO: Enforce RLS/auth for all operations
 
 const insertSchema = z.object({
-  organization_id: z.string().uuid(),
   user_id: z.string().uuid(),
   syllabus_id: z.string().uuid(),
   enrolled_at: z.string().optional(),

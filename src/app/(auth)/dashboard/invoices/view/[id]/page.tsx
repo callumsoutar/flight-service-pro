@@ -1,28 +1,23 @@
 import { Card } from '@/components/ui/card';
-import { Calendar, User, DollarSign } from 'lucide-react';
 import PaymentHistory from '@/components/invoices/PaymentHistory';
 import DraftRedirector from '@/components/invoices/DraftRedirector';
 import { createClient } from '@/lib/SupabaseServerClient';
 import { InvoiceItem } from '@/types/invoice_items';
-import { cookies } from 'next/headers';
 import * as React from 'react';
 import InvoiceViewHeader from '@/components/invoices/InvoiceViewHeader';
 import InvoiceViewActions from '@/components/invoices/InvoiceViewActions';
 
 async function getInvoiceAndItems(id: string) {
   const supabase = await createClient();
-  // Get current org from cookie
-  const cookieStore = await cookies();
-  const currentOrgId = cookieStore.get('current_org_id')?.value;
-  if (!currentOrgId) return { invoice: null, items: [] };
+  
   // Fetch invoice
   const { data: invoices } = await supabase
     .from('invoices')
     .select('*, users:user_id(id, first_name, last_name, email)')
     .eq('id', id)
-    .eq('organization_id', currentOrgId)
     .limit(1);
   const invoice = invoices && invoices.length > 0 ? invoices[0] : null;
+  
   // Fetch items
   const { data: items } = await supabase
     .from('invoice_items')
@@ -52,38 +47,8 @@ export default async function InvoiceViewPage({ params }: { params: Promise<{ id
         invoiceNumber={invoice.invoice_number}
         status={invoice.status}
         memberName={memberName}
+        bookingId={invoice.booking_id}
       />
-
-      {/* Stat Cards */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Card className="flex flex-row items-center gap-4 p-5">
-          <div className="bg-indigo-100 text-indigo-600 rounded-full p-2">
-            <User className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground font-medium">Member</div>
-            <div className="font-semibold text-base">{memberName}</div>
-          </div>
-        </Card>
-        <Card className="flex flex-row items-center gap-4 p-5">
-          <div className="bg-blue-100 text-blue-600 rounded-full p-2">
-            <Calendar className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground font-medium">Due Date</div>
-            <div className="font-semibold text-base">{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : '-'}</div>
-          </div>
-        </Card>
-        <Card className="flex flex-row items-center gap-4 p-5">
-          <div className="bg-green-100 text-green-600 rounded-full p-2">
-            <DollarSign className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground font-medium">Total Amount</div>
-            <div className="font-semibold text-base">${invoice.total_amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-          </div>
-        </Card>
-      </section>
 
       {/* Invoice Document */}
       <Card className="p-8 shadow-md">
@@ -124,9 +89,9 @@ export default async function InvoiceViewPage({ params }: { params: Promise<{ id
                 items.map((item: InvoiceItem) => (
                   <tr key={item.id} className="border-b last:border-b-0">
                     <td className="px-4 py-3 text-sm">{item.description}</td>
-                    <td className="px-4 py-3 text-right text-sm">{item.quantity}</td>
-                    <td className="px-4 py-3 text-right text-sm">${item.rate_inclusive.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right text-sm font-medium">${item.total_amount.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right text-sm">{item.quantity || 0}</td>
+                    <td className="px-4 py-3 text-right text-sm">${(item.rate_inclusive || item.unit_price || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right text-sm font-medium">${(item.line_total || 0).toFixed(2)}</td>
                   </tr>
                 ))
               )}
@@ -137,26 +102,26 @@ export default async function InvoiceViewPage({ params }: { params: Promise<{ id
         <div className="flex flex-col items-end mt-6 gap-1">
           <div className="flex gap-8 text-sm">
             <div className="text-muted-foreground">Subtotal (excl. Tax):</div>
-            <div className="font-medium">${invoice.subtotal?.toFixed(2) ?? '-'}</div>
+            <div className="font-medium">${(invoice.subtotal || 0).toFixed(2)}</div>
           </div>
           <div className="flex gap-8 text-sm">
             <div className="text-muted-foreground">Tax ({invoice.tax_rate ? Math.round(invoice.tax_rate * 100) : 0}%):</div>
-            <div className="font-medium">${invoice.tax_amount?.toFixed(2) ?? '-'}</div>
+            <div className="font-medium">${(invoice.tax_total || 0).toFixed(2)}</div>
           </div>
           <div className="flex gap-8 text-lg mt-2">
             <div className="font-bold">Total:</div>
-            <div className="font-bold text-green-600">${invoice.total_amount?.toFixed(2) ?? '-'}</div>
+            <div className="font-bold text-green-600">${(invoice.total_amount || 0).toFixed(2)}</div>
           </div>
         </div>
         {/* Paid & Balance Due */}
         <div className="flex flex-col items-end mt-4 gap-1">
           <div className="flex gap-8 text-sm">
             <div className="text-muted-foreground">Paid:</div>
-            <div className="font-semibold text-blue-700">${typeof invoice.paid === 'number' ? invoice.paid.toFixed(2) : '0.00'}</div>
+            <div className="font-semibold text-blue-700">${(invoice.total_paid || 0).toFixed(2)}</div>
           </div>
           <div className="flex gap-8 text-sm">
             <div className="text-muted-foreground">Balance Due:</div>
-            <div className="font-semibold text-red-600">${typeof invoice.balance_due === 'number' ? invoice.balance_due.toFixed(2) : '0.00'}</div>
+            <div className="font-semibold text-red-600">${(invoice.balance_due || 0).toFixed(2)}</div>
           </div>
         </div>
         {/* Add Payment Button (below balance due, tight spacing) */}
@@ -164,8 +129,8 @@ export default async function InvoiceViewPage({ params }: { params: Promise<{ id
           <InvoiceViewActions
             invoiceId={invoice.id}
             invoiceNumber={invoice.invoice_number}
-            totalAmount={invoice.total_amount}
-            balanceDue={typeof invoice.balance_due === 'number' ? invoice.balance_due : invoice.total_amount}
+            totalAmount={invoice.total_amount || 0}
+            balanceDue={invoice.balance_due || invoice.total_amount || 0}
             status={invoice.status}
           />
         </div>

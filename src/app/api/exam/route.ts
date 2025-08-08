@@ -4,15 +4,19 @@ import { createClient } from '@/lib/SupabaseServerClient';
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const syllabus_id = searchParams.get('syllabus_id');
-  if (!syllabus_id) {
-    return NextResponse.json({ error: 'Missing syllabus_id' }, { status: 400 });
-  }
+  
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from('exam')
-    .select('id, name, description, syllabus_id, organization_id, created_at')
-    .eq('syllabus_id', syllabus_id)
+    .select('id, name, description, syllabus_id, passing_score, is_active, created_at, updated_at')
     .order('name', { ascending: true });
+
+  // Filter by syllabus_id if provided, otherwise return all exams
+  if (syllabus_id) {
+    query = query.eq('syllabus_id', syllabus_id);
+  }
+
+  const { data, error } = await query;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

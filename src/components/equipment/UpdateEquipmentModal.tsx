@@ -1,3 +1,4 @@
+"use client";
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -11,11 +12,10 @@ interface UpdateEquipmentModalProps {
   open: boolean;
   onClose: () => void;
   equipment: Equipment;
-  orgId: string;
   refresh: () => void;
 }
 
-export const UpdateEquipmentModal: React.FC<UpdateEquipmentModalProps> = ({ open, onClose, equipment, orgId, refresh }) => {
+export const UpdateEquipmentModal: React.FC<UpdateEquipmentModalProps> = ({ open, onClose, equipment, refresh }) => {
   const [updateDate, setUpdateDate] = useState<Date>(new Date());
   const [nextDueDate, setNextDueDate] = useState<Date | null>(null);
   const [notes, setNotes] = useState<string>("");
@@ -56,7 +56,6 @@ export const UpdateEquipmentModal: React.FC<UpdateEquipmentModalProps> = ({ open
       next_due_at: nextDueDate ? nextDueDate.toISOString().slice(0, 10) : null,
       notes: notes || null,
       updated_by: userId,
-      organization_id: orgId,
     };
     const res = await fetch('/api/equipment_updates', {
       method: 'POST',

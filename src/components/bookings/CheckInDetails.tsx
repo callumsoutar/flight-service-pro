@@ -1,14 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { ClipboardList, Clock, Plane } from "lucide-react";
-import { useOrgContext } from "@/components/OrgContextProvider";
 
 interface CheckInDetailsProps {
   aircraftId?: string;
-  organizationId?: string;
   selectedFlightTypeId?: string | null;
   instructorId?: string | null;
   instructors: { id: string; name: string }[];
@@ -37,99 +35,115 @@ interface CheckInDetailsProps {
   }) => void;
 }
 
-export default function CheckInDetails({ aircraftId, organizationId, selectedFlightTypeId, instructorId, instructors, instructorRate, instructorRateLoading, onCalculateCharges, bookingStartHobbs, bookingStartTacho, initialEndHobbs, initialEndTacho, onFormValuesChange }: CheckInDetailsProps) {
+export default function CheckInDetails({ 
+  aircraftId, 
+  selectedFlightTypeId, 
+  instructorId, 
+  instructors, 
+  instructorRate, 
+  instructorRateLoading, 
+  onCalculateCharges, 
+  bookingStartHobbs, 
+  bookingStartTacho, 
+  initialEndHobbs, 
+  initialEndTacho, 
+  onFormValuesChange 
+}: CheckInDetailsProps) {
   // Start values: ONLY from booking start values (from check-out)
-  const [startHobbs, setStartHobbs] = useState(bookingStartHobbs !== undefined && bookingStartHobbs !== null ? String(bookingStartHobbs) : "");
-  const [startTacho, setStartTacho] = useState(bookingStartTacho !== undefined && bookingStartTacho !== null ? String(bookingStartTacho) : "");
+  const [startHobbs, setStartHobbs] = useState<string>("");
+  const [startTacho, setStartTacho] = useState<string>("");
   // End values: ONLY from props
-  const [endHobbs, setEndHobbs] = useState(initialEndHobbs !== undefined && initialEndHobbs !== null ? String(initialEndHobbs) : "");
-  const [endTacho, setEndTacho] = useState(initialEndTacho !== undefined && initialEndTacho !== null ? String(initialEndTacho) : "");
+  const [endHobbs, setEndHobbs] = useState<string>("");
+  const [endTacho, setEndTacho] = useState<string>("");
   const [flightTypes, setFlightTypes] = useState<{ id: string; name: string }[]>([]);
-  const [selectedFlightType, setSelectedFlightType] = useState<string>(selectedFlightTypeId || "");
+  const [selectedFlightType, setSelectedFlightType] = useState<string>("");
   const [chargeRate, setChargeRate] = useState<string | null>(null);
   const [chargeHobbs, setChargeHobbs] = useState<boolean | null>(null);
   const [chargeTacho, setChargeTacho] = useState<boolean | null>(null);
-  // Remove all local instructorRate state and logic
-  const [selectedInstructor, setSelectedInstructor] = useState<string>(instructorId || "");
+  const [selectedInstructor, setSelectedInstructor] = useState<string>("");
 
-  // Get org tax rate from context
-  const { taxRate } = useOrgContext();
-
-  // Sync start values with booking start values (from check-out) ONLY when those props change
-  useEffect(() => {
-    if (bookingStartHobbs !== undefined && bookingStartHobbs !== null) {
-      setStartHobbs(String(bookingStartHobbs));
-    } else {
-      setStartHobbs("");
-    }
-  }, [bookingStartHobbs]);
-
-  useEffect(() => {
-    if (bookingStartTacho !== undefined && bookingStartTacho !== null) {
-      setStartTacho(String(bookingStartTacho));
-    } else {
-      setStartTacho("");
-    }
-  }, [bookingStartTacho]);
-
-  // Sync end values with props ONLY when those props change
-  useEffect(() => {
-    if (initialEndHobbs !== undefined && initialEndHobbs !== null) {
-      setEndHobbs(String(initialEndHobbs));
-    } else {
-      setEndHobbs("");
-    }
-  }, [initialEndHobbs]);
-
-  useEffect(() => {
-    if (initialEndTacho !== undefined && initialEndTacho !== null) {
-      setEndTacho(String(initialEndTacho));
-    } else {
-      setEndTacho("");
-    }
-  }, [initialEndTacho]);
+  // Default tax rate (can be made configurable later)
+  const taxRate = 0.15;
 
   // Track previous values to avoid unnecessary callbacks
   const prevValuesRef = useRef({ endHobbs: "", endTacho: "" });
 
-  // Notify parent of form value changes
+  // Initialize start values from booking start values
+  useEffect(() => {
+    setStartHobbs(bookingStartHobbs !== undefined && bookingStartHobbs !== null ? String(bookingStartHobbs) : "");
+  }, [bookingStartHobbs]);
+
+  useEffect(() => {
+    setStartTacho(bookingStartTacho !== undefined && bookingStartTacho !== null ? String(bookingStartTacho) : "");
+  }, [bookingStartTacho]);
+
+  // Initialize end values from props
+  useEffect(() => {
+    setEndHobbs(initialEndHobbs !== undefined && initialEndHobbs !== null ? String(initialEndHobbs) : "");
+  }, [initialEndHobbs]);
+
+  useEffect(() => {
+    setEndTacho(initialEndTacho !== undefined && initialEndTacho !== null ? String(initialEndTacho) : "");
+  }, [initialEndTacho]);
+
+  // Initialize selected values
+  useEffect(() => {
+    setSelectedFlightType(selectedFlightTypeId || "");
+  }, [selectedFlightTypeId]);
+
+  useEffect(() => {
+    setSelectedInstructor(instructorId || "");
+  }, [instructorId]);
+
+  // Notify parent of form value changes with debouncing
   useEffect(() => {
     const currentValues = { endHobbs, endTacho };
     const prevValues = prevValuesRef.current;
     
     // Only call callback if values actually changed
     if (onFormValuesChange && (currentValues.endHobbs !== prevValues.endHobbs || currentValues.endTacho !== prevValues.endTacho)) {
-      onFormValuesChange(currentValues);
-      prevValuesRef.current = currentValues;
+      // Debounce the callback to avoid excessive calls
+      const timeoutId = setTimeout(() => {
+        onFormValuesChange(currentValues);
+        prevValuesRef.current = currentValues;
+      }, 100);
+
+      return () => clearTimeout(timeoutId);
     }
   }, [endHobbs, endTacho, onFormValuesChange]);
 
+  // Fetch flight types on mount
   useEffect(() => {
-    if (!organizationId) return;
-    // Fetch all flight types for the organization
-    fetch(`/api/flight_types?organization_id=${organizationId}`)
-      .then((res) => res.json())
-      .then((data) => {
+    const fetchFlightTypes = async () => {
+      try {
+        const res = await fetch(`/api/flight_types`);
+        if (!res.ok) throw new Error('Failed to fetch flight types');
+        const data = await res.json();
         if (data.flight_types) {
           setFlightTypes(data.flight_types);
         }
-      });
-  }, [organizationId]);
+      } catch {
+        // Silent error handling - component will still function without flight types
+      }
+    };
+    fetchFlightTypes();
+  }, []);
 
+  // Fetch charge rate when aircraft or flight type changes
   useEffect(() => {
-    setSelectedFlightType(selectedFlightTypeId || "");
-  }, [selectedFlightTypeId]);
+    const fetchChargeRate = async () => {
+      if (!aircraftId || !selectedFlightType) {
+        setChargeRate(null);
+        setChargeHobbs(null);
+        setChargeTacho(null);
+        return;
+      }
 
-  useEffect(() => {
-    if (!aircraftId || !selectedFlightType) {
-      setChargeRate(null);
-      setChargeHobbs(null);
-      setChargeTacho(null);
-      return;
-    }
-    fetch(`/api/aircraft_charge_rates?aircraft_id=${aircraftId}&flight_type_id=${selectedFlightType}`)
-      .then((res) => res.json())
-      .then((data) => {
+      try {
+        const res = await fetch(`/api/aircraft_charge_rates?aircraft_id=${aircraftId}&flight_type_id=${selectedFlightType}`);
+        if (!res.ok) throw new Error('Failed to fetch charge rate');
+        const data = await res.json();
+        
         if (data.charge_rate) {
           setChargeRate(data.charge_rate.rate_per_hour);
           setChargeHobbs(data.charge_rate.charge_hobbs);
@@ -139,36 +153,53 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
           setChargeHobbs(null);
           setChargeTacho(null);
         }
-      });
+      } catch {
+        // Silent error handling - component will still function without charge rates
+        setChargeRate(null);
+        setChargeHobbs(null);
+        setChargeTacho(null);
+      }
+    };
+
+    fetchChargeRate();
   }, [aircraftId, selectedFlightType]);
 
-  useEffect(() => {
-    setSelectedInstructor(instructorId || "");
-  }, [instructorId]);
+  // Memoized calculations for performance
+  const { tachoTotal, hobbsTotal, chargingBy } = useMemo(() => {
+    const tachoTotal = (parseFloat(endTacho) - parseFloat(startTacho)).toFixed(2);
+    const hobbsTotal = (parseFloat(endHobbs) - parseFloat(startHobbs)).toFixed(2);
+    const chargingBy: 'hobbs' | 'tacho' | null = chargeHobbs ? "hobbs" : chargeTacho ? "tacho" : null;
+    return { tachoTotal, hobbsTotal, chargingBy };
+  }, [endTacho, startTacho, endHobbs, startHobbs, chargeHobbs, chargeTacho]);
 
-  // Remove or refactor this fetch:
-  // fetch(`/api/instructor_rates?organization_id=${organizationId}&user_id=${selectedInstructor}`)
-  // Instead, parent should pass the instructor rate as a prop, or use the two-step lookup pattern in the parent and pass the result down.
+  // Memoized tax calculations
+  const { aircraftRateExclusive, aircraftRateInclusive, instructorRateExclusive, instructorRateInclusive } = useMemo(() => {
+    const aircraftRateExclusive = chargeRate ? parseFloat(chargeRate) : null;
+    const aircraftRateInclusive = aircraftRateExclusive && taxRate != null ? (aircraftRateExclusive * (1 + taxRate)) : null;
+    const instructorRateExclusive = instructorRate?.rate ?? null;
+    const instructorRateInclusive = instructorRateExclusive && taxRate != null ? (instructorRateExclusive * (1 + taxRate)) : null;
+    return { aircraftRateExclusive, aircraftRateInclusive, instructorRateExclusive, instructorRateInclusive };
+  }, [chargeRate, instructorRate, taxRate]);
 
-  // Calculate totals
-  const tachoTotal = (parseFloat(endTacho) - parseFloat(startTacho)).toFixed(2);
-  const hobbsTotal = (parseFloat(endHobbs) - parseFloat(startHobbs)).toFixed(2);
-  const chargingBy = chargeHobbs ? "hobbs" : chargeTacho ? "tacho" : null;
+  const handleCalculateCharges = useCallback(() => {
+    if (!onCalculateCharges) return;
 
-  // Calculate tax-inclusive rates
-  const aircraftRateExclusive = chargeRate ? parseFloat(chargeRate) : null;
-  const aircraftRateInclusive = aircraftRateExclusive && taxRate != null ? (aircraftRateExclusive * (1 + taxRate)) : null;
-  const instructorRateExclusive = instructorRate?.rate ?? null;
-  const instructorRateInclusive = instructorRateExclusive && taxRate != null ? (instructorRateExclusive * (1 + taxRate)) : null;
-
-  const handleCalculateCharges = () => {
     let chargeTime = 0;
     if (chargingBy === "hobbs") {
       chargeTime = parseFloat(hobbsTotal);
     } else if (chargingBy === "tacho") {
       chargeTime = parseFloat(tachoTotal);
     }
-    if (onCalculateCharges && chargeTime > 0 && aircraftRateExclusive && instructorRateExclusive && selectedInstructor && selectedFlightType) {
+    
+    // Validate that we have valid meter readings
+    const hobbsStart = startHobbs !== "" ? parseFloat(startHobbs) : undefined;
+    const hobbsEnd = endHobbs !== "" ? parseFloat(endHobbs) : undefined;
+    const tachStart = startTacho !== "" ? parseFloat(startTacho) : undefined;
+    const tachEnd = endTacho !== "" ? parseFloat(endTacho) : undefined;
+    
+
+    
+    if (chargeTime > 0 && aircraftRateExclusive && instructorRateExclusive && selectedInstructor && selectedFlightType) {
       onCalculateCharges({
         chargeTime,
         aircraftRate: aircraftRateExclusive,
@@ -176,13 +207,51 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
         chargingBy,
         selectedInstructor,
         selectedFlightType,
-        hobbsStart: startHobbs !== "" ? parseFloat(startHobbs) : undefined,
-        hobbsEnd: endHobbs !== "" ? parseFloat(endHobbs) : undefined,
-        tachStart: startTacho !== "" ? parseFloat(startTacho) : undefined,
-        tachEnd: endTacho !== "" ? parseFloat(endTacho) : undefined,
+        hobbsStart,
+        hobbsEnd,
+        tachStart,
+        tachEnd,
       });
     }
-  };
+  }, [
+    onCalculateCharges, 
+    chargingBy, 
+    hobbsTotal, 
+    tachoTotal, 
+    aircraftRateExclusive, 
+    instructorRateExclusive, 
+    selectedInstructor, 
+    selectedFlightType, 
+    startHobbs, 
+    endHobbs, 
+    startTacho, 
+    endTacho
+  ]);
+
+  // Memoized input handlers to prevent unnecessary re-renders
+  const handleStartHobbsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setStartHobbs(e.target.value);
+  }, []);
+
+  const handleEndHobbsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setEndHobbs(e.target.value);
+  }, []);
+
+  const handleStartTachoChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setStartTacho(e.target.value);
+  }, []);
+
+  const handleEndTachoChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setEndTacho(e.target.value);
+  }, []);
+
+  const handleFlightTypeChange = useCallback((value: string) => {
+    setSelectedFlightType(value);
+  }, []);
+
+  const handleInstructorChange = useCallback((value: string) => {
+    setSelectedInstructor(value);
+  }, []);
 
   return (
     <div className="p-0">
@@ -193,7 +262,7 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
           <label className="block text-sm font-semibold mb-2">Flight Type</label>
-          <Select value={selectedFlightType} onValueChange={setSelectedFlightType}>
+          <Select value={selectedFlightType} onValueChange={handleFlightTypeChange}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Select flight type" />
             </SelectTrigger>
@@ -218,7 +287,7 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
         </div>
         <div>
           <label className="block text-sm font-semibold mb-2">Instructor</label>
-          <Select value={selectedInstructor} onValueChange={setSelectedInstructor}>
+          <Select value={selectedInstructor} onValueChange={handleInstructorChange}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Select instructor" />
             </SelectTrigger>
@@ -255,15 +324,23 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1">Start Tacho</label>
-              <input type="number" value={startTacho} onChange={e => setStartTacho(e.target.value)}
+              <input 
+                type="number" 
+                value={startTacho} 
+                onChange={handleStartTachoChange}
                 className={`w-full min-w-[100px] rounded-md border px-3 py-2 text-sm text-center font-mono text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-green-100 focus-visible:ring-[2px] outline-none no-spinner ${chargingBy === "tacho" ? 'border-green-200' : 'border-input'}`}
-                placeholder="" />
+                placeholder="" 
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">End Tacho</label>
-              <input type="number" value={endTacho} onChange={e => setEndTacho(e.target.value)}
+              <input 
+                type="number" 
+                value={endTacho} 
+                onChange={handleEndTachoChange}
                 className={`w-full min-w-[100px] rounded-md border px-3 py-2 text-sm text-center font-mono text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-green-100 focus-visible:ring-[2px] outline-none no-spinner ${chargingBy === "tacho" ? 'border-green-200' : 'border-input'}`}
-                placeholder="" />
+                placeholder="" 
+              />
             </div>
           </div>
           <div className="text-center text-sm text-muted-foreground mt-1">Total: {isNaN(parseFloat(tachoTotal)) ? '0.0' : tachoTotal} hours</div>
@@ -277,22 +354,35 @@ export default function CheckInDetails({ aircraftId, organizationId, selectedFli
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold mb-1">Start Hobbs</label>
-              <input type="number" value={startHobbs} onChange={e => setStartHobbs(e.target.value)}
+              <input 
+                type="number" 
+                value={startHobbs} 
+                onChange={handleStartHobbsChange}
                 className={`w-full min-w-[100px] rounded-md border px-3 py-2 text-sm text-center font-mono text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-green-100 focus-visible:ring-[2px] outline-none no-spinner ${chargingBy === "hobbs" ? 'border-green-200' : 'border-input'}`}
-                placeholder="" />
+                placeholder="" 
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">End Hobbs</label>
-              <input type="number" value={endHobbs} onChange={e => setEndHobbs(e.target.value)}
+              <input 
+                type="number" 
+                value={endHobbs} 
+                onChange={handleEndHobbsChange}
                 className={`w-full min-w-[100px] rounded-md border px-3 py-2 text-sm text-center font-mono text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-green-100 focus-visible:ring-[2px] outline-none no-spinner ${chargingBy === "hobbs" ? 'border-green-200' : 'border-input'}`}
-                placeholder="" />
+                placeholder="" 
+              />
             </div>
           </div>
           <div className="text-center text-sm text-muted-foreground mt-1">Total: {isNaN(parseFloat(hobbsTotal)) ? '0.0' : hobbsTotal} hours</div>
         </div>
       </div>
       <div className="mt-6">
-        <Button variant="outline" className="w-full flex items-center gap-2 justify-center" onClick={handleCalculateCharges}>
+        <Button 
+          variant="outline" 
+          className="w-full flex items-center gap-2 justify-center" 
+          onClick={handleCalculateCharges}
+          disabled={false}
+        >
           <ClipboardList className="w-5 h-5" />
           Calculate Flight Charges
         </Button>

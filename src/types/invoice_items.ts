@@ -5,12 +5,13 @@ export type InvoiceItem = {
   chargeable_id: string | null;
   description: string;
   quantity: number;
-  rate: number;
-  rate_inclusive: number; // tax-inclusive rate
-  amount: number;
-  tax_rate: number;
-  tax_amount: number;
-  total_amount: number;
+  unit_price: number;
+  rate_inclusive: number | null; // Calculated by trigger: unit_price * (1 + tax_rate)
+  amount: number; // Calculated by trigger: quantity * unit_price
+  tax_rate: number | null;
+  tax_amount: number | null; // Calculated by trigger: amount * (tax_rate / 100)
+  line_total: number | null; // Calculated by trigger: amount + tax_amount
+  notes: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -21,12 +22,9 @@ export type InvoiceItemInsert = {
   chargeable_id?: string | null;
   description: string;
   quantity?: number;
-  rate: number;
-  rate_inclusive?: number;
-  amount: number;
-  tax_rate?: number;
-  tax_amount?: number;
-  total_amount: number;
+  unit_price: number;
+  tax_rate?: number | null;
+  notes?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -37,12 +35,9 @@ export type InvoiceItemUpdate = {
   chargeable_id?: string | null;
   description?: string;
   quantity?: number;
-  rate?: number;
-  rate_inclusive?: number;
-  amount?: number;
-  tax_rate?: number;
-  tax_amount?: number;
-  total_amount?: number;
+  unit_price?: number;
+  tax_rate?: number | null;
+  notes?: string | null;
   created_at?: string;
   updated_at?: string;
 }; 

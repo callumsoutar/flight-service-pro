@@ -11,21 +11,16 @@ export async function GET(req: NextRequest) {
   if (userError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Get current organization from cookie
-  const currentOrgId = req.cookies.get("current_org_id")?.value;
-  if (!currentOrgId) {
-    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
-  }
+  
   // Get search query and type filter
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q")?.toLowerCase() || "";
   const type = searchParams.get("type") || "";
 
-  // Fetch chargeables for the org
+  // Fetch chargeables
   let query = supabase
     .from("chargeables")
     .select("id, name, description, rate, type")
-    .eq("organization_id", currentOrgId)
     .order("name", { ascending: true })
     .limit(50);
 

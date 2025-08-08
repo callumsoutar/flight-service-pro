@@ -1,6 +1,5 @@
 export type Transaction = {
   id: string;
-  organization_id: string;
   user_id: string;
   type: string; // USER-DEFINED
   status: string; // USER-DEFINED

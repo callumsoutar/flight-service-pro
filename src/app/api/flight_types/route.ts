@@ -8,15 +8,11 @@ export async function GET(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Org check
-  const orgId = req.cookies.get("current_org_id")?.value;
-  if (!orgId) {
-    return NextResponse.json({ error: "No organization selected" }, { status: 400 });
-  }
+  
   const searchParams = req.nextUrl.searchParams;
   const flightTypeId = searchParams.get("id");
 
-  let query = supabase.from("flight_types").select("*").eq("organization_id", orgId);
+  let query = supabase.from("flight_types").select("*");
   if (flightTypeId) {
     query = query.eq("id", flightTypeId);
     const { data, error } = await query.single();

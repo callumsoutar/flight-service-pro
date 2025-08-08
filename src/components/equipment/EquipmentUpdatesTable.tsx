@@ -13,11 +13,10 @@ interface EquipmentUpdatesTableProps {
   loading?: boolean;
   error?: string | null;
   equipment?: Equipment;
-  orgId?: string;
   refresh?: () => void;
 }
 
-export const EquipmentUpdatesTable: React.FC<EquipmentUpdatesTableProps> = ({ updates, userMap, loading, error, equipment, orgId, refresh }) => {
+export const EquipmentUpdatesTable: React.FC<EquipmentUpdatesTableProps> = ({ updates, userMap, loading, error, equipment, refresh }) => {
   const [modalOpen, setModalOpen] = React.useState(false);
   return (
     <Card className="p-0 overflow-x-auto">
@@ -30,12 +29,11 @@ export const EquipmentUpdatesTable: React.FC<EquipmentUpdatesTableProps> = ({ up
           <Plus className="w-4 h-4" /> Log Update
         </Button>
       </div>
-      {equipment && orgId && (
+      {equipment && (
         <UpdateEquipmentModal
           open={modalOpen}
           onClose={() => setModalOpen(false)}
           equipment={equipment}
-          orgId={orgId}
           refresh={refresh || (() => {})}
         />
       )}
@@ -44,7 +42,7 @@ export const EquipmentUpdatesTable: React.FC<EquipmentUpdatesTableProps> = ({ up
           <thead className="bg-muted/60 sticky top-0 z-10">
             <tr>
               <th className="px-4 py-3 text-left font-semibold whitespace-nowrap"><span className="inline-flex items-center gap-1"><Info className="w-4 h-4 text-muted-foreground" /> Updated By</span></th>
-              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap"><span className="inline-flex items-center gap-1"><Calendar className="w-4 h-4 text-muted-foreground" /> Updated At</span></th>
+              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap"><span className="inline-flex items-center gap-1"><Calendar className="w-4 h-4 text-muted-foreground" /> Update Date</span></th>
               <th className="px-4 py-3 text-left font-semibold whitespace-nowrap"><span className="inline-flex items-center gap-1"><Calendar className="w-4 h-4 text-muted-foreground" /> Next Due At</span></th>
               <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Notes</th>
             </tr>
@@ -58,7 +56,7 @@ export const EquipmentUpdatesTable: React.FC<EquipmentUpdatesTableProps> = ({ up
               <tr><td colSpan={4} className="text-center py-8">No update records found.</td></tr>
             ) : (
               updates.map((row) => {
-                const updatedAt = row.updated_at ? format(new Date(row.updated_at), 'dd MMM yyyy · HH:mm') : null;
+                const updateDate = row.updated_at ? format(new Date(row.updated_at), 'dd MMM yyyy') : null;
                 const nextDueAt = row.next_due_at ? format(new Date(row.next_due_at), 'dd MMM yyyy') : null;
                 const notesTruncated = row.notes && row.notes.length > 32 ? row.notes.slice(0, 32) + '…' : row.notes;
                 return (
@@ -67,13 +65,13 @@ export const EquipmentUpdatesTable: React.FC<EquipmentUpdatesTableProps> = ({ up
                     className="transition-colors bg-white hover:bg-indigo-50/60 group"
                   >
                     <td className="px-4 py-3 whitespace-nowrap">{userMap[row.updated_by] || row.updated_by}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">{updatedAt ? <span className="text-gray-900">{updatedAt}</span> : <span className="text-muted-foreground">-</span>}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{updateDate ? <span className="text-gray-900">{updateDate}</span> : <span className="text-muted-foreground">-</span>}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{nextDueAt ? <span className="text-gray-900">{nextDueAt}</span> : <span className="text-muted-foreground">-</span>}</td>
                     <td className="px-4 py-3 max-w-[180px] text-muted-foreground">
                       {row.notes && row.notes.length > 32 ? (
                         <Popover>
                           <PopoverTrigger asChild>
-                            <span className="cursor-pointer underline decoration-dotted" tabIndex={0} aria-label="Show full note">{notesTruncated}</span>
+                            <span className="cursor-pointer underline decoration-dotted" tabIndex={0} aria-label="Show full notes">{notesTruncated}</span>
                           </PopoverTrigger>
                           <PopoverContent side="top" className="text-sm max-w-xs whitespace-pre-line">{row.notes}</PopoverContent>
                         </Popover>
