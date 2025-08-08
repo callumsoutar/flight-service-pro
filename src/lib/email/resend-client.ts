@@ -1,10 +1,14 @@
 import { Resend } from 'resend';
 
-if (!process.env.RESEND_API_KEY) {
-  throw new Error('RESEND_API_KEY environment variable is not set');
-}
+// Only throw error at runtime, not during build
+const getResendClient = () => {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error('RESEND_API_KEY environment variable is not set');
+  }
+  return new Resend(process.env.RESEND_API_KEY);
+};
 
-export const resend = new Resend(process.env.RESEND_API_KEY);
+export const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 export const EMAIL_CONFIG = {
   FROM_EMAIL: process.env.FROM_EMAIL || 'onboarding@resend.dev', // Use Resend test domain by default

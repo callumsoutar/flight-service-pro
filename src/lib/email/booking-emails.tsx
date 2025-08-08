@@ -30,6 +30,15 @@ export async function sendBookingConfirmation({
   to,
 }: SendBookingConfirmationProps): Promise<EmailSendResult> {
   try {
+    // Check if email service is available
+    if (!resend) {
+      console.warn('Email service not available - RESEND_API_KEY not configured');
+      return {
+        success: false,
+        error: 'Email service not configured',
+      };
+    }
+
     const recipientEmail = to || member.email;
     
     if (!recipientEmail) {
@@ -118,6 +127,15 @@ export async function sendBookingUpdate({
   to,
 }: SendBookingConfirmationProps): Promise<EmailSendResult> {
   try {
+    // Check if email service is available
+    if (!resend) {
+      console.warn('Email service not available - RESEND_API_KEY not configured');
+      return {
+        success: false,
+        error: 'Email service not configured',
+      };
+    }
+
     const recipientEmail = to || member.email;
     
     if (!recipientEmail) {
@@ -189,6 +207,15 @@ export async function sendBookingCancellation({
   cancellationReason?: string;
 }): Promise<EmailSendResult> {
   try {
+    // Check if email service is available
+    if (!resend) {
+      console.warn('Email service not available - RESEND_API_KEY not configured');
+      return {
+        success: false,
+        error: 'Email service not configured',
+      };
+    }
+
     const recipientEmail = to || member.email;
     
     if (!recipientEmail) {
