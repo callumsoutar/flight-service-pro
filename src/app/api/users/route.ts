@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get("q")?.toLowerCase() || "";
   const id = searchParams.get("id");
   const ids = searchParams.get("ids");
+  const email = searchParams.get("email");
 
   // Fetch all users with all fields
   const { data, error } = await supabase
@@ -65,6 +66,9 @@ export async function GET(req: NextRequest) {
     users = users.filter(u => idArray.includes(u.id));
   } else if (id) {
     users = users.filter(u => u.id === id);
+  } else if (email) {
+    // Filter by exact email match (for checking existing users)
+    users = users.filter(u => u.email && u.email.toLowerCase() === email.toLowerCase());
   } else if (q) {
     users = users.filter(u =>
       (u.first_name && u.first_name.toLowerCase().includes(q)) ||
@@ -109,37 +113,49 @@ export async function POST(req: NextRequest) {
     occupation,
     employer,
     notes, 
-    role = "member" 
+    role = "member",
+    create_auth_user = true // New parameter to control auth user creation
   } = body;
   
   if (!email) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
   }
 
-  // Create user in Supabase Auth first
-  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-    email,
-    password: "tempPassword123!", // This should be changed by the user
-    email_confirm: true,
-    user_metadata: {
-      first_name,
-      last_name,
-    },
-  });
+  let userId: string;
+  let authData = null;
 
-  if (authError) {
-    return NextResponse.json({ error: authError.message }, { status: 500 });
-  }
+  if (create_auth_user) {
+    // Create user in Supabase Auth first (normal user creation)
+    const { data: authResponse, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password: "tempPassword123!", // This should be changed by the user
+      email_confirm: true,
+      user_metadata: {
+        first_name,
+        last_name,
+      },
+    });
 
-  if (!authData.user) {
-    return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
+    if (authError) {
+      return NextResponse.json({ error: authError.message }, { status: 500 });
+    }
+
+    if (!authResponse.user) {
+      return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
+    }
+
+    authData = authResponse;
+    userId = authResponse.user.id;
+  } else {
+    // Generate a UUID for trial flight users (no auth account)
+    userId = crypto.randomUUID();
   }
 
   // Create user record in users table with all fields
   const { data: userData, error: userError } = await supabase
     .from("users")
     .insert([{
-      id: authData.user.id,
+      id: userId,
       email,
       first_name,
       last_name,
@@ -168,26 +184,47 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (userError) {
-    // If user creation fails, we should clean up the auth user
-    await supabase.auth.admin.deleteUser(authData.user.id);
+    // If user creation fails and we created an auth user, clean it up
+    if (authData?.user) {
+      await supabase.auth.admin.deleteUser(authData.user.id);
+    }
     return NextResponse.json({ error: userError.message }, { status: 500 });
   }
 
-  // Assign role to user via user_roles table
-  const { data: roleData } = await supabase
-    .from("roles")
-    .select("id")
-    .eq("name", role)
-    .single();
+  // Assign role to user via user_roles table (only if we have a role system set up)
+  if (create_auth_user) {
+    const { data: roleData } = await supabase
+      .from("roles")
+      .select("id")
+      .eq("name", role)
+      .single();
 
-  if (roleData?.id) {
-    await supabase
-      .from("user_roles")
-      .insert([{
-        user_id: authData.user.id,
-        role_id: roleData.id,
-        granted_by: authData.user.id,
-      }]);
+    if (roleData?.id) {
+      await supabase
+        .from("user_roles")
+        .insert([{
+          user_id: userId,
+          role_id: roleData.id,
+          granted_by: userId,
+        }]);
+    }
+  } else {
+    // For trial flight users, assign member role for basic permissions
+    const { data: memberRole } = await supabase
+      .from("roles")
+      .select("id")
+      .eq("name", "member")
+      .single();
+
+    if (memberRole?.id) {
+      await supabase
+        .from("user_roles")
+        .insert([{
+          user_id: userId,
+          role_id: memberRole.id,
+          granted_by: user.id, // Current authenticated user granting the role
+        }]);
+    }
   }
 
   return NextResponse.json({ user: userData });

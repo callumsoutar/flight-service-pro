@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 
 // Define types for better TypeScript support
 interface Booking {
-  id: number;
+  id: string; // Changed from number to string to support UUIDs
   start: number;
   duration: number;
   name: string;
@@ -257,10 +257,8 @@ const FlightScheduler = () => {
       const endTime = new Date(newBookingData.end_time);
       const duration = (endTime.getTime() - bookingDate.getTime()) / (1000 * 60 * 60);
       
-      // Generate a unique temporary ID for optimistic bookings to avoid React key conflicts
-      const bookingId = newBookingData.id ? 
-        (typeof newBookingData.id === 'string' ? parseInt(newBookingData.id) : newBookingData.id) :
-        Date.now(); // Use timestamp as fallback for unique ID
+      // Use the booking ID directly as string
+      const bookingId = newBookingData.id || Date.now().toString(); // Use timestamp as fallback for unique ID
 
       const schedulerBooking: Booking = {
         id: bookingId,
@@ -407,7 +405,7 @@ const FlightScheduler = () => {
               }
               
               const schedulerBooking: Booking = {
-                id: parseInt(booking.id) || 0,
+                id: booking.id, // Keep as string UUID
                 start: startTime,
                 duration: duration,
                 name: booking.user?.first_name && booking.user?.last_name 

@@ -2,12 +2,14 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import Progress from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Progress from "@/components/ui/progress";
 import type { LessonProgress, LessonOutcome } from "@/types/lesson_progress";
 import type { Lesson } from "@/types/lessons";
 import type { User } from "@/types/users";
 import type { Instructor } from "@/types/instructors";
+import type { Syllabus } from "@/types/syllabus";
 
 import { useRouter } from "next/navigation";
 import { 
@@ -15,12 +17,10 @@ import {
   CheckCircle, 
   XCircle, 
   Clock, 
-  TrendingUp, 
   BookOpen, 
   User as UserIcon,
   Eye,
-  Target,
-  Award
+  Target
 } from "lucide-react";
 import { format, isToday, isYesterday, isThisWeek, subDays } from "date-fns";
 
@@ -28,18 +28,14 @@ interface MemberTrainingHistoryTabProps {
   memberId: string;
 }
 
-interface ProgressStats {
-  totalLessons: number;
-  completedLessons: number;
-  passedLessons: number;
-  recentLessons: number;
-  currentStreak: number;
-}
+
 
 export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHistoryTabProps) {
   const router = useRouter();
   const [records, setRecords] = useState<LessonProgress[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
+  const [selectedSyllabusId, setSelectedSyllabusId] = useState<string>("");
   const [instructors, setInstructors] = useState<Record<string, User>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,9 +50,10 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
         .then(res => res.json())
         .then(data => Array.isArray(data.data) ? data.data : []),
       fetch(`/api/lessons`).then(res => res.json()).then(data => Array.isArray(data.lessons) ? data.lessons : []),
+      fetch(`/api/syllabus`).then(res => res.json()).then(data => Array.isArray(data.syllabi) ? data.syllabi : []),
       fetch(`/api/instructors`).then(res => res.json()).then(data => Array.isArray(data.instructors) ? data.instructors : []),
     ])
-      .then(async ([progressData, lessonsData, instructorsData]) => {
+      .then(async ([progressData, lessonsData, syllabiData, instructorsData]) => {
         // Sort records by date, most recent first
         const sortedRecords = progressData.sort((a: LessonProgress, b: LessonProgress) => 
           new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime()
@@ -64,6 +61,12 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
         
         setRecords(sortedRecords);
         setLessons(lessonsData);
+        setSyllabi(syllabiData);
+        
+        // Set first syllabus as default selection if available
+        if (syllabiData.length > 0 && !selectedSyllabusId) {
+          setSelectedSyllabusId(syllabiData[0].id);
+        }
         
         // Create instructor map
         const instructorMap: Record<string, Instructor> = {};
@@ -102,24 +105,9 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
       })
       .catch((e) => setError(e.message || "Failed to load training history"))
       .finally(() => setLoading(false));
-  }, [memberId]);
+  }, [memberId, selectedSyllabusId]);
 
-  // Calculate progress statistics
-  const progressStats: ProgressStats = {
-    totalLessons: records.length,
-    completedLessons: records.filter(r => r.status).length,
-    passedLessons: records.filter(r => r.status === 'pass').length,
-    recentLessons: records.filter(r => {
-      const recordDate = new Date(r.date || r.created_at);
-      const thirtyDaysAgo = subDays(new Date(), 30);
-      return recordDate >= thirtyDaysAgo;
-    }).length,
-    currentStreak: calculateCurrentStreak(records),
-  };
 
-  const completionPercentage = progressStats.totalLessons > 0 
-    ? Math.round((progressStats.passedLessons / progressStats.totalLessons) * 100) 
-    : 0;
 
   // Helper functions
   const lessonNameMap = lessons.reduce<Record<string, string>>((acc, lesson) => {
@@ -134,17 +122,32 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
     return [u.first_name, u.last_name].filter(Boolean).join(" ") || u.email || `Unknown Instructor`;
   }
 
-  function calculateCurrentStreak(records: LessonProgress[]): number {
-    let streak = 0;
-    for (const record of records) {
-      if (record.status === 'pass') {
-        streak++;
-      } else if (record.status === 'not yet competent') {
-        break;
-      }
-    }
-    return streak;
+  // Calculate progress for selected syllabus
+  function calculateSyllabusProgress() {
+    if (!selectedSyllabusId) return { passed: 0, total: 0, percentage: 0 };
+    
+    const selectedSyllabus = syllabi.find(s => s.id === selectedSyllabusId);
+    if (!selectedSyllabus) return { passed: 0, total: 0, percentage: 0 };
+    
+    // Get lessons for this syllabus
+    const syllabusLessons = lessons.filter(lesson => lesson.syllabus_id === selectedSyllabusId);
+    const totalLessons = syllabusLessons.length;
+    
+    // Count passed lessons for this syllabus
+    const passedLessons = records.filter(record => {
+      if (record.status !== 'pass') return false;
+      const lesson = lessons.find(l => l.id === record.lesson_id);
+      return lesson && lesson.syllabus_id === selectedSyllabusId;
+    }).length;
+    
+    const percentage = totalLessons > 0 ? Math.round((passedLessons / totalLessons) * 100) : 0;
+    
+    return { passed: passedLessons, total: totalLessons, percentage };
   }
+
+  const progressData = calculateSyllabusProgress();
+
+
 
   function formatRelativeDate(dateString: string): string {
     const date = new Date(dateString);
@@ -224,66 +227,7 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
 
   return (
     <div className="w-full space-y-6">
-      {/* Progress Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <BookOpen className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Lessons</p>
-                <p className="text-2xl font-bold">{progressStats.totalLessons}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Passed</p>
-                <p className="text-2xl font-bold">{progressStats.passedLessons}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Recent (30 days)</p>
-                <p className="text-2xl font-bold">{progressStats.recentLessons}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <Award className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Current Streak</p>
-                <p className="text-2xl font-bold">{progressStats.currentStreak}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Overall Progress Bar */}
+      {/* Syllabus Progress */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -292,18 +236,38 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
               Training Progress
             </CardTitle>
             <Badge variant="outline" className="text-lg px-3 py-1">
-              {completionPercentage}% Complete
+              {progressData.percentage}% Complete
             </Badge>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <Progress value={completionPercentage} className="h-3" />
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>{progressStats.passedLessons} lessons passed</span>
-              <span>{progressStats.totalLessons - progressStats.passedLessons} remaining</span>
-            </div>
+        <CardContent className="space-y-4">
+          {/* Syllabus Selector */}
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-medium text-gray-700 min-w-[80px]">Syllabus:</label>
+            <Select value={selectedSyllabusId} onValueChange={setSelectedSyllabusId}>
+              <SelectTrigger className="w-[300px]">
+                <SelectValue placeholder="Select a syllabus" />
+              </SelectTrigger>
+              <SelectContent>
+                {syllabi.map((syllabus) => (
+                  <SelectItem key={syllabus.id} value={syllabus.id}>
+                    {syllabus.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+          
+          {/* Progress Bar */}
+          {selectedSyllabusId && (
+            <div className="space-y-2">
+              <Progress value={progressData.percentage} className="h-3" />
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>{progressData.passed} lessons passed</span>
+                <span>{progressData.total - progressData.passed} remaining</span>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

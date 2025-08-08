@@ -276,220 +276,316 @@ export default function InstructorFlightTypeRatesTable({ instructorId }: Props) 
   };
 
   if (loading) {
-    return <div className="p-4 text-center">Loading rates...</div>;
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-start">
+          <div className="space-y-1">
+            <div className="h-4 bg-gray-200 rounded animate-pulse w-48"></div>
+          </div>
+          <div className="h-9 bg-gray-200 rounded animate-pulse w-24"></div>
+        </div>
+        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+          <div className="bg-gray-50 p-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          </div>
+          <div className="p-4 space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="grid grid-cols-3 gap-4 items-center">
+                <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 bg-gray-200 rounded animate-pulse w-20"></div>
+                <div className="flex gap-2 justify-end">
+                  <div className="h-8 w-16 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-8 w-16 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-semibold">Flight Type Rates</h3>
-          <p className="text-sm text-gray-500">Rates shown include {Math.round(defaultTaxRate * 100)}% tax</p>
+    <div className="space-y-6">
+      {/* Action Bar */}
+      <div className="flex justify-between items-start">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-gray-600">
+              Rates shown include <span className="font-medium text-indigo-600">{Math.round(defaultTaxRate * 100)}% tax</span>
+            </p>
+          </div>
         </div>
-        <Button onClick={handleAddRate} size="sm">
+        <Button 
+          onClick={handleAddRate} 
+          size="sm" 
+          className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-lg shadow-sm"
+        >
           Add Rate
         </Button>
       </div>
-      
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Flight Type</TableHead>
-            <TableHead>Rate</TableHead>
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rates.map((rate) => (
-            <TableRow key={rate.id}>
-              <TableCell>
-                {isEditing(rate.id) && editingRate ? (
-                  <Select
-                    value={editingRate.flight_type_id}
-                    onValueChange={(value) => setEditingRate(prev => prev ? { ...prev, flight_type_id: value } : null)}
-                  >
-                    <SelectTrigger className="w-64">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {flightTypes.map((flightType) => {
-                        // Show current flight type or available ones (not assigned to other rates)
-                        const isCurrentFlightType = flightType.id === editingRate.flight_type_id;
-                        const isAssignedToOtherRate = rates.some(rate => 
-                          rate.flight_type_id === flightType.id && rate.id !== editingRate.id
-                        );
-                        
-                        if (isCurrentFlightType || !isAssignedToOtherRate) {
-                          return (
-                            <SelectItem key={flightType.id} value={flightType.id}>
-                              {flightType.name}
-                            </SelectItem>
-                          );
-                        }
-                        return null;
-                      })}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  flightTypes.find(ft => ft.id === rate.flight_type_id)?.name || 'Unknown'
-                )}
-              </TableCell>
-              <TableCell>
-                {isEditing(rate.id) && editingRate ? (
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={editingRate.rate}
-                    onChange={(e) => setEditingRate(prev => prev ? { ...prev, rate: e.target.value } : null)}
-                    className="w-24"
-                  />
-                ) : (
-                  `$${calculateTaxInclusive(rate.rate).toFixed(2)}`
-                )}
-              </TableCell>
 
-
-              <TableCell>
-                {isEditing(rate.id) ? (
-                  <div className="flex gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleSaveRate();
-                      }}
-                      disabled={saving}
-                      className="h-8 w-8 p-0"
-                      type="button"
-                    >
-                      <Check className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleCancelEdit();
-                      }}
-                      disabled={saving}
-                      className="h-8 w-8 p-0"
-                      type="button"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+      {/* Main Content */}
+      {rates.length === 0 && !addingNewRate ? (
+        <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center bg-gray-50">
+          <div className="flex flex-col items-center gap-3">
+            <div className="p-3 bg-gray-100 rounded-full">
+              <Check className="w-6 h-6 text-gray-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-gray-900">No rates configured</h3>
+              <p className="text-xs text-gray-500 mt-1">Add your first flight type rate to get started</p>
+            </div>
+            <Button 
+              onClick={handleAddRate} 
+              variant="outline" 
+              size="sm"
+              className="mt-2"
+            >
+              Add First Rate
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+          <Table>
+            <TableHeader className="bg-gray-50">
+              <TableRow className="border-b border-gray-200">
+                <TableHead className="font-semibold text-gray-900 py-4 px-6">
+                  Flight Type
+                </TableHead>
+                <TableHead className="font-semibold text-gray-900 py-4 px-6">
+                  <div className="flex flex-col">
+                    <span>Rate (Inc. Tax)</span>
+                    <span className="text-xs font-normal text-gray-500">Per hour</span>
                   </div>
-                ) : (
-                  <div className="flex gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleEditRate(rate);
-                      }}
-                      className="h-8 w-8 p-0"
-                      type="button"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleDeleteRate(rate.id);
-                      }}
-                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                      type="button"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-          
-          {/* New Rate Row */}
-          {isAddingNew() && editingRate && (
-            <TableRow className="bg-blue-50">
-              <TableCell>
-                <Select
-                  value={editingRate.flight_type_id}
-                  onValueChange={(value) => setEditingRate(prev => prev ? { ...prev, flight_type_id: value } : null)}
+                </TableHead>
+                <TableHead className="font-semibold text-gray-900 py-4 px-6 text-right">
+                  Actions
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rates.map((rate) => (
+                <TableRow 
+                  key={rate.id} 
+                  className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                    isEditing(rate.id) ? 'bg-indigo-50' : ''
+                  }`}
                 >
-                  <SelectTrigger className="w-64">
-                    <SelectValue placeholder="Select flight type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {flightTypes.map((flightType) => {
-                      // Only show flight types not already assigned
-                      const isAssigned = rates.some(rate => rate.flight_type_id === flightType.id);
-                      if (!isAssigned) {
-                        return (
-                          <SelectItem key={flightType.id} value={flightType.id}>
-                            {flightType.name}
-                          </SelectItem>
-                        );
-                      }
-                      return null;
-                    })}
-                  </SelectContent>
-                </Select>
-              </TableCell>
-              <TableCell>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={editingRate.rate}
-                  onChange={(e) => setEditingRate(prev => prev ? { ...prev, rate: e.target.value } : null)}
-                  className="w-24"
-                  placeholder="0.00"
-                />
-              </TableCell>
-              <TableCell>
-                <div className="flex gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleSaveNewRate();
-                    }}
-                    disabled={saving}
-                    className="h-8 w-8 p-0"
-                    type="button"
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleCancelNewRate();
-                    }}
-                    disabled={saving}
-                    className="h-8 w-8 p-0"
-                    type="button"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+                  <TableCell className="py-4 px-6">
+                    {isEditing(rate.id) && editingRate ? (
+                      <Select
+                        value={editingRate.flight_type_id}
+                        onValueChange={(value) => setEditingRate(prev => prev ? { ...prev, flight_type_id: value } : null)}
+                      >
+                        <SelectTrigger className="w-full max-w-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {flightTypes.map((flightType) => {
+                            // Show current flight type or available ones (not assigned to other rates)
+                            const isCurrentFlightType = flightType.id === editingRate.flight_type_id;
+                            const isAssignedToOtherRate = rates.some(rate => 
+                              rate.flight_type_id === flightType.id && rate.id !== editingRate.id
+                            );
+                            
+                            if (isCurrentFlightType || !isAssignedToOtherRate) {
+                              return (
+                                <SelectItem key={flightType.id} value={flightType.id}>
+                                  {flightType.name}
+                                </SelectItem>
+                              );
+                            }
+                            return null;
+                          })}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                        <span className="font-medium text-gray-900">
+                          {flightTypes.find(ft => ft.id === rate.flight_type_id)?.name || 'Unknown'}
+                        </span>
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="py-4 px-6">
+                    {isEditing(rate.id) && editingRate ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500">$</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={editingRate.rate}
+                          onChange={(e) => setEditingRate(prev => prev ? { ...prev, rate: e.target.value } : null)}
+                          className="w-24 text-center"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    ) : (
+                      <span className="font-semibold text-gray-900 text-lg">
+                        ${calculateTaxInclusive(rate.rate).toFixed(2)}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="py-4 px-6">
+                    {isEditing(rate.id) ? (
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleSaveRate();
+                          }}
+                          disabled={saving}
+                          className="h-9 px-3 bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                          type="button"
+                        >
+                          <Check className="h-4 w-4 mr-1" />
+                          Save
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleCancelEdit();
+                          }}
+                          disabled={saving}
+                          className="h-9 px-3"
+                          type="button"
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleEditRate(rate);
+                          }}
+                          className="h-9 px-3 hover:bg-indigo-50 hover:border-indigo-200"
+                          type="button"
+                        >
+                          <Edit2 className="h-4 w-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDeleteRate(rate.id);
+                          }}
+                          className="h-9 px-3 text-red-600 hover:bg-red-50 hover:border-red-200"
+                          type="button"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+              
+              {/* New Rate Row */}
+              {isAddingNew() && editingRate && (
+                <TableRow className="bg-blue-50 border-b border-blue-200">
+                  <TableCell className="py-4 px-6">
+                    <Select
+                      value={editingRate.flight_type_id}
+                      onValueChange={(value) => setEditingRate(prev => prev ? { ...prev, flight_type_id: value } : null)}
+                    >
+                      <SelectTrigger className="w-full max-w-xs border-blue-300 bg-white">
+                        <SelectValue placeholder="Select flight type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {flightTypes.map((flightType) => {
+                          // Only show flight types not already assigned
+                          const isAssigned = rates.some(rate => rate.flight_type_id === flightType.id);
+                          if (!isAssigned) {
+                            return (
+                              <SelectItem key={flightType.id} value={flightType.id}>
+                                {flightType.name}
+                              </SelectItem>
+                            );
+                          }
+                          return null;
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell className="py-4 px-6">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editingRate.rate}
+                        onChange={(e) => setEditingRate(prev => prev ? { ...prev, rate: e.target.value } : null)}
+                        className="w-24 text-center border-blue-300 bg-white"
+                        placeholder="0.00"
+                        autoFocus
+                      />
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-4 px-6">
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleSaveNewRate();
+                        }}
+                        disabled={saving}
+                        className="h-9 px-3 bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                        type="button"
+                      >
+                        <Check className="h-4 w-4 mr-1" />
+                        Add
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleCancelNewRate();
+                        }}
+                        disabled={saving}
+                        className="h-9 px-3"
+                        type="button"
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Cancel
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 } 

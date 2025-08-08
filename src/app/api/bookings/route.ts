@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/SupabaseServerClient";
+import { sendBookingConfirmation, sendBookingUpdate } from "@/lib/email/booking-emails";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export async function GET(req: NextRequest) {
@@ -114,6 +115,65 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Send confirmation email after successful booking creation
+  try {
+    if (data && data.user && data.user.email) {
+      // Prepare additional booking data for email
+      let instructor = null;
+      if (data.instructor && data.instructor.users) {
+        const instructorUser = Array.isArray(data.instructor.users) 
+          ? data.instructor.users[0] 
+          : data.instructor.users;
+        
+        instructor = {
+          name: `${instructorUser?.first_name || ''} ${instructorUser?.last_name || ''}`.trim() || 
+                instructorUser?.email || 
+                data.instructor.id,
+          email: instructorUser?.email,
+        };
+      }
+
+      // Get lesson and flight type names if available
+      let lesson = null;
+      let flightType = null;
+      
+      if (data.lesson_id) {
+        const { data: lessonData } = await supabase
+          .from('lessons')
+          .select('name')
+          .eq('id', data.lesson_id)
+          .single();
+        lesson = lessonData ? { name: lessonData.name } : null;
+      }
+
+      if (data.flight_type_id) {
+        const { data: flightTypeData } = await supabase
+          .from('flight_types')
+          .select('name')
+          .eq('id', data.flight_type_id)
+          .single();
+        flightType = flightTypeData ? { name: flightTypeData.name } : null;
+      }
+
+      // Send the email in the background - don't wait for it to complete
+      sendBookingConfirmation({
+        booking: data,
+        member: data.user,
+        aircraft: data.aircraft,
+        instructor,
+        lesson,
+        flightType,
+      }).catch((emailError) => {
+        console.error('Failed to send booking confirmation email:', emailError);
+        // Don't fail the booking creation if email fails
+      });
+    }
+  } catch (emailError) {
+    console.error('Error in email sending process:', emailError);
+    // Don't fail the booking creation if email process fails
+  }
+
   return NextResponse.json({ booking: normalizeBookingTimestamps(data) });
 }
 
@@ -216,12 +276,92 @@ export async function PATCH(req: NextRequest) {
   // Fetch and return the updated booking (including flight_time)
   const { data: updatedBooking, error: fetchError } = await supabase
     .from("bookings")
-    .select("*")
+    .select(`
+      *,
+      user:user_id(id, first_name, last_name, email),
+      instructor:instructor_id(*, users:users!instructors_user_id_fkey(*)),
+      aircraft:aircraft_id(id, registration, type)
+    `)
     .eq("id", id)
     .single();
   if (fetchError) {
     return NextResponse.json({ error: fetchError.message }, { status: 500 });
   }
+
+  // Send email notification for status changes
+  try {
+    if (updatedBooking && updatedBooking.user && updatedBooking.user.email && 
+        updates.status && updates.status !== existingBooking.status) {
+      
+      // Prepare instructor data
+      let instructor = null;
+      if (updatedBooking.instructor && updatedBooking.instructor.users) {
+        const instructorUser = Array.isArray(updatedBooking.instructor.users) 
+          ? updatedBooking.instructor.users[0] 
+          : updatedBooking.instructor.users;
+        
+        instructor = {
+          name: `${instructorUser?.first_name || ''} ${instructorUser?.last_name || ''}`.trim() || 
+                instructorUser?.email || 
+                updatedBooking.instructor.id,
+          email: instructorUser?.email,
+        };
+      }
+
+      // Get lesson and flight type names if available
+      let lesson = null;
+      let flightType = null;
+      
+      if (updatedBooking.lesson_id) {
+        const { data: lessonData } = await supabase
+          .from('lessons')
+          .select('name')
+          .eq('id', updatedBooking.lesson_id)
+          .single();
+        lesson = lessonData ? { name: lessonData.name } : null;
+      }
+
+      if (updatedBooking.flight_type_id) {
+        const { data: flightTypeData } = await supabase
+          .from('flight_types')
+          .select('name')
+          .eq('id', updatedBooking.flight_type_id)
+          .single();
+        flightType = flightTypeData ? { name: flightTypeData.name } : null;
+      }
+
+      // Determine if this is a confirmation or general update
+      if (updates.status === 'confirmed' && existingBooking.status === 'unconfirmed') {
+        // Send confirmation email
+        sendBookingConfirmation({
+          booking: updatedBooking,
+          member: updatedBooking.user,
+          aircraft: updatedBooking.aircraft,
+          instructor,
+          lesson,
+          flightType,
+        }).catch((emailError) => {
+          console.error('Failed to send booking confirmation email:', emailError);
+        });
+      } else {
+        // Send general update email
+        sendBookingUpdate({
+          booking: updatedBooking,
+          member: updatedBooking.user,
+          aircraft: updatedBooking.aircraft,
+          instructor,
+          lesson,
+          flightType,
+        }).catch((emailError) => {
+          console.error('Failed to send booking update email:', emailError);
+        });
+      }
+    }
+  } catch (emailError) {
+    console.error('Error in email sending process:', emailError);
+    // Don't fail the booking update if email process fails
+  }
+
   return NextResponse.json({ booking: normalizeBookingTimestamps(updatedBooking) });
 }
 
