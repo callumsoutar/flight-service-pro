@@ -206,7 +206,7 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
   });
 
   return (
-    <Card className="w-full">
+    <Card className="w-full rounded-md">
       <CardContent className="py-4 px-2 sm:px-6 w-full">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Exam Results</h3>

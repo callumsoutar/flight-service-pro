@@ -100,10 +100,11 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
     type: a.type,
   }));
 
-  // Fetch all lessons
+  // Fetch all lessons ordered by order column
   const { data: lessonRows } = await supabase
     .from("lessons")
-    .select("id, name");
+    .select("id, name, order")
+    .order("order", { ascending: true });
   lessons = (lessonRows || []).map((l: { id: string; name: string }) => ({ id: l.id, name: l.name }));
 
   // Fetch all flight types
@@ -111,6 +112,29 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
     .from("flight_types")
     .select("id, name");
   flightTypes = (flightTypeRows || []).map((f: { id: string; name: string }) => ({ id: f.id, name: f.name }));
+
+  // Fetch all bookings for conflict checking
+  const { data: allBookingsData } = await supabase
+    .from("bookings")
+    .select("id, aircraft_id, instructor_id, start_time, end_time, status");
+  const allBookings = (allBookingsData || []).map(booking => ({
+    ...booking,
+    // Add required fields with default values for conflict checking
+    user_id: null,
+    purpose: "",
+    remarks: null,
+    lesson_id: null,
+    flight_type_id: null,
+    booking_type: "flight" as const,
+    hobbs_start: null,
+    hobbs_end: null,
+    tach_start: null,
+    tach_end: null,
+    cancellation_reason: null,
+    cancellation_category_id: null,
+    created_at: "",
+    updated_at: ""
+  })) as Booking[];
 
   // Assign member, instructor, and aircraft only if booking is not null
   if (booking) {
@@ -184,7 +208,7 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
         <div className="flex flex-row items-center w-full mb-2 gap-4">
           <div className="flex-1 min-w-0 flex flex-col items-start gap-0">
             <h1 className="text-[3rem] font-extrabold tracking-tight text-gray-900" style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1 }}>Booking Details</h1>
-            {booking && (
+            {booking && booking.user_id && (
               <BookingMemberLink
                 userId={booking.user_id}
                 firstName={booking.user?.first_name || member?.first_name}
@@ -220,6 +244,7 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
                 aircraft={aircraftList}
                 lessons={lessons}
                 flightTypes={flightTypes}
+                bookings={allBookings}
               />
             ) : (
               <div className="p-8 text-center text-muted-foreground">Booking not found.</div>

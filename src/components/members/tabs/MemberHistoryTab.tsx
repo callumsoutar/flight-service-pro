@@ -29,7 +29,7 @@ export default function MemberHistoryTab({ member }: MemberHistoryTabProps) {
   }, [member.id]);
 
   return (
-    <Card className="mt-4">
+    <Card className="mt-4 rounded-md">
       <div className="flex items-center gap-2 mb-4">
         <Clock className="w-5 h-5 text-muted-foreground" />
         <h2 className="text-lg font-semibold">History / Audit Log</h2>

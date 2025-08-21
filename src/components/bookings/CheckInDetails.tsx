@@ -197,8 +197,6 @@ export default function CheckInDetails({
     const tachStart = startTacho !== "" ? parseFloat(startTacho) : undefined;
     const tachEnd = endTacho !== "" ? parseFloat(endTacho) : undefined;
     
-
-    
     if (chargeTime > 0 && aircraftRateExclusive && instructorRateExclusive && selectedInstructor && selectedFlightType) {
       onCalculateCharges({
         chargeTime,
@@ -279,10 +277,14 @@ export default function CheckInDetails({
           </Select>
           {aircraftRateInclusive != null ? (
             <div className="text-xs text-muted-foreground mt-1">
-              Rate: <span className="font-semibold">${aircraftRateInclusive.toFixed(2)} / hour</span>
+              Rate: <span className="font-semibold">${aircraftRateInclusive.toFixed(2)} / hour</span> (incl. tax)
             </div>
-          ) : chargeRate && (
-            <div className="text-xs text-muted-foreground mt-1">Rate: <span className="font-semibold">${parseFloat(chargeRate).toFixed(2)} / hour</span></div>
+          ) : chargeRate ? (
+            <div className="text-xs text-muted-foreground mt-1">Rate: <span className="font-semibold">${parseFloat(chargeRate).toFixed(2)} / hour</span> (excl. tax)</div>
+          ) : selectedFlightType && aircraftId ? (
+            <div className="text-xs text-red-500 mt-1">No rate found for this flight type</div>
+          ) : (
+            <div className="text-xs text-muted-foreground mt-1">Select flight type to see rate</div>
           )}
         </div>
         <div>
@@ -306,10 +308,14 @@ export default function CheckInDetails({
             <div className="text-xs text-muted-foreground mt-1">Loading instructor rate...</div>
           ) : instructorRateInclusive != null ? (
             <div className="text-xs text-muted-foreground mt-1">
-              Rate: <span className="font-semibold">${instructorRateInclusive.toFixed(2)} / hour</span>
+              Rate: <span className="font-semibold">${instructorRateInclusive.toFixed(2)} / hour</span> (incl. tax)
             </div>
-          ) : instructorRate && (
-            <div className="text-xs text-muted-foreground mt-1">Rate: <span className="font-semibold">${instructorRate.rate.toFixed(2)} / hour</span></div>
+          ) : instructorRate ? (
+            <div className="text-xs text-muted-foreground mt-1">Rate: <span className="font-semibold">${instructorRate.rate.toFixed(2)} / hour</span> (excl. tax)</div>
+          ) : selectedInstructor && selectedFlightType ? (
+            <div className="text-xs text-red-500 mt-1">No rate found for this instructor</div>
+          ) : (
+            <div className="text-xs text-muted-foreground mt-1">Select instructor to see rate</div>
           )}
         </div>
       </div>
@@ -377,11 +383,20 @@ export default function CheckInDetails({
         </div>
       </div>
       <div className="mt-6">
+        {/* Show validation status */}
+        {(!aircraftRateExclusive || !instructorRateExclusive || !selectedInstructor || !selectedFlightType) && (
+          <div className="text-xs text-red-500 mb-2 space-y-1">
+            {!selectedFlightType && <div>• Please select a flight type</div>}
+            {!selectedInstructor && <div>• Please select an instructor</div>}
+            {!aircraftRateExclusive && selectedFlightType && <div>• Aircraft rate not found</div>}
+            {!instructorRateExclusive && selectedInstructor && selectedFlightType && <div>• Instructor rate not found</div>}
+          </div>
+        )}
         <Button 
           variant="outline" 
           className="w-full flex items-center gap-2 justify-center" 
           onClick={handleCalculateCharges}
-          disabled={false}
+          disabled={!aircraftRateExclusive || !instructorRateExclusive || !selectedInstructor || !selectedFlightType}
         >
           <ClipboardList className="w-5 h-5" />
           Calculate Flight Charges

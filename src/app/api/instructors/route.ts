@@ -4,6 +4,9 @@ import { createClient } from '@/lib/SupabaseServerClient';
 
 const InstructorSchema = z.object({
   user_id: z.string().uuid(),
+  first_name: z.string().nullable().optional(),
+  last_name: z.string().nullable().optional(),
+  rating: z.string().uuid().nullable().optional(), // Added rating field
   approved_by: z.string().uuid().nullable().optional(),
   approved_at: z.string().datetime().optional(),
   expires_at: z.string().datetime().nullable().optional(),
@@ -23,7 +26,7 @@ export async function GET(req: NextRequest) {
   const instructorId = searchParams.get('id');
   const searchQuery = searchParams.get('q');
 
-  // Join with users table to get instructor names
+  // Join with users table and licences table
   let query = supabase
     .from('instructors')
     .select(`
@@ -33,6 +36,12 @@ export async function GET(req: NextRequest) {
         first_name,
         last_name,
         email
+      ),
+      instructor_category:instructor_categories!instructors_rating_fkey (
+        id,
+        name,
+        description,
+        country
       )
     `);
   
@@ -45,8 +54,8 @@ export async function GET(req: NextRequest) {
   }
   
   if (searchQuery) {
-    // Search by instructor name using the joined users table
-    query = query.or(`users.first_name.ilike.%${searchQuery}%,users.last_name.ilike.%${searchQuery}%`);
+    // Search by instructor name using both the instructor table columns and joined users table
+    query = query.or(`first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,users.first_name.ilike.%${searchQuery}%,users.last_name.ilike.%${searchQuery}%`);
   }
 
   if (userId || instructorId) {

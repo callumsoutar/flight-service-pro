@@ -3,8 +3,10 @@ import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import MemberSelect, { UserResult } from "@/components/invoices/MemberSelect";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import InstructorSelect, { InstructorResult } from "@/components/invoices/InstructorSelect";
+import { UserResult } from "@/components/invoices/MemberSelect";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,10 +29,10 @@ type EnrollForm = z.infer<typeof enrollSchema>;
 interface InstructorWithUser {
   id: string;
   user_id: string;
-  users: {
+  first_name: string | null;
+  last_name: string | null;
+  users?: {
     id: string;
-    first_name: string;
-    last_name: string;
     email: string;
   };
 }
@@ -46,16 +48,13 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
-  const [selectedInstructor, setSelectedInstructor] = useState<UserResult | null>(null);
+  const [selectedInstructor, setSelectedInstructor] = useState<InstructorResult | null>(null);
+  const [selectedSyllabus, setSelectedSyllabus] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [instructorMap, setInstructorMap] = useState<Record<string, UserResult>>({});
 
   const {
-    register,
-    handleSubmit,
     reset,
-    setValue,
-    formState: { errors },
   } = useForm<EnrollForm>({
     resolver: zodResolver(enrollSchema),
   });
@@ -78,10 +77,10 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
         const map: Record<string, UserResult> = {};
         instructorsData.forEach((instructor: InstructorWithUser) => {
           map[instructor.id] = {
-            id: instructor.users.id,
-            first_name: instructor.users.first_name,
-            last_name: instructor.users.last_name,
-            email: instructor.users.email,
+            id: instructor.users?.id || instructor.user_id,
+            first_name: instructor.first_name || "",
+            last_name: instructor.last_name || "",
+            email: instructor.users?.email || "",
           };
         });
         setInstructorMap(map);
@@ -91,15 +90,24 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
   }, [memberId]);
 
   // Enroll form submit
-  const onSubmit = async (values: EnrollForm) => {
+  const onSubmit = async () => {
     setSubmitting(true);
     setError(null);
+    
+    // Validate that we have both syllabus and instructor selected
+    if (!selectedSyllabus || !selectedInstructor?.id) {
+      setError("Please select both a syllabus and an instructor");
+      setSubmitting(false);
+      return;
+    }
+    
     try {
       const res = await fetch("/api/student_syllabus_enrollment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...values,
+          syllabus_id: selectedSyllabus,
+          primary_instructor_id: selectedInstructor.id, // This is the instructor ID from instructors table
           user_id: memberId,
         }),
       });
@@ -107,6 +115,7 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
       setShowEnrollDialog(false);
       reset();
       setSelectedInstructor(null);
+      setSelectedSyllabus("");
       // Refresh enrollments
       const enrollmentsRes = await fetch(`/api/student_syllabus_enrollment?user_id=${memberId}`);
       const enrollmentsData = await enrollmentsRes.json();
@@ -149,10 +158,10 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
       setInstructorMap(prev => ({
         ...prev,
         [instructor.id]: {
-          id: instructor.users.id,
-          first_name: instructor.users.first_name,
-          last_name: instructor.users.last_name,
-          email: instructor.users.email,
+          id: instructor.users?.id || instructor.user_id,
+          first_name: instructor.first_name || "",
+          last_name: instructor.last_name || "",
+          email: instructor.users?.email || "",
         }
       }));
       
@@ -164,11 +173,11 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
   };
 
   // Helper for instructor chip
-  function InstructorChip({ instructor }: { instructor: UserResult }) {
+  function InstructorChip({ instructor }: { instructor: UserResult | InstructorResult }) {
     return (
       <div className="flex items-center gap-2 px-2 py-1 bg-muted rounded-lg">
         <Avatar className="w-6 h-6">
-          {/* No profile_image_url on UserResult, fallback to initials */}
+          {/* No profile_image_url on UserResult/InstructorResult, fallback to initials */}
           <AvatarFallback>{(instructor.first_name?.[0] || "").toUpperCase()}</AvatarFallback>
         </Avatar>
         <span className="font-medium text-sm">{instructor.first_name} {instructor.last_name}</span>
@@ -177,7 +186,7 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full rounded-md">
       <CardContent className="py-4 px-2 sm:px-6 w-full">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Syllabus Enrollments</h3>
@@ -185,40 +194,52 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
         </div>
         {/* Enroll Dialog */}
         <Dialog open={showEnrollDialog} onOpenChange={setShowEnrollDialog}>
-          <DialogContent className="w-[400px] max-w-[95vw] mx-auto p-6 max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-muted">
-            <DialogHeader className="mb-4">
-              <DialogTitle className="text-2xl font-bold mb-1 tracking-tight">Enroll in Syllabus</DialogTitle>
-            </DialogHeader>
-            <form className="flex flex-col gap-4 w-full" onSubmit={handleSubmit(onSubmit)}>
-              <div>
-                <label className="block text-base font-medium mb-1">Syllabus</label>
-                <select {...register("syllabus_id")} className="w-full border rounded p-2">
-                  <option value="">Select syllabus</option>
-                  {availableSyllabi.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-                {errors.syllabus_id && <div className="text-red-500 text-xs mt-1">{errors.syllabus_id.message}</div>}
+          <DialogContent className="w-full max-w-md mx-auto p-0 bg-white rounded-2xl shadow-xl border border-gray-100">
+            <form className="w-full" onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>
+              <div className="px-8 pt-8 pb-4">
+                <DialogHeader className="mb-6">
+                  <DialogTitle className="text-2xl font-bold text-center">Enroll in Syllabus</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 mb-4">
+                  <div className="flex flex-col">
+                    <label className="text-sm font-medium mb-1">Syllabus *</label>
+                    <Select value={selectedSyllabus} onValueChange={setSelectedSyllabus}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select syllabus" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableSyllabi.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!selectedSyllabus && error && <div className="text-red-500 text-xs mt-1">Please select a syllabus</div>}
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="text-sm font-medium mb-1">Primary Instructor *</label>
+                    <InstructorSelect
+                      value={selectedInstructor}
+                      onSelect={instructor => {
+                        setSelectedInstructor(instructor);
+                      }}
+                    />
+                    {!selectedInstructor && error && <div className="text-red-500 text-xs mt-1">Please select an instructor</div>}
+                  </div>
+                </div>
+                {error && <div className="text-red-600 text-sm mb-2 text-center">{error}</div>}
               </div>
-              <div>
-                <label className="block text-base font-medium mb-1">Primary Instructor</label>
-                <MemberSelect
-                  value={selectedInstructor}
-                  onSelect={instructor => {
-                    setSelectedInstructor(instructor);
-                    setValue("primary_instructor_id", instructor?.id || "");
-                  }}
-                />
-                {errors.primary_instructor_id && <div className="text-red-500 text-xs mt-1">{errors.primary_instructor_id.message}</div>}
-              </div>
-              <DialogFooter>
-                <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold" disabled={submitting}>
+              <div className="flex justify-end gap-2 px-8 pb-6">
+                <DialogClose asChild>
+                  <Button type="button" variant="outline" disabled={submitting} className="min-w-[90px]">Cancel</Button>
+                </DialogClose>
+                <Button
+                  type="submit"
+                  disabled={submitting}
+                  className="min-w-[110px] bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2 text-base flex items-center gap-2 rounded-lg shadow"
+                >
                   {submitting ? "Enrolling..." : "Enroll"}
                 </Button>
-                <DialogClose asChild>
-                  <Button type="button" variant="outline">Cancel</Button>
-                </DialogClose>
-              </DialogFooter>
+              </div>
             </form>
           </DialogContent>
         </Dialog>
@@ -241,9 +262,6 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
             <div className="text-muted-foreground py-8 text-center">
               <Info className="w-10 h-10 text-gray-500 mx-auto" />
               <p className="mt-2">No syllabus enrollments found for this member.</p>
-              <Button onClick={() => setShowEnrollDialog(true)} className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
-                Enroll in Syllabus
-              </Button>
             </div>
           ) : (
             <Table className="w-full table-auto">
@@ -296,7 +314,7 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
                                 {instructors.map(i => (
                                   <CommandItem key={i.id} onSelect={() => handleInstructorChange(row.id, i)}>
                                     <User className="w-4 h-4 mr-2" />
-                                    {i.users.first_name} {i.users.last_name} 
+                                    {i.first_name} {i.last_name} 
                                     {row.primary_instructor_id === i.id && <Check className="ml-auto w-4 h-4 text-green-500" />}
                                   </CommandItem>
                                 ))}

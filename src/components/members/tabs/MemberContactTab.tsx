@@ -117,7 +117,7 @@ export default function MemberContactTab({ member }: MemberContactTabProps) {
         </div>
       </div>
       {/* Personal Details Section */}
-      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
+      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-lg p-6 shadow-sm">
         <h4 className="flex items-center gap-2 text-base font-semibold mb-4 text-gray-900 tracking-tight">
           <UserIcon className="w-5 h-5 text-indigo-500" />
           Personal Details
@@ -186,7 +186,7 @@ export default function MemberContactTab({ member }: MemberContactTabProps) {
         </div>
       </div>
       {/* Company Details Section */}
-      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
+      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-lg p-6 shadow-sm">
         <h4 className="flex items-center gap-2 text-base font-semibold mb-4 text-gray-900 tracking-tight">
           <Building className="w-5 h-5 text-indigo-500" />
           Company Details
@@ -213,7 +213,7 @@ export default function MemberContactTab({ member }: MemberContactTabProps) {
         </div>
       </div>
       {/* Next of Kin Section */}
-      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
+      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-lg p-6 shadow-sm">
         <h4 className="flex items-center gap-2 text-base font-semibold mb-4 text-gray-900 tracking-tight">
           <Users className="w-5 h-5 text-indigo-500" />
           Next of Kin
@@ -234,7 +234,7 @@ export default function MemberContactTab({ member }: MemberContactTabProps) {
         </div>
       </div>
       {/* Notes Section */}
-      <div className="mb-2 bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
+      <div className="mb-2 bg-gray-50 border border-gray-200 rounded-lg p-6 shadow-sm">
         <h4 className="text-base font-semibold mb-4 text-gray-900 tracking-tight">Notes</h4>
         <div className="max-w-md">
           <Input {...register("notes")}

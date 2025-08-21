@@ -29,7 +29,10 @@ export default function BookingsTable({ bookings, members, instructors, aircraft
   const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
 
   // Helper lookups
-  const getMemberName = (id: string) => members.find((m) => m.id === id)?.name || "--";
+  const getMemberName = (id: string | null) => {
+    if (!id) return "--";
+    return members.find((m) => m.id === id)?.name || "--";
+  };
   const getInstructorName = React.useCallback((id: string) => {
     return instructors.find((i) => i.id === id)?.name || "--";
   }, [instructors]);

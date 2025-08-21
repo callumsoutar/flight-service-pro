@@ -83,7 +83,7 @@ export default function MemberAccountTab({ memberId }: MemberAccountTabProps) {
   return (
     <div className="flex flex-col gap-8">
       {/* Horizontal Info Bar */}
-      <div className="flex flex-col md:flex-row items-stretch gap-4 bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100">
+      <div className="flex flex-col md:flex-row items-stretch gap-4 bg-gray-50 rounded-lg p-4 mb-6 border border-gray-100">
         <div className="flex-1 flex flex-col items-center justify-center">
           <DollarSign className="w-6 h-6 mb-1 text-green-500" />
           <div className="text-xs text-muted-foreground">Account Balance</div>

@@ -154,7 +154,7 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
         <div className="space-y-6">
           {/* Current Membership or Create New */}
           {membershipSummary?.current_membership ? (
-            <Card className="border-l-4 border-l-green-500">
+            <Card className="border-l-4 border-l-green-500 rounded-md">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -243,7 +243,7 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
               </CardContent>
             </Card>
           ) : (
-            <Card>
+            <Card className="rounded-md">
               <CardContent className="text-center py-8">
                 <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Membership</h3>
@@ -257,7 +257,7 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
 
           {/* Membership History */}
           {membershipSummary?.membership_history && membershipSummary.membership_history.length > 0 && (
-            <Card>
+            <Card className="rounded-md">
               <CardHeader>
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                   <CalendarCheck2 className="w-5 h-5 text-gray-500" />
@@ -326,7 +326,7 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
           )}
         </div>
       ) : (
-        <Card className="p-6">
+        <Card className="p-6 rounded-md">
           <div className="text-center text-gray-600">
             <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <p>No membership data available for this member.</p>

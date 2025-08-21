@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, X, MessageCircle } from "lucide-react";
+import { ChevronDown, X, MessageCircle, Send, Plane } from "lucide-react";
 import InstructorCommentsModal from "@/components/bookings/InstructorCommentsModal";
 import { CancelBookingModal } from "@/components/bookings/CancelBookingModal";
 import { toast } from "sonner";
@@ -25,6 +25,8 @@ export default function BookingStagesOptions({ bookingId, instructorCommentsCoun
   const [cancellationCategories, setCancellationCategories] = useState<{ id: string; name: string }[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [sendingConfirmation, setSendingConfirmation] = useState(false);
+  const [navigatingAircraft, setNavigatingAircraft] = useState(false);
   const router = useRouter();
 
   React.useEffect(() => {
@@ -71,6 +73,43 @@ export default function BookingStagesOptions({ bookingId, instructorCommentsCoun
     }
   };
 
+  const handleSendConfirmation = async () => {
+    if (sendingConfirmation) return;
+    setSendingConfirmation(true);
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}/send-confirmation`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error || "Failed to send confirmation");
+        return;
+      }
+      toast.success("Confirmation email sent");
+    } catch {
+      toast.error("Failed to send confirmation");
+    } finally {
+      setSendingConfirmation(false);
+    }
+  };
+
+  const handleViewAircraft = async () => {
+    if (navigatingAircraft) return;
+    setNavigatingAircraft(true);
+    try {
+      const res = await fetch(`/api/bookings?id=${bookingId}`);
+      const data = await res.json();
+      const aircraftId = data?.booking?.aircraft?.id || data?.booking?.aircraft_id;
+      if (!aircraftId) {
+        toast.error("No aircraft linked to this booking");
+        return;
+      }
+      router.push(`/dashboard/aircraft/view/${aircraftId}`);
+    } catch {
+      toast.error("Failed to open aircraft");
+    } finally {
+      setNavigatingAircraft(false);
+    }
+  };
+
   return (
     <>
       <DropdownMenu>
@@ -79,7 +118,7 @@ export default function BookingStagesOptions({ bookingId, instructorCommentsCoun
             Options <ChevronDown className="w-4 h-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" sideOffset={8} className="w-56">
           <DropdownMenuItem onClick={() => setCommentsOpen(true)}>
             <MessageCircle className="w-4 h-4 mr-2" />
             Instructor Comments
@@ -88,6 +127,14 @@ export default function BookingStagesOptions({ bookingId, instructorCommentsCoun
                 {instructorCommentsCount}
               </span>
             )}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleSendConfirmation}>
+            <Send className="w-4 h-4 mr-2" />
+            Send Confirmation
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleViewAircraft}>
+            <Plane className="w-4 h-4 mr-2" />
+            View Aircraft
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setCancelOpen(true)} className="text-red-600">

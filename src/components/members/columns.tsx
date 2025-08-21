@@ -17,7 +17,8 @@ export type Member = {
 
 export const columns: ColumnDef<Member>[] = [
   {
-    accessorKey: "name",
+    id: "name",
+    accessorFn: (row) => `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim(),
     header: "Member",
     cell: ({ row }) => {
       const member = row.original;

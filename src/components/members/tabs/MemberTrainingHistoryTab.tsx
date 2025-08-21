@@ -14,15 +14,12 @@ import type { Syllabus } from "@/types/syllabus";
 import { useRouter } from "next/navigation";
 import { 
   Calendar, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
   BookOpen, 
   User as UserIcon,
   Eye,
   Target
 } from "lucide-react";
-import { format, isToday, isYesterday, isThisWeek, subDays } from "date-fns";
+import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 
 interface MemberTrainingHistoryTabProps {
   memberId: string;
@@ -35,6 +32,7 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
   const [records, setRecords] = useState<LessonProgress[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
+  const [enrolledSyllabi, setEnrolledSyllabi] = useState<Syllabus[]>([]);
   const [selectedSyllabusId, setSelectedSyllabusId] = useState<string>("");
   const [instructors, setInstructors] = useState<Record<string, User>>({});
   const [loading, setLoading] = useState(true);
@@ -51,9 +49,10 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
         .then(data => Array.isArray(data.data) ? data.data : []),
       fetch(`/api/lessons`).then(res => res.json()).then(data => Array.isArray(data.lessons) ? data.lessons : []),
       fetch(`/api/syllabus`).then(res => res.json()).then(data => Array.isArray(data.syllabi) ? data.syllabi : []),
+      fetch(`/api/student_syllabus_enrollment?user_id=${memberId}`).then(res => res.json()).then(data => Array.isArray(data.data) ? data.data : []),
       fetch(`/api/instructors`).then(res => res.json()).then(data => Array.isArray(data.instructors) ? data.instructors : []),
     ])
-      .then(async ([progressData, lessonsData, syllabiData, instructorsData]) => {
+      .then(async ([progressData, lessonsData, syllabiData, enrollmentData, instructorsData]) => {
         // Sort records by date, most recent first
         const sortedRecords = progressData.sort((a: LessonProgress, b: LessonProgress) => 
           new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime()
@@ -63,9 +62,16 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
         setLessons(lessonsData);
         setSyllabi(syllabiData);
         
-        // Set first syllabus as default selection if available
-        if (syllabiData.length > 0 && !selectedSyllabusId) {
-          setSelectedSyllabusId(syllabiData[0].id);
+        // Filter syllabi to only show enrolled ones
+        const enrolledSyllabusIds = enrollmentData.map((enrollment: { syllabus_id: string }) => enrollment.syllabus_id);
+        const userEnrolledSyllabi = syllabiData.filter((syllabus: Syllabus) => 
+          enrolledSyllabusIds.includes(syllabus.id)
+        );
+        setEnrolledSyllabi(userEnrolledSyllabi);
+        
+        // Set first enrolled syllabus as default selection if available
+        if (userEnrolledSyllabi.length > 0 && !selectedSyllabusId) {
+          setSelectedSyllabusId(userEnrolledSyllabi[0].id);
         }
         
         // Create instructor map
@@ -157,18 +163,7 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
     return format(date, "MMM d, yyyy");
   }
 
-  function StatusIcon({ status }: { status?: LessonOutcome | null }) {
-    if (!status) return <Clock className="w-4 h-4 text-gray-400" />;
-    
-    switch (status) {
-      case "pass":
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case "not yet competent":
-        return <XCircle className="w-4 h-4 text-red-600" />;
-      default:
-        return <Clock className="w-4 h-4 text-gray-400" />;
-    }
-  }
+
 
   function StatusBadge({ status }: { status?: LessonOutcome | null }) {
     if (!status) return <Badge variant="secondary">Pending</Badge>;
@@ -183,25 +178,7 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
     }
   }
 
-  // Group records by time periods
-  const groupedRecords = {
-    recent: records.filter(r => {
-      const recordDate = new Date(r.date || r.created_at);
-      const sevenDaysAgo = subDays(new Date(), 7);
-      return recordDate >= sevenDaysAgo;
-    }),
-    thisMonth: records.filter(r => {
-      const recordDate = new Date(r.date || r.created_at);
-      const thirtyDaysAgo = subDays(new Date(), 30);
-      const sevenDaysAgo = subDays(new Date(), 7);
-      return recordDate >= thirtyDaysAgo && recordDate < sevenDaysAgo;
-    }),
-    older: records.filter(r => {
-      const recordDate = new Date(r.date || r.created_at);
-      const thirtyDaysAgo = subDays(new Date(), 30);
-      return recordDate < thirtyDaysAgo;
-    }),
-  };
+
 
   if (loading) {
     return (
@@ -225,10 +202,25 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
     );
   }
 
+  // If no enrolled syllabi, show empty state
+  if (enrolledSyllabi.length === 0) {
+    return (
+      <div className="w-full space-y-6">
+        <Card className="rounded-md">
+          <CardContent className="text-center py-12">
+            <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Syllabus Enrollments</h3>
+            <p className="text-gray-600 mb-4">This member is not enrolled in any training syllabi yet.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full space-y-6">
       {/* Syllabus Progress */}
-      <Card>
+      <Card className="rounded-md">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
@@ -249,7 +241,7 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
                 <SelectValue placeholder="Select a syllabus" />
               </SelectTrigger>
               <SelectContent>
-                {syllabi.map((syllabus) => (
+                {enrolledSyllabi.map((syllabus) => (
                   <SelectItem key={syllabus.id} value={syllabus.id}>
                     {syllabus.name}
                   </SelectItem>
@@ -272,128 +264,95 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
       </Card>
 
       {/* Training Timeline */}
-      <Card>
+      <Card className="rounded-md">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="w-5 h-5" />
             Training Timeline
           </CardTitle>
         </CardHeader>
-                 <CardContent className="space-y-4">
+        <CardContent>
           {records.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-12">
               <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg font-medium">No training history found</p>
-              <p className="text-sm">Completed lessons will appear here</p>
+              <p className="text-lg font-medium text-gray-900 mb-2">No training history found</p>
+              <p className="text-gray-600">Completed lessons will appear here</p>
             </div>
           ) : (
-            <>
-              {/* Recent Lessons */}
-              {groupedRecords.recent.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    Recent Activity
-                  </h4>
-                                     <div className="space-y-2">
-                     {groupedRecords.recent.map((record) => (
-                       <LessonCard key={record.id} record={record} />
-                     ))}
-                   </div>
-                </div>
-              )}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Status</th>
+                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Lesson</th>
+                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Date</th>
+                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Instructor</th>
+                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Attempt</th>
+                    <th className="text-left py-3 font-medium text-gray-900">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {records.map((record) => {
+                    const isClickable = !!record.booking_id;
+                    const lessonName = record.lesson_id ? lessonNameMap[record.lesson_id] || 'Unknown Lesson' : 'Unknown Lesson';
+                    const instructorName = getInstructorName(record.instructor_id);
+                    const dateDisplay = formatRelativeDate(record.date || record.created_at);
 
-              {/* This Month */}
-              {groupedRecords.thisMonth.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    This Month
-                  </h4>
-                                     <div className="space-y-2">
-                     {groupedRecords.thisMonth.map((record) => (
-                       <LessonCard key={record.id} record={record} />
-                     ))}
-                   </div>
-                </div>
-              )}
-
-              {/* Older */}
-              {groupedRecords.older.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                    Earlier
-                  </h4>
-                                     <div className="space-y-2">
-                     {groupedRecords.older.slice(0, 10).map((record) => (
-                       <LessonCard key={record.id} record={record} />
-                     ))}
-                     {groupedRecords.older.length > 10 && (
-                       <div className="text-center pt-2">
-                         <Button variant="outline" size="sm">
-                           View {groupedRecords.older.length - 10} More Lessons
-                         </Button>
-                       </div>
-                     )}
-                   </div>
-                </div>
-              )}
-            </>
+                    return (
+                      <tr 
+                        key={record.id} 
+                        className={`border-b border-gray-100 ${isClickable ? 'hover:bg-gray-50 cursor-pointer' : ''}`}
+                        onClick={isClickable ? () => router.push(`/dashboard/bookings/debrief/view/${record.booking_id}`) : undefined}
+                      >
+                        <td className="py-3 pr-4">
+                          <StatusBadge status={record.status} />
+                        </td>
+                        <td className="py-3 pr-4 font-medium text-gray-900">
+                          <div className="flex items-center gap-2">
+                            <BookOpen className="w-4 h-4 text-gray-500" />
+                            {lessonName}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-gray-500" />
+                            {dateDisplay}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4 text-sm">
+                          <div className="flex items-center gap-2">
+                            <UserIcon className="w-4 h-4 text-gray-500" />
+                            <span className="max-w-[120px] truncate">{instructorName}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4 text-sm">
+                          {record.attempt && record.attempt > 1 ? (
+                            <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                              Attempt {record.attempt}
+                            </Badge>
+                          ) : (
+                            <span className="text-gray-400">1</span>
+                          )}
+                        </td>
+                        <td className="py-3">
+                          {isClickable ? (
+                            <Button variant="outline" size="sm">
+                              <Eye className="w-4 h-4 mr-2" />
+                              View
+                            </Button>
+                          ) : (
+                            <span className="text-gray-400 text-sm">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
     </div>
   );
-
-  function LessonCard({ record }: { record: LessonProgress }) {
-    const isClickable = !!record.booking_id;
-    const lessonName = record.lesson_id ? lessonNameMap[record.lesson_id] || 'Unknown Lesson' : 'Unknown Lesson';
-    const instructorName = getInstructorName(record.instructor_id);
-    const dateDisplay = formatRelativeDate(record.date || record.created_at);
-
-    return (
-      <div
-        className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-          isClickable 
-            ? 'hover:bg-blue-50 hover:border-blue-200 cursor-pointer' 
-            : 'bg-gray-50'
-        }`}
-        onClick={isClickable ? () => router.push(`/dashboard/bookings/debrief/view/${record.booking_id}`) : undefined}
-      >
-        <div className="flex-shrink-0">
-          <StatusIcon status={record.status} />
-        </div>
-        
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-medium text-gray-900 truncate text-sm">{lessonName}</p>
-            <StatusBadge status={record.status} />
-            {record.attempt && record.attempt > 1 && (
-              <Badge variant="outline" className="text-xs px-1.5 py-0.5">
-                Attempt {record.attempt}
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4 text-xs text-gray-500 flex-shrink-0">
-          <span className="flex items-center gap-1">
-            <Calendar className="w-3 h-3" />
-            {dateDisplay}
-          </span>
-          <span className="flex items-center gap-1 max-w-[120px] truncate">
-            <UserIcon className="w-3 h-3 flex-shrink-0" />
-            <span className="truncate">{instructorName}</span>
-          </span>
-        </div>
-        
-        {isClickable && (
-          <div className="flex-shrink-0">
-            <Eye className="w-4 h-4 text-gray-400" />
-          </div>
-        )}
-      </div>
-    );
-  }
 } 

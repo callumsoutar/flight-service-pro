@@ -115,7 +115,7 @@ export default function CreateMembershipModal({
           {/* Left Column - Selection & Configuration */}
           <div className="space-y-6">
             {/* Membership Type Selection */}
-            <Card>
+            <Card className="rounded-md">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-2">
                   <Gift className="h-5 w-5 text-purple-600" />
@@ -172,7 +172,7 @@ export default function CreateMembershipModal({
             </Card>
 
             {/* Configuration Options */}
-            <Card>
+            <Card className="rounded-md">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-2">
                   <Settings className="h-5 w-5 text-green-600" />
@@ -238,7 +238,7 @@ export default function CreateMembershipModal({
           {/* Right Column - Preview */}
           <div className="space-y-6">
             {selectedType ? (
-              <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50">
+              <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-md">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-2">
                     <div className="p-2 bg-blue-100 rounded-lg">
@@ -331,7 +331,7 @@ export default function CreateMembershipModal({
                 </CardContent>
               </Card>
             ) : (
-              <Card className="border-dashed border-2 border-gray-300">
+              <Card className="border-dashed border-2 border-gray-300 rounded-md">
                 <CardContent className="text-center py-12">
                   <Gift className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">Select a Membership Type</h3>

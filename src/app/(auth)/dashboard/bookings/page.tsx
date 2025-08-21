@@ -55,17 +55,17 @@ export default async function BookingsPage() {
 
   // Fetch only instructors referenced by bookings (instructor_id in bookings)
   const uniqueInstructorIds = Array.from(new Set(bookings.map(b => b.instructor_id).filter(Boolean)));
-  let instructorUsers: { id: string; first_name?: string; last_name?: string }[] = [];
+  let instructorRows: { id: string; first_name?: string; last_name?: string }[] = [];
   if (uniqueInstructorIds.length > 0) {
-    const { data: instructorUserRows } = await supabase
-      .from("users")
+    const { data: instructorData } = await supabase
+      .from("instructors")
       .select("id, first_name, last_name")
       .in("id", uniqueInstructorIds);
-    instructorUsers = instructorUserRows || [];
+    instructorRows = instructorData || [];
   }
-  instructors = instructorUsers.map(user => ({
-    id: user.id,
-    name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.id,
+  instructors = instructorRows.map(instructor => ({
+    id: instructor.id,
+    name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.id,
   }));
 
   // Fetch only aircraft referenced by bookings (aircraft_id in bookings)

@@ -63,21 +63,36 @@ export async function POST(req: NextRequest) {
   }
   
   const body = await req.json();
-  const requiredFields = ["user_id", "aircraft_id", "start_time", "end_time", "purpose", "booking_type"];
+  const requiredFields = ["aircraft_id", "start_time", "end_time", "purpose", "booking_type"];
   for (const field of requiredFields) {
     if (!body[field]) {
       return NextResponse.json({ error: `Missing required field: ${field}` }, { status: 400 });
     }
   }
+  // Check for conflicts before attempting to insert
+  try {
+    await checkBookingConflicts(supabase, {
+      aircraft_id: body.aircraft_id,
+      instructor_id: body.instructor_id,
+      start_time: body.start_time,
+      end_time: body.end_time,
+      excludeBookingId: null // For new bookings, don't exclude any existing booking
+    });
+  } catch (conflictError) {
+    return NextResponse.json({ 
+      error: conflictError instanceof Error ? conflictError.message : "Resource conflict detected" 
+    }, { status: 409 });
+  }
+
   // Compose insert payload
   const insertPayload: Record<string, unknown> = {
-    user_id: body.user_id,
     aircraft_id: body.aircraft_id,
     start_time: body.start_time,
     end_time: body.end_time,
     purpose: body.purpose,
     booking_type: body.booking_type,
     // Optional fields
+    user_id: body.user_id || null,
     instructor_id: body.instructor_id || null,
     remarks: body.remarks || null,
     lesson_id: body.lesson_id || null,
@@ -218,6 +233,37 @@ export async function PATCH(req: NextRequest) {
   }
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+  }
+
+  // Check for conflicts if time or resource fields are being updated
+  const hasTimeChanges = updates.start_time || updates.end_time;
+  const hasResourceChanges = updates.aircraft_id || updates.instructor_id;
+  
+  if (hasTimeChanges || hasResourceChanges) {
+    try {
+      // Get current booking data to use for conflict checking
+      const { data: currentBooking, error: currentError } = await supabase
+        .from("bookings")
+        .select("aircraft_id, instructor_id, start_time, end_time")
+        .eq("id", id)
+        .single();
+      
+      if (currentError) {
+        return NextResponse.json({ error: currentError.message }, { status: 404 });
+      }
+
+      await checkBookingConflicts(supabase, {
+        aircraft_id: updates.aircraft_id || currentBooking.aircraft_id,
+        instructor_id: updates.instructor_id || currentBooking.instructor_id,
+        start_time: updates.start_time || currentBooking.start_time,
+        end_time: updates.end_time || currentBooking.end_time,
+        excludeBookingId: id // Exclude the current booking being updated
+      });
+    } catch (conflictError) {
+      return NextResponse.json({ 
+        error: conflictError instanceof Error ? conflictError.message : "Resource conflict detected" 
+      }, { status: 409 });
+    }
   }
   
   // First, get the existing booking to check for status changes
@@ -641,4 +687,75 @@ function normalizeBookingTimestamps(booking: Record<string, unknown> | null) {
     booking.end_time = isNaN(d.getTime()) ? booking.end_time : d.toISOString();
   }
   return booking;
+}
+
+// Check for booking conflicts with aircraft and instructors
+async function checkBookingConflicts(
+  supabase: SupabaseClient,
+  params: {
+    aircraft_id: string;
+    instructor_id?: string | null;
+    start_time: string;
+    end_time: string;
+    excludeBookingId?: string | null;
+  }
+) {
+  const { aircraft_id, instructor_id, start_time, end_time, excludeBookingId } = params;
+  
+  // Convert times to Date objects for validation
+  const startDate = new Date(start_time);
+  const endDate = new Date(end_time);
+  
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    throw new Error("Invalid start or end time format");
+  }
+  
+  if (startDate >= endDate) {
+    throw new Error("Start time must be before end time");
+  }
+  
+  // Query for overlapping bookings
+  let query = supabase
+    .from("bookings")
+    .select("id, aircraft_id, instructor_id, start_time, end_time, status")
+    .in("status", ["unconfirmed", "confirmed", "briefing", "flying"])
+    .lt("start_time", end_time)
+    .gt("end_time", start_time);
+  
+  // Exclude the current booking if updating
+  if (excludeBookingId) {
+    query = query.neq("id", excludeBookingId);
+  }
+  
+  const { data: conflicts, error } = await query;
+  
+  if (error) {
+    throw new Error(`Failed to check for conflicts: ${error.message}`);
+  }
+  
+  // Check for aircraft conflicts
+  const aircraftConflicts = conflicts?.filter(booking => 
+    booking.aircraft_id === aircraft_id
+  ) || [];
+  
+  if (aircraftConflicts.length > 0) {
+    const conflictTimes = aircraftConflicts.map(c => 
+      `${new Date(c.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${new Date(c.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    ).join(', ');
+    throw new Error(`Aircraft is already booked during this time (${conflictTimes}). Please choose a different aircraft or time slot.`);
+  }
+  
+  // Check for instructor conflicts (only if instructor is specified)
+  if (instructor_id) {
+    const instructorConflicts = conflicts?.filter(booking => 
+      booking.instructor_id === instructor_id
+    ) || [];
+    
+    if (instructorConflicts.length > 0) {
+      const conflictTimes = instructorConflicts.map(c => 
+        `${new Date(c.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${new Date(c.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+      ).join(', ');
+      throw new Error(`Instructor is already booked during this time (${conflictTimes}). Please choose a different instructor or time slot.`);
+    }
+  }
 } 

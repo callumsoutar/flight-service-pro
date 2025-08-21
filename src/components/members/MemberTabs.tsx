@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Mail, Users, CreditCard, Calendar, History, GraduationCap, Clock, BookOpen, BarChart2, Check } from "lucide-react";
+import { Mail, Users, CreditCard, Calendar, History, GraduationCap, Clock, BookOpen, BarChart2 } from "lucide-react";
 import MemberContactTab from "./tabs/MemberContactTab";
 import { User } from "@/types/users";
 import MemberHistoryTab from "@/components/members/tabs/MemberHistoryTab";
@@ -44,7 +44,7 @@ export default function MemberTabs({ member }: { member: User }) {
   const selectedOverflow = overflowTabs.find((t) => t.id === selectedTab);
 
   return (
-    <div className="w-full h-full flex flex-col bg-white rounded-2xl shadow border border-gray-200 overflow-hidden">
+    <div className="w-full h-full flex flex-col bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
       <Tabs.Root
         value={selectedTab}
         onValueChange={setSelectedTab}
@@ -84,7 +84,7 @@ export default function MemberTabs({ member }: { member: User }) {
                     <span>More</span>
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[160px] rounded-xl shadow-lg p-2 bg-white border border-gray-200">
+                <DropdownMenuContent align="end" className="min-w-[160px] rounded-md shadow-lg p-2 bg-white border border-gray-200 space-y-1">
                   {overflowTabs.map((tab) => {
                     const Icon = tab.icon;
                     const isActive = selectedTab === tab.id;
@@ -92,11 +92,10 @@ export default function MemberTabs({ member }: { member: User }) {
                       <DropdownMenuItem
                         key={tab.id}
                         onSelect={() => setSelectedTab(tab.id)}
-                        className={`flex items-center gap-3 px-3 py-2 text-base rounded-lg transition-colors hover:bg-gray-100 focus:bg-gray-100 ${isActive ? "font-semibold text-indigo-700 bg-indigo-50" : "text-gray-900"}`}
+                        className={`flex items-center gap-3 px-3 py-2 text-base rounded-md transition-colors hover:bg-gray-100 focus:bg-gray-100 ${isActive ? "font-semibold text-indigo-700 bg-indigo-50" : "text-gray-900"}`}
                         data-state={isActive ? "active" : undefined}
                         style={{ minHeight: 44 }}
                       >
-                        {isActive && <Check className="w-5 h-5 text-indigo-700" />}
                         <Icon className="w-5 h-5" />
                         <span>{tab.label}</span>
                       </DropdownMenuItem>

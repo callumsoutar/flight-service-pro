@@ -26,11 +26,9 @@ type MemberForHook = {
 type InstructorForHook = {
   id: string;
   user_id: string;
-  users?: {
-    first_name: string;
-    last_name: string;
-    email: string;
-  };
+  first_name: string;
+  last_name: string;
+  email: string;
 } | null;
 
 interface BookingDetailsFormData {
@@ -55,6 +53,7 @@ interface BookingDetailsProps {
   aircraft: { id: string; registration: string; type: string }[];
   lessons: { id: string; name: string }[];
   flightTypes: { id: string; name: string }[];
+  bookings: Booking[]; // All bookings for conflict checking
 }
 
 // Helper to generate 30-min interval times
@@ -74,6 +73,13 @@ function getUtcIsoString(dateStr: string, timeStr: string): string | null {
   return local.toISOString();
 }
 
+// Special placeholder values for select components (shadcn doesn't allow empty strings)
+const PLACEHOLDER_VALUES = {
+  AIRCRAFT: '__no_aircraft__',
+  LESSON: '__no_lesson__',
+  FLIGHT_TYPE: '__no_flight_type__'
+} as const;
+
 // Helper to convert User to MemberForHook
 function convertUserToMemberForHook(user?: User): MemberForHook {
   if (!user) return null;
@@ -91,30 +97,23 @@ function convertInstructorForHook(instructor?: unknown): InstructorForHook {
   
   const obj = instructor as Record<string, unknown>;
   
-  // Check if the object has the expected JoinedInstructor structure
+  // Check if the object has the expected Instructor structure with own name fields
   if (typeof obj.id === 'string' && 
-      typeof obj.user_id === 'string' && 
-      obj.users && 
-      typeof obj.users === 'object' && 
-      obj.users !== null) {
-    
-    const users = obj.users as Record<string, unknown>;
+      typeof obj.user_id === 'string') {
     
     return {
       id: obj.id,
       user_id: obj.user_id,
-      users: {
-        first_name: typeof users.first_name === 'string' ? users.first_name : "",
-        last_name: typeof users.last_name === 'string' ? users.last_name : "",
-        email: typeof users.email === 'string' ? users.email : "",
-      },
+      first_name: typeof obj.first_name === 'string' ? obj.first_name : "",
+      last_name: typeof obj.last_name === 'string' ? obj.last_name : "",
+      email: typeof obj.email === 'string' ? obj.email : "",
     };
   }
   
   return null;
 }
 
-export default function BookingDetails({ booking, members, instructors, aircraft, lessons, flightTypes }: BookingDetailsProps) {
+export default function BookingDetails({ booking, members, instructors, aircraft, lessons, flightTypes, bookings }: BookingDetailsProps) {
   // Check if booking is read-only (completed bookings cannot be edited)
   const isReadOnly = booking.status === 'complete';
   
@@ -126,11 +125,11 @@ export default function BookingDetails({ booking, members, instructors, aircraft
       end_time: booking?.end_time ? format(parseISO(booking.end_time), "HH:mm") : "",
       member: booking?.user_id || "",
       instructor: booking?.instructor_id || "",
-      aircraft: booking?.aircraft_id || "",
-      lesson: booking?.lesson_id ?? "",
+      aircraft: booking?.aircraft_id || PLACEHOLDER_VALUES.AIRCRAFT,
+      lesson: booking?.lesson_id || PLACEHOLDER_VALUES.LESSON,
       remarks: booking?.remarks || "",
       purpose: booking?.purpose || "",
-      flight_type: booking?.flight_type_id ?? "",
+      flight_type: booking?.flight_type_id || PLACEHOLDER_VALUES.FLIGHT_TYPE,
       booking_type: booking?.booking_type || "flight",
     },
   });
@@ -138,6 +137,55 @@ export default function BookingDetails({ booking, members, instructors, aircraft
   // Watch the member and instructor field values
   const memberFieldValue = watch("member");
   const instructorFieldValue = watch("instructor");
+  
+  // Watch time fields for conflict checking
+  const startDate = watch("start_date");
+  const startTime = watch("start_time");
+  const endDate = watch("end_date");
+  const endTime = watch("end_time");
+  
+  // Compute unavailable aircraft/instructors for the selected time
+  const unavailable = React.useMemo(() => {
+    // Helper: check if two time ranges overlap
+    const isOverlap = (startA: Date, endA: Date, startB: Date, endB: Date) => {
+      return startA < endB && endA > startB;
+    };
+    
+    if (!startDate || !startTime || !endDate || !endTime) {
+      return { aircraft: new Set<string>(), instructors: new Set<string>() };
+    }
+    
+    // Parse the form date/time values
+    const [year, month, day] = startDate.split('-').map(Number);
+    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+    const [endHour, endMinute] = endTime.split(':').map(Number);
+    
+    const start = new Date(year, month - 1, day, startHour, startMinute);
+    const end = new Date(endYear, endMonth - 1, endDay, endHour, endMinute);
+    
+    const aircraftSet = new Set<string>();
+    const instructorSet = new Set<string>();
+    
+    // Check against all active bookings (not cancelled or complete)
+    const activeStatuses = ["unconfirmed", "confirmed", "briefing", "flying"];
+    
+    for (const b of bookings) {
+      // Skip the current booking being edited
+      if (b.id === booking.id) continue;
+      
+      if (activeStatuses.includes(b.status) && b.start_time && b.end_time) {
+        const bStart = new Date(b.start_time);
+        const bEnd = new Date(b.end_time);
+        if (isOverlap(start, end, bStart, bEnd)) {
+          if (b.aircraft_id) aircraftSet.add(b.aircraft_id);
+          if (b.instructor_id) instructorSet.add(b.instructor_id);
+        }
+      }
+    }
+    
+    return { aircraft: aircraftSet, instructors: instructorSet };
+  }, [bookings, startDate, startTime, endDate, endTime, booking.id]);
   
   // Use optimized hooks for data fetching
   const memberValue = useMemberValue(
@@ -155,26 +203,65 @@ export default function BookingDetails({ booking, members, instructors, aircraft
   const { mutate: updateBooking, isPending: saving, isSuccess: saveSuccess } = useBookingUpdate();
 
   const onSubmit = async (data: BookingDetailsFormData) => {
+    // Check for resource conflicts before submission
+    if (!isReadOnly) {
+      if (data.aircraft !== PLACEHOLDER_VALUES.AIRCRAFT && data.aircraft.trim() !== "" && unavailable.aircraft.has(data.aircraft)) {
+        alert("Selected aircraft is already booked during this time. Please choose a different aircraft or time slot.");
+        return;
+      }
+      
+      if (data.instructor.trim() !== "" && unavailable.instructors.has(data.instructor)) {
+        alert("Selected instructor is already booked during this time. Please choose a different instructor or time slot.");
+        return;
+      }
+    }
+    
     // Compose ISO strings for start_time and end_time (robust local-to-UTC conversion)
     const start_time = getUtcIsoString(data.start_date, data.start_time);
     const end_time = getUtcIsoString(data.end_date, data.end_time);
     
-    // Convert empty strings to null for UUID fields to prevent PostgreSQL errors
-    const sanitizeUuid = (value: string) => value.trim() === "" ? null : value;
+    // Convert empty strings and placeholder values to null for UUID fields to prevent PostgreSQL errors
+    const sanitizeUuid = (value: string) => {
+      if (value.trim() === "" || 
+          value === PLACEHOLDER_VALUES.AIRCRAFT || 
+          value === PLACEHOLDER_VALUES.LESSON || 
+          value === PLACEHOLDER_VALUES.FLIGHT_TYPE) {
+        return null;
+      }
+      return value;
+    };
     
-    updateBooking({
+    // Build update object with all required fields
+    const updateData: {
+      id: string;
+      start_time: string | null;
+      end_time: string | null;
+      purpose: string;
+      remarks: string;
+      booking_type: string;
+      instructor_id: string | null;
+      user_id: string | null;
+      aircraft_id: string | null;
+      lesson_id: string | null;
+      flight_type_id: string | null;
+    } = {
       id: booking.id,
       start_time,
       end_time,
       purpose: data.purpose,
       remarks: data.remarks,
-      instructor_id: sanitizeUuid(data.instructor),
-      user_id: sanitizeUuid(data.member),
-      aircraft_id: sanitizeUuid(data.aircraft),
-      lesson_id: sanitizeUuid(data.lesson),
-      flight_type_id: sanitizeUuid(data.flight_type),
       booking_type: data.booking_type,
-    });
+      instructor_id: data.instructor.trim() !== "" ? sanitizeUuid(data.instructor) : null,
+      user_id: data.member.trim() !== "" ? sanitizeUuid(data.member) : null,
+      aircraft_id: data.aircraft !== PLACEHOLDER_VALUES.AIRCRAFT && data.aircraft.trim() !== "" 
+        ? sanitizeUuid(data.aircraft) : null,
+      lesson_id: data.lesson !== PLACEHOLDER_VALUES.LESSON && data.lesson.trim() !== "" 
+        ? sanitizeUuid(data.lesson) : null,
+      flight_type_id: data.flight_type !== PLACEHOLDER_VALUES.FLIGHT_TYPE && data.flight_type.trim() !== "" 
+        ? sanitizeUuid(data.flight_type) : null,
+    };
+    
+    updateBooking(updateData);
   };
 
   return (
@@ -192,7 +279,20 @@ export default function BookingDetails({ booking, members, instructors, aircraft
           </CardTitle>
           {!isReadOnly && (
             <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={() => reset()} disabled={!formState.isDirty}>Undo Changes</Button>
+              <Button type="button" variant="outline" onClick={() => reset({
+                start_date: booking?.start_time ? format(parseISO(booking.start_time), "yyyy-MM-dd") : "",
+                start_time: booking?.start_time ? format(parseISO(booking.start_time), "HH:mm") : "",
+                end_date: booking?.end_time ? format(parseISO(booking.end_time), "yyyy-MM-dd") : "",
+                end_time: booking?.end_time ? format(parseISO(booking.end_time), "HH:mm") : "",
+                member: booking?.user_id || "",
+                instructor: booking?.instructor_id || "",
+                aircraft: booking?.aircraft_id || PLACEHOLDER_VALUES.AIRCRAFT,
+                lesson: booking?.lesson_id || PLACEHOLDER_VALUES.LESSON,
+                remarks: booking?.remarks || "",
+                purpose: booking?.purpose || "",
+                flight_type: booking?.flight_type_id || PLACEHOLDER_VALUES.FLIGHT_TYPE,
+                booking_type: booking?.booking_type || "flight",
+              })} disabled={!formState.isDirty}>Undo Changes</Button>
               <Button type="submit" className="bg-black text-white flex items-center gap-2 min-w-[90px] justify-center" disabled={!formState.isDirty || saving || saveSuccess}>
                 {saving ? (
                   <>
@@ -369,7 +469,13 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                   <div className="relative">
                     <InstructorSelect
                       value={instructorValue}
+                      unavailableInstructorIds={unavailable.instructors}
                       onSelect={instructor => {
+                        // Prevent selection of conflicted instructors
+                        if (instructor && unavailable.instructors.has(instructor.id)) {
+                          alert("This instructor is already booked during this time. Please choose a different instructor or time slot.");
+                          return;
+                        }
                         field.onChange(instructor ? instructor.id : "");
                       }}
                       disabled={isReadOnly}
@@ -395,9 +501,15 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                     <SelectValue placeholder="Select aircraft" />
                   </SelectTrigger>
                   <SelectContent>
-                    {aircraft.map(a => (
-                      <SelectItem key={a.id} value={a.id}>{a.registration} ({a.type})</SelectItem>
-                    ))}
+                    <SelectItem value={PLACEHOLDER_VALUES.AIRCRAFT}>No aircraft selected</SelectItem>
+                    {aircraft.map(a => {
+                      const isBooked = unavailable.aircraft.has(a.id);
+                      return (
+                        <SelectItem key={a.id} value={a.id} disabled={isBooked}>
+                          {a.registration} ({a.type}){isBooked ? " (booked)" : ""}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               )} />
@@ -410,6 +522,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                     <SelectValue placeholder="Select flight type" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={PLACEHOLDER_VALUES.FLIGHT_TYPE}>No flight type selected</SelectItem>
                     {flightTypes.map(f => (
                       <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
                     ))}
@@ -425,6 +538,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                     <SelectValue placeholder="Select lesson" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={PLACEHOLDER_VALUES.LESSON}>No lesson selected</SelectItem>
                     {lessons.map(l => (
                       <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
                     ))}

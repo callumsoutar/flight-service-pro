@@ -101,7 +101,7 @@ export default function RenewMembershipModal({
 
         <div className="space-y-6">
           {/* Current Membership Info */}
-          <Card className="bg-gray-50">
+          <Card className="bg-gray-50 rounded-md">
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="font-medium">Current Membership</h4>
@@ -151,7 +151,7 @@ export default function RenewMembershipModal({
 
           {/* New Membership Preview */}
           {selectedType && (
-            <Card className="border-green-200 bg-green-50">
+            <Card className="border-green-200 bg-green-50 rounded-md">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Gift className="h-4 w-4 text-green-600" />

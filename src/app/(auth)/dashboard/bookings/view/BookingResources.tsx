@@ -12,11 +12,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Button } from "@/components/ui/button";
 import { ViewObservationModal } from "@/components/aircraft/ViewObservationModal";
 
-// Define a type for the joined instructor row
+// Define a type for the instructor with direct name fields
 export type JoinedInstructor = {
   id: string;
   user_id: string;
-  users: User;
+  first_name: string | null;
+  last_name: string | null;
+  users?: User; // Keep users optional for email fallback
 };
 
 interface BookingResourcesProps {
@@ -81,8 +83,8 @@ export default function BookingResources({ member, instructor, aircraft }: Booki
             <div className="flex-1">
               <div className="font-semibold">Instructor <Badge className="ml-2" variant="secondary">Staff</Badge></div>
               <div className="mt-1">
-                {instructor?.users
-                  ? `${instructor.users.first_name || ""} ${instructor.users.last_name || ""}`.trim() || instructor.users.email
+                {instructor
+                  ? `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.users?.email || "-"
                   : "-"}
               </div>
               <div className="text-gray-500 text-sm">{instructor?.users?.email || "-"}</div>

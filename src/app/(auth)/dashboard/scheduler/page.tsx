@@ -82,6 +82,7 @@ const FlightScheduler = () => {
   // State for instructors and aircraft resources
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [aircraft, setAircraft] = useState<AircraftData[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,6 +94,8 @@ const FlightScheduler = () => {
 
   // State for bookings (by resource)
   const [bookings, setBookings] = useState<Record<string, Booking[]>>({});
+  // State for raw booking data (for conflict checking)
+  const [rawBookings, setRawBookings] = useState<import("@/types/bookings").Booking[]>([]);
 
   const [dragData, setDragData] = useState<DragData | null>(null);
   const [hoveredBooking, setHoveredBooking] = useState<Booking | null>(null);
@@ -188,7 +191,7 @@ const FlightScheduler = () => {
             .filter((instructor: { is_actively_instructing: boolean }) => {
               return instructor.is_actively_instructing === true;
             }) // Only active instructors
-            .map(async (instructor: { id: string; user_id: string; is_actively_instructing: boolean; users?: { first_name?: string; last_name?: string; email?: string } }) => {
+            .map(async (instructor: { id: string; user_id: string; is_actively_instructing: boolean; first_name?: string; last_name?: string; rating?: string; users?: { email?: string } }) => {
             try {
               const endorsementsRes = await fetch(`/api/instructor_endorsements?instructor_id=${instructor.id}`);
               if (endorsementsRes.ok) {
@@ -200,7 +203,7 @@ const FlightScheduler = () => {
                 return {
                   id: instructor.id,
                   user_id: instructor.user_id, // Assuming user_id is available in the fetched data
-                  name: `${instructor.users?.first_name || ""} ${instructor.users?.last_name || ""}`.trim() || instructor.users?.email || `Instructor ${instructor.id}`,
+                  name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.users?.email || `Instructor ${instructor.id}`,
                   endorsements: endorsementNames.join(', ') || 'No endorsements'
                 };
               } else {
@@ -208,7 +211,7 @@ const FlightScheduler = () => {
                 return {
                   id: instructor.id,
                   user_id: instructor.user_id, // Assuming user_id is available in the fetched data
-                  name: `${instructor.users?.first_name || ""} ${instructor.users?.last_name || ""}`.trim() || instructor.users?.email || `Instructor ${instructor.id}`,
+                  name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.users?.email || `Instructor ${instructor.id}`,
                   endorsements: 'No endorsements'
                 };
               }
@@ -217,7 +220,7 @@ const FlightScheduler = () => {
               return {
                 id: instructor.id,
                 user_id: instructor.user_id, // Assuming user_id is available in the fetched data
-                name: `${instructor.users?.first_name || ""} ${instructor.users?.last_name || ""}`.trim() || instructor.users?.email || `Instructor ${instructor.id}`,
+                name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.users?.email || `Instructor ${instructor.id}`,
                 endorsements: 'No endorsements'
               };
             }
@@ -274,7 +277,7 @@ const FlightScheduler = () => {
         instructor: 'No Instructor', // Will be set below if instructor exists
         aircraft: newBookingData.aircraft?.registration || 'Aircraft',
         lessonType: newBookingData.booking_type || 'flight',
-        notes: newBookingData.remarks || ''
+        notes: newBookingData.purpose || ''
       };
 
       setBookings(prev => {
@@ -327,7 +330,8 @@ const FlightScheduler = () => {
         // Format date for API query (YYYY-MM-DD)
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         
-        // Fetch bookings for the selected date with comprehensive data
+        // Fetch all bookings with comprehensive data (not just for selected date)
+        // This ensures we can check conflicts across all dates
         const bookingsRes = await fetch(`/api/bookings`, {
           method: 'GET',
           headers: {
@@ -364,8 +368,12 @@ const FlightScheduler = () => {
         if (!bookingsData || !Array.isArray(bookingsData.bookings)) {
           console.warn("Unexpected bookings data structure:", bookingsData);
           setBookings({});
+          setRawBookings([]);
           return;
         }
+        
+        // Store all raw bookings for conflict checking
+        setRawBookings(bookingsData.bookings);
         
         // Filter bookings for the selected date and group by resource
         const bookingsByResource: Record<string, Booking[]> = {};
@@ -420,7 +428,7 @@ const FlightScheduler = () => {
                   : booking.instructor?.email || 'No Instructor', // Set instructor from booking data first
                 aircraft: booking.aircraft?.registration || 'Aircraft',
                 lessonType: booking.booking_type || 'flight',
-                notes: booking.remarks || ''
+                notes: booking.purpose || ''
               };
               
               // Group by instructor if available
@@ -797,7 +805,7 @@ const FlightScheduler = () => {
     
     return (
       <div key={resourceKey} className="flex border-b border-gray-200 resource-row group transition-all duration-200" data-resource={resourceKey} style={{ height: `${rowHeight}px` }}>
-        <div className={`w-44 p-4 text-sm font-semibold border-r border-gray-100 flex items-center transition-all duration-200 ${
+        <div className={`w-52 p-4 text-sm font-semibold border-r border-gray-100 flex items-center transition-all duration-200 ${
           isInstructor 
             ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-900' 
             : 'bg-gradient-to-r from-gray-50 to-slate-50 text-gray-700'
@@ -808,7 +816,10 @@ const FlightScheduler = () => {
             )}
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-sm truncate">
-                {isInstructor ? (resource as Instructor).name : resource as string}
+                {isInstructor 
+                  ? (resource as Instructor).name
+                  : resource as string
+                }
               </div>
               {isInstructor && endorsements && (
                 <div className="text-xs text-blue-600 font-medium mt-0.5 truncate">
@@ -929,7 +940,7 @@ const FlightScheduler = () => {
 
       {/* Time Header with Navigation */}
       <div className="flex border-b border-gray-300 bg-gradient-to-r from-gray-50 to-slate-50">
-        <div className="w-44 border-r border-gray-200 flex items-center justify-center bg-white">
+        <div className="w-52 border-r border-gray-200 flex items-center justify-center bg-white">
           <div className="flex items-center space-x-2">
             <button 
               onClick={scrollLeft}
@@ -1096,7 +1107,7 @@ const FlightScheduler = () => {
           registration: aircraftData.registration,
           type: aircraftData.type || 'Unknown'
         }))}
-        bookings={[]} // We can pass empty array since we're not checking conflicts in this context
+        bookings={rawBookings} // Pass all bookings for conflict checking
         prefilledData={prefilledBookingData || undefined}
         onBookingCreated={addBookingOptimistically}
       />

@@ -84,14 +84,14 @@ export function useInstructorData(instructorId: string | null) {
       }
       
       const data = await response.json();
-      if (data.instructor && data.instructor.users) {
-        const user = data.instructor.users;
+      if (data.instructor) {
+        const instructor = data.instructor;
         return {
-          id: data.instructor.id,
-          user_id: data.instructor.user_id,
-          first_name: user.first_name || "",
-          last_name: user.last_name || "",
-          email: user.email || "",
+          id: instructor.id,
+          user_id: instructor.user_id,
+          first_name: instructor.first_name || "",
+          last_name: instructor.last_name || "",
+          email: instructor.users?.email || "",
         };
       }
       return null;
@@ -213,23 +213,21 @@ export function useInstructorValue(
   existingInstructor?: {
     id: string;
     user_id: string;
-    users?: {
-      first_name: string;
-      last_name: string;
-      email: string;
-    };
+    first_name: string;
+    last_name: string;
+    email: string;
   } | null
 ): InstructorResult | null {
   const { data: instructorData, isLoading } = useInstructorData(instructorId);
   
-  // Priority 1: Use existing instructor data from server-side join if available
-  if (existingInstructor && existingInstructor.users) {
+  // Priority 1: Use existing instructor data from server-side if available
+  if (existingInstructor) {
     return {
       id: existingInstructor.id,
       user_id: existingInstructor.user_id,
-      first_name: existingInstructor.users.first_name || "",
-      last_name: existingInstructor.users.last_name || "",
-      email: existingInstructor.users.email || "",
+      first_name: existingInstructor.first_name || "",
+      last_name: existingInstructor.last_name || "",
+      email: existingInstructor.email || "",
     };
   }
   

@@ -1,5 +1,5 @@
 "use client";
-import { Plane, CalendarIcon, UserIcon, BadgeCheck, ClipboardList as ClipboardListIcon, StickyNote, AlignLeft, ClipboardList, BookOpen, Loader2 } from "lucide-react";
+import { Plane, CalendarIcon, UserIcon, BadgeCheck, ClipboardList as ClipboardListIcon, StickyNote, AlignLeft, ClipboardList, BookOpen, Loader2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import React from "react";
@@ -8,6 +8,7 @@ import { format, parseISO } from "date-fns";
 import { Booking } from "@/types/bookings";
 import { BookingDetails } from "@/types/booking_details";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -76,11 +77,29 @@ function getUtcIsoString(dateStr: string, timeStr: string): string | null {
   return local.toISOString();
 }
 
+// Helper to calculate aircraft endurance based on fuel on board and fuel consumption
+function calculateEndurance(fuelOnBoard: number, fuelConsumption: number): { hours: number; minutes: number; totalHours: number } | null {
+  if (!fuelOnBoard || !fuelConsumption || fuelConsumption <= 0) return null;
+  
+  const totalHours = fuelOnBoard / fuelConsumption;
+  const hours = Math.floor(totalHours);
+  const minutes = Math.round((totalHours - hours) * 60);
+  
+  return { hours, minutes, totalHours };
+}
+
+// Helper to format endurance for display
+function formatEndurance(endurance: { hours: number; minutes: number } | null): string {
+  if (!endurance) return "--";
+  return `${endurance.hours}h ${endurance.minutes.toString().padStart(2, '0')}m`;
+}
+
 export default function CheckOutForm({ booking, members, instructors, aircraft, lessons, flightTypes, bookingDetails }: CheckOutFormProps) {
   // Check if booking is read-only (completed bookings cannot be edited)
   const isReadOnly = booking.status === 'complete';
   
   // Parse eta into date and time for default values
+  // Default to booking end time if no existing ETA, otherwise use existing ETA
   let etaDateDefault = "";
   let etaTimeDefault = "";
   if (bookingDetails?.eta) {
@@ -88,6 +107,13 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
       const etaDateObj = parseISO(bookingDetails.eta);
       etaDateDefault = format(etaDateObj, "yyyy-MM-dd");
       etaTimeDefault = format(etaDateObj, "HH:mm");
+    } catch {}
+  } else if (booking?.end_time) {
+    // Default ETA to booking end time if no existing ETA
+    try {
+      const endDateObj = parseISO(booking.end_time);
+      etaDateDefault = format(endDateObj, "yyyy-MM-dd");
+      etaTimeDefault = format(endDateObj, "HH:mm");
     } catch {}
   }
   const checkedOutAircraftDefault = booking?.checked_out_aircraft_id || booking?.aircraft_id || "";
@@ -122,6 +148,7 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
   // Watch form fields
   const watchedAircraftId = watch("checked_out_aircraft_id");
   const watchedInstructorId = watch("checked_out_instructor_id");
+  const watchedFuelOnBoard = watch("fuel_on_board");
   
   // Use optimized hooks for data fetching
   const { data: selectedAircraftMeters, isLoading: isLoadingAircraftMeters } = useAircraftMeters(watchedAircraftId);
@@ -141,6 +168,11 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
   
   // Use optimized mutation for save operations
   const { mutate: saveCheckOut, isPending: saving } = useCheckOutSave();
+
+  // Calculate endurance based on fuel on board and aircraft fuel consumption
+  const fuelOnBoard = watchedFuelOnBoard ? parseInt(watchedFuelOnBoard, 10) : 0;
+  const fuelConsumption = selectedAircraftMeters?.fuel_consumption || null;
+  const endurance = fuelOnBoard && fuelConsumption ? calculateEndurance(fuelOnBoard, fuelConsumption) : null;
 
 
 
@@ -405,7 +437,37 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
           {/* Aircraft, Flight Type, Lesson, Booking Type */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
             <div>
-              <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><Plane className="w-4 h-4" /> Aircraft</label>
+              <label className="block text-xs font-semibold mb-2 flex items-center gap-1">
+                <Plane className="w-4 h-4" /> Aircraft
+                {watchedAircraftId && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Clock className="w-4 h-4 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs">
+                        <div className="space-y-1">
+                          {isLoadingAircraftMeters ? (
+                            <div className="flex items-center gap-2">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Loading aircraft meters...</span>
+                            </div>
+                          ) : selectedAircraftMeters ? (
+                            <>
+                              <div>Current Hobbs: {selectedAircraftMeters.current_hobbs !== null ? selectedAircraftMeters.current_hobbs.toFixed(1) : 'N/A'}</div>
+                              <div>Current Tacho: {selectedAircraftMeters.current_tach !== null ? selectedAircraftMeters.current_tach.toFixed(1) : 'N/A'}</div>
+                              <div>Fuel Consumption: {selectedAircraftMeters.fuel_consumption !== null ? `${selectedAircraftMeters.fuel_consumption} L/hr` : 'N/A'}</div>
+                              <div className="text-blue-600 font-medium">Meter values will be recorded as flight start readings</div>
+                            </>
+                          ) : (
+                            <div className="text-amber-600">No meter data available</div>
+                          )}
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </label>
               <Controller name="checked_out_aircraft_id" control={control} render={({ field }) => (
                 <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
                   <SelectTrigger className="w-full">
@@ -418,25 +480,6 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
                   </SelectContent>
                 </Select>
               )} />
-              {/* Display current meter readings with loading state */}
-              {watchedAircraftId && (
-                <div className="text-xs text-muted-foreground mt-2 space-y-1">
-                  {isLoadingAircraftMeters ? (
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Loading aircraft meters...</span>
-                    </div>
-                  ) : selectedAircraftMeters ? (
-                    <>
-                      <div>Current Hobbs: {selectedAircraftMeters.current_hobbs !== null ? selectedAircraftMeters.current_hobbs.toFixed(1) : 'N/A'}</div>
-                      <div>Current Tacho: {selectedAircraftMeters.current_tach !== null ? selectedAircraftMeters.current_tach.toFixed(1) : 'N/A'}</div>
-                      <div className="text-blue-600 font-medium">These values will be recorded as flight start readings</div>
-                    </>
-                  ) : (
-                    <div className="text-amber-600">No meter data available</div>
-                  )}
-                </div>
-              )}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BadgeCheck className="w-4 h-4" /> Flight Type</label>
@@ -590,7 +633,24 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
               />
               )}
             />
-            <span className="ml-4 text-sm text-muted-foreground">Total: -- (<span className="text-blue-600 cursor-pointer hover:underline">-- safe endurance</span>)</span>
+            <span className="ml-4 text-sm text-muted-foreground">
+              {fuelConsumption ? (
+                <>
+                  Total: {fuelOnBoard}L (
+                  <span className="text-blue-600 font-medium">
+                    {formatEndurance(endurance)} endurance
+                  </span>
+                  {endurance && (
+                    <span className="text-amber-600 ml-1">
+                      @ {fuelConsumption}L/hr
+                    </span>
+                  )}
+                  )
+                </>
+              ) : (
+                <>Total: {fuelOnBoard}L (<span className="text-gray-400">-- safe endurance</span>)</>
+              )}
+            </span>
           </div>
         </div>
         {/* Passengers */}

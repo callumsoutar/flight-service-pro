@@ -33,23 +33,7 @@ export interface Invoice {
   booking?: import("./bookings").Booking;
 }
 
-export interface InvoiceItem {
-  id: string;
-  invoice_id: string;
-  chargeable_id?: string | null;
-  description: string;
-  quantity: number;
-  rate: number;
-  rate_inclusive: number;
-  amount: number;
-  tax_rate: number;
-  tax_amount: number;
-  total_amount: number;
-  created_at: string;
-  updated_at: string;
-  // Optionally joined objects from Supabase
-  chargeable?: import("./chargeables").Chargeable;
-}
+// InvoiceItem moved to separate file: @/types/invoice_items
 
 export type InvoiceInsert = {
   id?: string;

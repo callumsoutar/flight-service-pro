@@ -61,11 +61,13 @@ const DebriefClientShell: React.FC<DebriefClientShellProps> = ({ booking, member
       <div className="flex flex-row items-center w-full mb-2 gap-4">
         <div className="flex-1 min-w-0 flex flex-col items-start gap-0">
           <h1 className="text-[3rem] font-extrabold tracking-tight text-gray-900" style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1 }}>Debrief Booking</h1>
-          <BookingMemberLink
-            userId={booking.user_id}
-            firstName={member.first_name}
-            lastName={member.last_name}
-          />
+          {booking.user_id && (
+            <BookingMemberLink
+              userId={booking.user_id}
+              firstName={member.first_name}
+              lastName={member.last_name}
+            />
+          )}
         </div>
                   <StatusBadge status={status as BookingStatus} className="text-lg px-4 py-2 font-semibold" />
         <div className="flex items-center gap-3">

@@ -84,10 +84,11 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
     type: a.type,
   }));
 
-  // Fetch all lessons
+  // Fetch all lessons ordered by order column
   const { data: lessonRows } = await supabase
     .from("lessons")
-    .select("id, name");
+    .select("id, name, order")
+    .order("order", { ascending: true });
   lessons = (lessonRows || []).map((l: { id: string; name: string }) => ({ id: l.id, name: l.name }));
 
   // Fetch all flight types
@@ -115,7 +116,7 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
         <div className="flex flex-row items-center w-full mb-2 gap-4">
           <div className="flex-1 min-w-0 flex flex-col items-start gap-0">
             <h1 className="text-[3rem] font-extrabold tracking-tight text-gray-900" style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1 }}>Booking Check-Out</h1>
-            {booking && (
+            {booking && booking.user_id && (
               <BookingMemberLink
                 userId={booking.user_id}
                 firstName={booking.user?.first_name}

@@ -150,8 +150,35 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
   }, [completeSuccess]);
 
   // Use optimistic data if available, otherwise use actual data
-  const displayInvoiceItems = optimisticData?.invoiceItems || lastCalculateResult?.invoiceItems || invoiceItems;
-  const displayTotals = optimisticData?.totals || lastCalculateResult?.totals || { subtotal, totalTax, total };
+  // Smart merging: if we have optimistic data from calculate charges, but the actual invoiceItems 
+  // has more items (from adding chargeables), merge them
+  const mergedInvoiceItems = useMemo(() => {
+    if (optimisticData?.invoiceItems && invoiceItems.length > optimisticData.invoiceItems.length) {
+      // User has added chargeables after calculating charges
+      // Merge the optimistic calculate data with the new chargeable items
+      const calculateItemIds = new Set(optimisticData.invoiceItems.map(item => item.id));
+      const additionalItems = invoiceItems.filter((item: InvoiceItem) => !calculateItemIds.has(item.id));
+      return [...optimisticData.invoiceItems, ...additionalItems];
+    }
+    return optimisticData?.invoiceItems || lastCalculateResult?.invoiceItems || invoiceItems;
+  }, [optimisticData?.invoiceItems, lastCalculateResult?.invoiceItems, invoiceItems]);
+
+  const displayInvoiceItems = mergedInvoiceItems;
+  
+  // Recalculate totals if we merged additional items
+  const displayTotals = useMemo(() => {
+    if (mergedInvoiceItems === invoiceItems || (optimisticData?.invoiceItems && mergedInvoiceItems.length === optimisticData.invoiceItems.length)) {
+      // No merging happened, use existing totals
+      return optimisticData?.totals || lastCalculateResult?.totals || { subtotal, totalTax, total };
+    } else {
+      // We merged additional items, recalculate totals
+      const mergedSubtotal = mergedInvoiceItems.reduce((sum: number, item: InvoiceItem) => sum + (item.amount || 0), 0);
+      const mergedTotalTax = mergedInvoiceItems.reduce((sum: number, item: InvoiceItem) => sum + (item.tax_amount || 0), 0);
+      const mergedTotal = mergedInvoiceItems.reduce((sum: number, item: InvoiceItem) => sum + (item.line_total || 0), 0);
+      return { subtotal: mergedSubtotal, totalTax: mergedTotalTax, total: mergedTotal };
+    }
+  }, [mergedInvoiceItems, optimisticData?.totals, lastCalculateResult?.totals, subtotal, totalTax, total, invoiceItems, optimisticData?.invoiceItems]);
+  
   const displayInvoice = optimisticData?.invoice || lastCalculateResult?.invoice || invoice;
 
   // Show loading state only for critical data
@@ -192,7 +219,7 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
             </div>
           )}
           <CheckInDetails 
-            aircraftId={booking?.aircraft_id}
+            aircraftId={booking?.checked_out_aircraft_id || undefined}
             selectedFlightTypeId={booking?.flight_type_id}
             instructorId={booking?.instructor_id}
             instructors={instructors}

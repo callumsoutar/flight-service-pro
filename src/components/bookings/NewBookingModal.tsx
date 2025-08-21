@@ -159,14 +159,14 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
         fetch('/api/instructors')
           .then(res => res.json())
           .then(data => {
-            const instructorData = (data.instructors || []).find((inst: { id: string; users?: { first_name?: string; last_name?: string; email?: string }; user_id: string }) => inst.id === prefilledData.instructorId);
-            if (instructorData && instructorData.users) {
+            const instructorData = (data.instructors || []).find((inst: { id: string; first_name?: string; last_name?: string; users?: { email?: string }; user_id: string }) => inst.id === prefilledData.instructorId);
+            if (instructorData) {
               const instructorResult = {
                 id: instructorData.id,
                 user_id: instructorData.user_id,
-                first_name: instructorData.users.first_name || "",
-                last_name: instructorData.users.last_name || "",
-                email: instructorData.users.email || "",
+                first_name: instructorData.first_name || "",
+                last_name: instructorData.last_name || "",
+                email: instructorData.users?.email || "",
               };
               setInstructor(instructorResult);
             }
@@ -226,7 +226,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
 
   // Compute unavailable aircraft/instructors for the selected time
   const unavailable = React.useMemo(() => {
-    if (!startDate || !startTime || !endDate || !endTime) return { aircraft: new Set(), instructors: new Set() };
+    if (!startDate || !startTime || !endDate || !endTime) return { aircraft: new Set<string>(), instructors: new Set<string>() };
     const start = new Date(
       startDate.getFullYear(), startDate.getMonth(), startDate.getDate(),
       Number(startTime.split(":")[0]), Number(startTime.split(":")[1])
@@ -237,8 +237,12 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     );
     const aircraftSet = new Set<string>();
     const instructorSet = new Set<string>();
+    
+    // Check against all active bookings (not cancelled or complete)
+    const activeStatuses = ["unconfirmed", "confirmed", "briefing", "flying"];
+    
     for (const b of bookings) {
-      if ((b.status === "confirmed" || b.status === "flying") && b.start_time && b.end_time) {
+      if (activeStatuses.includes(b.status) && b.start_time && b.end_time) {
         const bStart = new Date(b.start_time);
         const bEnd = new Date(b.end_time);
         if (isOverlap(start, end, bStart, bEnd)) {
@@ -269,11 +273,23 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
         return;
       }
     } else {
-      if (!selectedMember || !aircraftId || !startDate || !startTime || !endDate || !endTime || !purpose || !bookingType) {
-        setError("Please fill in all required fields (member, aircraft, start/end time, purpose, booking type).");
+      if (!aircraftId || !startDate || !startTime || !endDate || !endTime || !purpose || !bookingType) {
+        setError("Please fill in all required fields (aircraft, start/end time, purpose, booking type).");
         return;
       }
     }
+    
+    // Check for resource conflicts before submission
+    if (aircraftId && unavailable.aircraft.has(aircraftId)) {
+      setError("Selected aircraft is already booked during this time. Please choose a different aircraft or time slot.");
+      return;
+    }
+    
+    if (instructor?.id && unavailable.instructors.has(instructor.id)) {
+      setError("Selected instructor is already booked during this time. Please choose a different instructor or time slot.");
+      return;
+    }
+    
     // Convert to UTC ISO strings
     const start_time = getUtcIsoString(startDate, startTime);
     const end_time = getUtcIsoString(endDate, endTime);
@@ -326,8 +342,8 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
           throw new Error('Failed to check existing users');
         }
       } else {
-        // Regular booking - use selected member
-        userId = selectedMember!.id;
+        // Regular booking - use selected member if available
+        userId = selectedMember?.id || null;
       }
       
       // Build booking payload
@@ -482,7 +498,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                   {/* Member and Flight Type on same line */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6 mb-8">
                     <div className="max-w-[340px] w-full mr-2">
-                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Member <span className="text-red-500">*</span></label>
+                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Member</label>
                       <MemberSelect
                         value={selectedMember}
                         onSelect={setSelectedMember}
@@ -511,17 +527,35 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Instructor</label>
                       <InstructorSelect
                         value={instructor}
-                        onSelect={setInstructor}
+                        unavailableInstructorIds={unavailable.instructors}
+                        onSelect={(selectedInstructor) => {
+                          // Prevent selection of conflicted instructors
+                          if (selectedInstructor && unavailable.instructors.has(selectedInstructor.id)) {
+                            setError("This instructor is already booked during this time. Please choose a different instructor or time slot.");
+                            return;
+                          }
+                          setInstructor(selectedInstructor);
+                          // Clear any previous conflict errors when selecting a valid instructor
+                          if (error && error.includes("instructor is already booked")) {
+                            setError(null);
+                          }
+                        }}
                       />
                       {instructor && unavailable.instructors.has(instructor.id) && (
-                        <div className="text-xs text-orange-600 mt-1 font-medium">
-                          ⚠️ This instructor is already booked during this time
+                        <div className="text-xs text-red-600 mt-1 font-medium bg-red-50 p-2 rounded border">
+                          ⚠️ This instructor is already booked during this time. Please choose a different instructor or time slot.
                         </div>
                       )}
                     </div>
                     <div className="max-w-[340px] w-full">
                       <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><Plane className="w-4 h-4" /> Aircraft</label>
-                      <Select value={aircraftId} onValueChange={setAircraftId}>
+                      <Select value={aircraftId} onValueChange={(selectedAircraftId) => {
+                        // Clear any previous aircraft conflict errors when selecting a different aircraft
+                        if (error && error.includes("aircraft is already booked")) {
+                          setError(null);
+                        }
+                        setAircraftId(selectedAircraftId);
+                      }}>
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select aircraft" />
                         </SelectTrigger>
@@ -569,8 +603,18 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                     </div>
                   </div>
                   
-                  {/* Remarks & Purpose */}
+                  {/* Description & Remarks */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
+                    <div className="max-w-[340px] w-full">
+                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><AlignLeft className="w-4 h-4" /> Description</label>
+                      <Textarea
+                        value={purpose}
+                        onChange={e => setPurpose(e.target.value)}
+                        placeholder="Description"
+                        className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
+                        rows={4}
+                      />
+                    </div>
                     <div className="max-w-[340px] w-full">
                       <div className="flex items-center mb-2">
                         <label className="block text-xs font-semibold flex items-center gap-1">
@@ -593,16 +637,6 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         value={remarks}
                         onChange={e => setRemarks(e.target.value)}
                         placeholder="Enter booking remarks"
-                        className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
-                        rows={4}
-                      />
-                    </div>
-                    <div className="max-w-[340px] w-full">
-                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><AlignLeft className="w-4 h-4" /> Description</label>
-                      <Textarea
-                        value={purpose}
-                        onChange={e => setPurpose(e.target.value)}
-                        placeholder="Description"
                         className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
                         rows={4}
                       />
@@ -650,17 +684,35 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Instructor</label>
                       <InstructorSelect
                         value={instructor}
-                        onSelect={setInstructor}
+                        unavailableInstructorIds={unavailable.instructors}
+                        onSelect={(selectedInstructor) => {
+                          // Prevent selection of conflicted instructors
+                          if (selectedInstructor && unavailable.instructors.has(selectedInstructor.id)) {
+                            setError("This instructor is already booked during this time. Please choose a different instructor or time slot.");
+                            return;
+                          }
+                          setInstructor(selectedInstructor);
+                          // Clear any previous conflict errors when selecting a valid instructor
+                          if (error && error.includes("instructor is already booked")) {
+                            setError(null);
+                          }
+                        }}
                       />
                       {instructor && unavailable.instructors.has(instructor.id) && (
-                        <div className="text-xs text-orange-600 mt-1 font-medium">
-                          ⚠️ This instructor is already booked during this time
+                        <div className="text-xs text-red-600 mt-1 font-medium bg-red-50 p-2 rounded border">
+                          ⚠️ This instructor is already booked during this time. Please choose a different instructor or time slot.
                         </div>
                       )}
                     </div>
                     <div className="max-w-[340px] w-full">
                       <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><Plane className="w-4 h-4" /> Aircraft</label>
-                      <Select value={aircraftId} onValueChange={setAircraftId}>
+                      <Select value={aircraftId} onValueChange={(selectedAircraftId) => {
+                        // Clear any previous aircraft conflict errors when selecting a different aircraft
+                        if (error && error.includes("aircraft is already booked")) {
+                          setError(null);
+                        }
+                        setAircraftId(selectedAircraftId);
+                      }}>
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select aircraft" />
                         </SelectTrigger>

@@ -34,6 +34,7 @@ interface CheckOutParams {
 interface AircraftMeterData {
   current_hobbs: number | null;
   current_tach: number | null;
+  fuel_consumption: number | null;
 }
 
 interface InstructorResult {
@@ -68,6 +69,7 @@ export function useAircraftMeters(aircraftId: string | null) {
         return {
           current_hobbs: typeof data.aircraft.current_hobbs === 'number' ? data.aircraft.current_hobbs : null,
           current_tach: typeof data.aircraft.current_tach === 'number' ? data.aircraft.current_tach : null,
+          fuel_consumption: typeof data.aircraft.fuel_consumption === 'number' ? data.aircraft.fuel_consumption : null,
         };
       }
       return null;

@@ -15,9 +15,10 @@ type InstructorSelectProps = {
   onSelect: (instructor: InstructorResult | null) => void;
   value: InstructorResult | null;
   disabled?: boolean;
+  unavailableInstructorIds?: Set<string>; // Set of instructor IDs that are unavailable due to conflicts
 };
 
-export default function InstructorSelect({ onSelect, value, disabled = false }: InstructorSelectProps) {
+export default function InstructorSelect({ onSelect, value, disabled = false, unavailableInstructorIds }: InstructorSelectProps) {
   const [instructors, setInstructors] = useState<InstructorResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,11 +32,11 @@ export default function InstructorSelect({ onSelect, value, disabled = false }: 
         if (!res.ok) throw new Error("Failed to fetch instructors");
         const data = await res.json();
         // Transform the data to match InstructorResult format
-        const transformedInstructors = (data.instructors || []).map((instructor: { id: string; user_id: string; users?: { first_name?: string; last_name?: string; email?: string } }) => ({
+        const transformedInstructors = (data.instructors || []).map((instructor: { id: string; user_id: string; first_name?: string; last_name?: string; users?: { email?: string } }) => ({
           id: instructor.id, // instructor ID from instructors table
           user_id: instructor.user_id, // user ID from users table
-          first_name: instructor.users?.first_name || "",
-          last_name: instructor.users?.last_name || "",
+          first_name: instructor.first_name || "",
+          last_name: instructor.last_name || "",
           email: instructor.users?.email || "",
         }));
         setInstructors(transformedInstructors);
@@ -51,12 +52,15 @@ export default function InstructorSelect({ onSelect, value, disabled = false }: 
   return (
     <div className="relative w-full">
       <Select 
-        value={selectedInstructor?.id || ""} 
+        value={selectedInstructor?.id || (value?.id || "")} 
         onValueChange={disabled ? undefined : (instructor_id) => {
-          const instructor = instructors.find(i => i.id === instructor_id);
-          onSelect(instructor || null);
+          // Only trigger onSelect if instructors are loaded and we have a valid selection
+          if (instructors.length > 0) {
+            const instructor = instructors.find(i => i.id === instructor_id);
+            onSelect(instructor || null);
+          }
         }}
-        disabled={disabled}
+        disabled={disabled || loading}
       >
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Select instructor" />
@@ -67,14 +71,20 @@ export default function InstructorSelect({ onSelect, value, disabled = false }: 
           ) : error ? (
             <div className="px-2 py-1.5 text-sm text-destructive">Error loading instructors</div>
           ) : instructors.length > 0 ? (
-            instructors.map((instructor) => (
-              <SelectItem key={instructor.id} value={instructor.id}>
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-indigo-500" />
-                  <span>{instructor.first_name} {instructor.last_name}</span>
-                </div>
-              </SelectItem>
-            ))
+            instructors.map((instructor) => {
+              const isUnavailable = unavailableInstructorIds?.has(instructor.id) || false;
+              return (
+                <SelectItem key={instructor.id} value={instructor.id} disabled={isUnavailable}>
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-indigo-500" />
+                    <span>
+                      {instructor.first_name} {instructor.last_name}
+                      {isUnavailable ? " (booked)" : ""}
+                    </span>
+                  </div>
+                </SelectItem>
+              );
+            })
           ) : (
             <div className="px-2 py-1.5 text-sm text-muted-foreground">No instructors found</div>
           )}

@@ -26,7 +26,7 @@ export default function MemberProfileCard({ member, joinDate, membershipStatus =
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <Card className="mb-6">
+    <Card className="mb-6 rounded-md">
       <CardContent className="flex flex-col md:flex-row md:items-center gap-6 p-6">
         <div className="flex items-center gap-6 flex-1">
           <Avatar className="w-20 h-20 text-3xl">
@@ -59,7 +59,7 @@ export default function MemberProfileCard({ member, joinDate, membershipStatus =
                 Quick Actions <ChevronDown className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-64">
+            <DropdownMenuContent align="end" sideOffset={8} className="w-56">
               <DropdownMenuItem>
                 <Calendar className="w-4 h-4 mr-2" /> New Booking
               </DropdownMenuItem>

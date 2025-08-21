@@ -6,18 +6,18 @@ import { Users, UserCog, UserCheck, MailPlus } from "lucide-react";
 export default async function InstructorsPage() {
   const supabase = await createClient();
 
-  // Fetch all instructors, join user for display
+  // Fetch all instructors with their own name fields
   const { data: instructorsRaw, error } = await supabase
     .from("instructors")
     .select(`
       id,
       user_id,
+      first_name,
+      last_name,
       expires_at,
       user:user_id (
         id,
-        email,
-        first_name,
-        last_name
+        email
       )
     `);
 
@@ -25,40 +25,28 @@ export default async function InstructorsPage() {
     return <div className="p-8 text-red-500">Error loading instructors: {error.message}</div>;
   }
 
-  // Map to Member type for table
-  type InstructorJoin = {
-    id: string;
-    user_id: string;
-    expires_at?: string;
-    user: {
-      id: string;
-      email: string;
-      first_name?: string;
-      last_name?: string;
-    } | {
-      id: string;
-      email: string;
-      first_name?: string;
-      last_name?: string;
-    }[] | null;
-  };
-
-  const formattedInstructors: Member[] = (instructorsRaw as InstructorJoin[] || [])
-    .map((instructor) => {
+  // Process instructors data
+  const formattedInstructors: Member[] = [];
+  
+  if (instructorsRaw && Array.isArray(instructorsRaw)) {
+    for (const instructor of instructorsRaw) {
+      // Get the user data (handle both object and array cases)
       const user = Array.isArray(instructor.user) ? instructor.user[0] : instructor.user;
-      if (!user) return null;
-      return {
-        id: user.id,
-        instructor_id: instructor.id,
-        user_id: user.id,
-        email: user.email,
-        first_name: user.first_name ?? undefined,
-        last_name: user.last_name ?? undefined,
-        role: "instructor",
-        status: instructor.expires_at && new Date(instructor.expires_at) < new Date() ? "expired" : "active",
-      };
-    })
-    .filter(Boolean) as Member[];
+      
+      if (user && user.id && user.email) {
+        formattedInstructors.push({
+          id: user.id,
+          instructor_id: instructor.id,
+          user_id: user.id,
+          email: user.email,
+          first_name: instructor.first_name || undefined,
+          last_name: instructor.last_name || undefined,
+          role: "instructor",
+          status: instructor.expires_at && new Date(instructor.expires_at) < new Date() ? "expired" : "active",
+        });
+      }
+    }
+  }
 
   const initialData = {
     members: formattedInstructors,

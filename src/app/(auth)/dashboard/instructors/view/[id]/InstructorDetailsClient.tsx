@@ -3,8 +3,9 @@ import React, { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import * as Tabs from "@radix-ui/react-tabs";
 import { User, Mail, Award, Activity, FileText, Upload, Clock, CalendarCheck2, ActivitySquare, Stethoscope, Settings, Briefcase, Calendar as CalendarIcon } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +13,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { useEffect } from "react";
+import type { InstructorCategory } from "@/types/instructor_categories";
 import RatingsTab from "@/components/aircraft/RatingsTab";
 import { Dropzone, DropzoneContent, DropzoneEmptyState } from '@/components/dropzone';
 import { useSupabaseUpload } from '@/hooks/use-supabase-upload';
@@ -33,6 +35,9 @@ const tabItems = [
 ];
 
 const licenseSchema = z.object({
+  first_name: z.string().min(1, "First name is required"),
+  last_name: z.string().min(1, "Last name is required"),
+  rating: z.string().optional(),
   instructor_check_due_date: z.string().min(1, "Required"),
   instrument_check_due_date: z.string().min(1, "Required"),
   class_1_medical_due_date: z.string().min(1, "Required"),
@@ -46,6 +51,7 @@ interface InstructorWithUser {
   id: string;
   first_name: string;
   last_name: string;
+  rating: string | null;
   email: string;
   status: string;
   instructor_check_due_date?: string;
@@ -88,6 +94,9 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
   } = useForm<LicenseFormValues>({
     resolver: zodResolver(licenseSchema),
     defaultValues: {
+      first_name: instructor.first_name || "",
+      last_name: instructor.last_name || "",
+      rating: instructor.rating || "",
       instructor_check_due_date: instructor.instructor_check_due_date || "",
       instrument_check_due_date: instructor.instrument_check_due_date || "",
       class_1_medical_due_date: instructor.class_1_medical_due_date,
@@ -98,6 +107,30 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
     },
   });
 
+  // State for instructor categories
+  const [instructorCategories, setInstructorCategories] = useState<InstructorCategory[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+
+  // Fetch instructor categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('/api/instructor_categories');
+        if (response.ok) {
+          const result = await response.json();
+          setInstructorCategories(result.instructor_categories || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch instructor categories:', error);
+        toast.error('Failed to load instructor categories');
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
   const onSave = async (data: LicenseFormValues) => {
     try {
       const res = await fetch("/api/instructors", {
@@ -105,6 +138,9 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: instructor.id,
+          first_name: data.first_name,
+          last_name: data.last_name,
+          rating: data.rating || null,
           instructor_check_due_date: data.instructor_check_due_date,
           instrument_check_due_date: data.instrument_check_due_date,
           class_1_medical_due_date: data.class_1_medical_due_date,
@@ -187,25 +223,90 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
         </div>
         <div className="w-full p-8">
           <Tabs.Content value="license" className="w-full">
-            <form onSubmit={handleSubmit(onSave)}>
-              <Card className="p-6 flex flex-col gap-6">
-                <div className="flex flex-row items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <Award className="w-5 h-5 text-indigo-600" />
-                    Instructor Details
-                  </h2>
-                  <div className="flex gap-2 items-center">
-                    <Button type="submit" disabled={!isDirty} size="sm" className="min-w-[100px] font-semibold">
-                      Save
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" disabled={!isDirty} onClick={() => reset()}>
-                      Undo
-                    </Button>
+            <form onSubmit={handleSubmit(onSave)} className="space-y-8">
+              {/* Header with Save/Undo buttons */}
+              <div className="flex flex-row items-center justify-between">
+                <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900">
+                  <Award className="w-6 h-6 text-indigo-600" />
+                  Instructor Details
+                </h2>
+                <div className="flex gap-2 items-center">
+                  <Button type="submit" disabled={!isDirty} size="sm" className="min-w-[100px] font-semibold">
+                    Save
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" disabled={!isDirty} onClick={() => reset()}>
+                    Undo
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Name Fields Section */}
+              <div className="space-y-4">
+                <h3 className="text-base font-medium text-gray-900 border-b border-gray-200 pb-2">Basic Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-700 flex items-center gap-1">
+                      <User className="w-4 h-4 text-indigo-500" /> First Name
+                    </label>
+                    <Input
+                      {...register("first_name")}
+                      placeholder="Enter first name"
+                      className="w-full"
+                    />
+                    {errors.first_name && <p className="text-xs text-red-500 mt-1">{errors.first_name.message}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-700 flex items-center gap-1">
+                      <User className="w-4 h-4 text-indigo-500" /> Last Name
+                    </label>
+                    <Input
+                      {...register("last_name")}
+                      placeholder="Enter last name"
+                      className="w-full"
+                    />
+                    {errors.last_name && <p className="text-xs text-red-500 mt-1">{errors.last_name.message}</p>}
                   </div>
                 </div>
+
+                {/* Instructor Category */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700 flex items-center gap-1">
+                      <Award className="w-4 h-4 text-indigo-500" /> Instructor Category
+                    </label>
+                    <Select
+                      value={watch("rating") || undefined}
+                      onValueChange={(value) => {
+                        if (value === "clear") {
+                          setValue("rating", "", { shouldDirty: true });
+                        } else {
+                          setValue("rating", value, { shouldDirty: true });
+                        }
+                      }}
+                      disabled={categoriesLoading}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={categoriesLoading ? "Loading categories..." : "Select instructor category"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="clear">No category selected</SelectItem>
+                        {instructorCategories.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Certification Dates Section */}
+              <div className="space-y-4">
+                <h3 className="text-base font-medium text-gray-900 border-b border-gray-200 pb-2">Certification & Medical</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700 flex items-center gap-1">
+                    <label className="block text-sm font-medium mb-2 text-gray-700 flex items-center gap-1">
                       <CalendarCheck2 className="w-4 h-4 text-indigo-500" /> Instructor Check Due
                     </label>
                     <Controller
@@ -243,7 +344,7 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
                     {errors.instructor_check_due_date && <p className="text-xs text-red-500 mt-1">{errors.instructor_check_due_date.message}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700 flex items-center gap-1">
+                    <label className="block text-sm font-medium mb-2 text-gray-700 flex items-center gap-1">
                       <ActivitySquare className="w-4 h-4 text-indigo-500" /> Instrument Check Due
                     </label>
                     <Controller
@@ -281,7 +382,7 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
                     {errors.instrument_check_due_date && <p className="text-xs text-red-500 mt-1">{errors.instrument_check_due_date.message}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700 flex items-center gap-1">
+                    <label className="block text-sm font-medium mb-2 text-gray-700 flex items-center gap-1">
                       <Stethoscope className="w-4 h-4 text-indigo-500" /> Class 1 Medical Due
                     </label>
                     <Controller
@@ -319,213 +420,217 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
                     {errors.class_1_medical_due_date && <p className="text-xs text-red-500 mt-1">{errors.class_1_medical_due_date.message}</p>}
                   </div>
                 </div>
-                {/* Endorsements Section */}
-                <div className="flex flex-col gap-2 mt-4">
-                  <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 mb-2">
-                    <Award className="w-5 h-5 text-indigo-500" />
-                    Endorsements & Ratings
-                  </h3>
-                  <Card className="p-4 bg-white border border-indigo-100">
-                    <RatingsTab instructorId={instructor.id} />
-                  </Card>
+              </div>
+              
+              {/* Endorsements Section */}
+              <div className="space-y-4">
+                <h3 className="text-base font-medium text-gray-900 border-b border-gray-200 pb-2 flex items-center gap-2">
+                  <Award className="w-5 h-5 text-indigo-500" />
+                  Endorsements & Ratings
+                </h3>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <RatingsTab instructorId={instructor.id} />
                 </div>
-              </Card>
+              </div>
             </form>
           </Tabs.Content>
-          <Tabs.Content value="uploads" className="w-full">
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-2">Uploads</h2>
-              <div className="max-w-2xl w-full mx-auto">
-                {/* Move hook call to top level */}
-                <Dropzone {...useSupabaseUpload({
-                  bucketName: 'test',
-                  path: 'test',
-                  allowedMimeTypes: ['image/*'],
-                  maxFiles: 2,
-                  maxFileSize: 1000 * 1000 * 10, // 10MB
-                })}>
-                  <DropzoneEmptyState />
-                  <DropzoneContent />
-                </Dropzone>
-              </div>
-            </Card>
+          <Tabs.Content value="uploads" className="w-full space-y-6">
+            <div className="flex flex-row items-center justify-between">
+              <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900">
+                <Upload className="w-6 h-6 text-indigo-600" />
+                Document Uploads
+              </h2>
+            </div>
+            
+            <div className="max-w-2xl w-full">
+              <Dropzone {...useSupabaseUpload({
+                bucketName: 'test',
+                path: 'test',
+                allowedMimeTypes: ['image/*'],
+                maxFiles: 2,
+                maxFileSize: 1000 * 1000 * 10, // 10MB
+              })}>
+                <DropzoneEmptyState />
+                <DropzoneContent />
+              </Dropzone>
+            </div>
           </Tabs.Content>
-          <Tabs.Content value="history" className="w-full">
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-2">History</h2>
-              <p className="text-zinc-700">No history yet. (Placeholder)</p>
-            </Card>
+          
+          <Tabs.Content value="history" className="w-full space-y-6">
+            <div className="flex flex-row items-center justify-between">
+              <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900">
+                <Clock className="w-6 h-6 text-indigo-600" />
+                Activity History
+              </h2>
+            </div>
+            
+            <div className="bg-gray-50 rounded-lg p-6 text-center">
+              <Activity className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600 text-sm">No activity history available yet.</p>
+              <p className="text-gray-500 text-xs mt-1">Changes and updates will appear here.</p>
+            </div>
           </Tabs.Content>
-          <Tabs.Content value="notes" className="w-full">
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold flex items-center gap-2 mb-2">
-                <FileText className="w-5 h-5 text-indigo-600" />
+          <Tabs.Content value="notes" className="w-full space-y-6">
+            <div className="flex flex-row items-center justify-between">
+              <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900">
+                <FileText className="w-6 h-6 text-indigo-600" />
                 Notes
               </h2>
-              <form
-                onSubmit={handleSubmit(async (data) => {
-                  try {
-                    const res = await fetch("/api/instructors", {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        id: instructor.id,
-                        notes: data.notes,
-                      }),
-                    });
-                    if (!res.ok) {
-                      const err = await res.json();
-                      throw new Error(err.error || "Failed to save notes");
-                    }
-                    toast.success("Notes saved");
-                    setValue("notes", data.notes, { shouldDirty: false });
-                  } catch (err: unknown) {
-                    if (err instanceof Error) {
-                      toast.error(err.message || "Failed to save notes");
-                    } else {
-                      toast.error("Failed to save notes");
-                    }
+            </div>
+            
+            <form
+              onSubmit={handleSubmit(async (data) => {
+                try {
+                  const res = await fetch("/api/instructors", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      id: instructor.id,
+                      notes: data.notes,
+                    }),
+                  });
+                  if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || "Failed to save notes");
                   }
-                })}
-                className="flex flex-col gap-4"
-              >
+                  toast.success("Notes saved");
+                  setValue("notes", data.notes, { shouldDirty: false });
+                } catch (err: unknown) {
+                  if (err instanceof Error) {
+                    toast.error(err.message || "Failed to save notes");
+                  } else {
+                    toast.error("Failed to save notes");
+                  }
+                }
+              })}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-700">Instructor Notes</label>
                 <Textarea
                   {...register("notes")}
-                  className="bg-white min-h-[120px]"
+                  className="bg-white min-h-[160px] resize-none"
                   placeholder="Add notes about this instructor..."
                   value={watch("notes") || ""}
                   onChange={e => setValue("notes", e.target.value, { shouldDirty: true })}
                 />
-                <div className="flex gap-2 mt-2">
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={!isDirty} size="sm" className="min-w-[100px] font-semibold">
+                  Save Notes
+                </Button>
+                <Button type="button" variant="outline" size="sm" disabled={!isDirty} onClick={() => reset()}>
+                  Undo
+                </Button>
+              </div>
+            </form>
+          </Tabs.Content>
+          {/* Settings Tab */}
+          <Tabs.Content value="settings" className="w-full space-y-8">
+            <div className="flex flex-row items-center justify-between">
+              <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900">
+                <Settings className="w-6 h-6 text-indigo-600" />
+                Instructor Settings
+              </h2>
+            </div>
+
+            <form onSubmit={handleSubmit(onSave)} className="space-y-8">
+              {/* Instructor Status Section */}
+              <div className="space-y-4">
+                <h3 className="text-base font-medium text-gray-900 border-b border-gray-200 pb-2">Status & Employment</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-green-500" /> 
+                      Actively Instructing
+                    </label>
+                    <Switch 
+                      checked={watch("is_actively_instructing")}
+                      onCheckedChange={val => setValue("is_actively_instructing", val, { shouldDirty: true })}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <Settings className="w-4 h-4 text-indigo-500" /> 
+                      Account Status
+                    </label>
+                    <Select
+                      value={status}
+                      onValueChange={val => {
+                        if (val !== status) {
+                          fetch("/api/instructors", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ id: instructor.id, status: val }),
+                          })
+                            .then(async res => {
+                              if (!res.ok) {
+                                const err = await res.json();
+                                throw new Error(err.error || "Failed to update status");
+                              }
+                              setStatus(val);
+                              toast.success("Status updated");
+                            })
+                            .catch(err => {
+                              toast.error(err.message || "Failed to update status");
+                            });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <Briefcase className="w-4 h-4 text-indigo-500" /> 
+                      Employment Type
+                    </label>
+                    <Select
+                      value={watch("employment_type")}
+                      onValueChange={val => setValue("employment_type", val as LicenseFormValues["employment_type"], { shouldDirty: true })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select employment type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {employmentTypes.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.employment_type && <p className="text-xs text-red-500 mt-1">{errors.employment_type.message}</p>}
+                  </div>
+                </div>
+                
+                <div className="flex gap-2 pt-4">
                   <Button type="submit" disabled={!isDirty} size="sm" className="min-w-[100px] font-semibold">
-                    Save
+                    Save Settings
                   </Button>
                   <Button type="button" variant="outline" size="sm" disabled={!isDirty} onClick={() => reset()}>
                     Undo
                   </Button>
                 </div>
-              </form>
-            </Card>
-          </Tabs.Content>
-          {/* Settings Tab */}
-          <Tabs.Content value="settings" className="w-full">
-            <div className="space-y-6">
-              <form onSubmit={handleSubmit(onSave)}>
-                <Card className="p-6">
-                  <div className="flex flex-row items-center justify-between mb-6">
-                    <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900">
-                      <Settings className="w-6 h-6 text-indigo-600" />
-                      Instructor Settings
-                    </h2>
-                    <div className="flex gap-2 items-center">
-                      <Button type="submit" disabled={!isDirty} size="sm" className="min-w-[100px] font-semibold">
-                        Save
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" disabled={!isDirty} onClick={() => reset()}>
-                        Undo
-                      </Button>
-                    </div>
-                  </div>
+              </div>
+            </form>
 
-                  {/* Instructor Status Section */}
-                  <div className="space-y-6">
-                    <div className="border-b border-gray-200 pb-4">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                            <Activity className="w-4 h-4 text-green-500" /> 
-                            Actively Instructing
-                          </label>
-                          <Switch 
-                            checked={watch("is_actively_instructing")}
-                            onCheckedChange={val => setValue("is_actively_instructing", val, { shouldDirty: true })}
-                          />
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                            <Settings className="w-4 h-4 text-indigo-500" /> 
-                            Account Status
-                          </label>
-                          <Select
-                            value={status}
-                            onValueChange={val => {
-                              if (val !== status) {
-                                fetch("/api/instructors", {
-                                  method: "PATCH",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ id: instructor.id, status: val }),
-                                })
-                                  .then(async res => {
-                                    if (!res.ok) {
-                                      const err = await res.json();
-                                      throw new Error(err.error || "Failed to update status");
-                                    }
-                                    setStatus(val);
-                                    toast.success("Status updated");
-                                  })
-                                  .catch(err => {
-                                    toast.error(err.message || "Failed to update status");
-                                  });
-                              }
-                            }}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {statusOptions.map((type) => (
-                                <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                            <Briefcase className="w-4 h-4 text-indigo-500" /> 
-                            Employment Type
-                          </label>
-                          <Select
-                            value={watch("employment_type")}
-                            onValueChange={val => setValue("employment_type", val as LicenseFormValues["employment_type"], { shouldDirty: true })}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Select employment type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {employmentTypes.map((type) => (
-                                <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {errors.employment_type && <p className="text-xs text-red-500 mt-1">{errors.employment_type.message}</p>}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              </form>
-
-              {/* Rates Section - Separate Card */}
-              <Card className="p-6">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 border-b border-gray-200 pb-4">
-                    <div className="p-2 bg-indigo-100 rounded-lg">
-                      <Settings className="w-6 h-6 text-indigo-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold text-gray-900">
-                        Flight Type Rates
-                      </h3>
-                      <p className="text-sm text-gray-500">
-                        Manage hourly rates for different types of instruction
-                      </p>
-                    </div>
-                  </div>
-                  <InstructorFlightTypeRatesTable instructorId={instructor.id} />
-                </div>
-              </Card>
+            {/* Rates Section */}
+            <div className="space-y-4">
+              <h3 className="text-base font-medium text-gray-900 border-b border-gray-200 pb-2 flex items-center gap-2">
+                <Settings className="w-5 h-5 text-indigo-500" />
+                Flight Type Rates
+              </h3>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <InstructorFlightTypeRatesTable instructorId={instructor.id} />
+              </div>
             </div>
           </Tabs.Content>
         </div>

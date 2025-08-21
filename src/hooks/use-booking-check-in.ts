@@ -144,7 +144,7 @@ export function useBookingCheckIn(bookingId: string) {
 
         const optimisticInvoice: Invoice = {
           id: 'optimistic-invoice',
-          user_id: bookingData.user_id,
+          user_id: bookingData.user_id || '',
           booking_id: bookingId,
           invoice_number: null,
           issue_date: null,

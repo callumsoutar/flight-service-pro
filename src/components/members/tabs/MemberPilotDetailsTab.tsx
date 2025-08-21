@@ -150,7 +150,7 @@ export default function MemberPilotDetailsTab({ memberId }: PilotDetailsTabProps
       </div>
 
       {/* Pilot License Section */}
-      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
+      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-lg p-6 shadow-sm">
         <h4 className="flex items-center gap-2 text-base font-semibold mb-4 text-gray-900 tracking-tight">
           <Plane className="w-5 h-5 text-indigo-500" />
           Pilot License Information
@@ -231,7 +231,7 @@ export default function MemberPilotDetailsTab({ memberId }: PilotDetailsTabProps
       </div>
 
       {/* Medical Certificate Section */}
-      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
+      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-lg p-6 shadow-sm">
         <h4 className="flex items-center gap-2 text-base font-semibold mb-4 text-gray-900 tracking-tight">
           <Heart className="w-5 h-5 text-indigo-500" />
           Medical Certificate Expiry
