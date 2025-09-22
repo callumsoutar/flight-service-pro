@@ -3,11 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 // Types
-interface CheckOutParams {
+export interface CheckOutParams {
   bookingId: string;
   bookingData: {
-    checked_out_aircraft_id?: string | null;
-    checked_out_instructor_id?: string | null;
     start_time?: string | null;
     end_time?: string | null;
     user_id?: string | null;
@@ -17,17 +15,24 @@ interface CheckOutParams {
     flight_type_id?: string | null;
     booking_type?: string;
     status?: string;
-    hobbs_start?: number;
-    tach_start?: number;
   };
-  bookingDetailsData?: {
+  flightLogData?: {
     id?: string;
+    booking_id: string;
+    checked_out_aircraft_id?: string;
+    checked_out_instructor_id?: string;
     eta?: string | null;
     fuel_on_board?: number;
     passengers?: string;
     route?: string;
-    remarks?: string;
-    booking_id: string;
+    flight_remarks?: string;
+    hobbs_start?: number;
+    hobbs_end?: number;
+    tach_start?: number;
+    tach_end?: number;
+    flight_time?: number;
+    briefing_completed?: boolean;
+    authorization_completed?: boolean;
   };
 }
 
@@ -112,12 +117,12 @@ export function useInstructorData(instructorId: string | null) {
 }
 
 // Hook for check-out save operations
-export function useCheckOutSave() {
+export function useCheckOutSave(options?: { onSuccess?: () => void }) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (params: CheckOutParams) => {
-      const { bookingId, bookingData, bookingDetailsData } = params;
+      const { bookingId, bookingData, flightLogData } = params;
 
       // Sanitize UUID fields - convert empty strings to null
       const sanitizeUuid = (value: string | null | undefined) => {
@@ -130,8 +135,6 @@ export function useCheckOutSave() {
       // Sanitize booking data
       const sanitizedBookingData = {
         ...bookingData,
-        checked_out_aircraft_id: sanitizeUuid(bookingData.checked_out_aircraft_id),
-        checked_out_instructor_id: sanitizeUuid(bookingData.checked_out_instructor_id),
         user_id: sanitizeUuid(bookingData.user_id),
         lesson_id: sanitizeUuid(bookingData.lesson_id),
         flight_type_id: sanitizeUuid(bookingData.flight_type_id),
@@ -151,29 +154,29 @@ export function useCheckOutSave() {
         }
       }
 
-      // Update booking details if there's data to update
-      if (bookingDetailsData && Object.keys(bookingDetailsData).length > 1) { // more than just booking_id
-        let detailsResponse;
+      // Update flight log if there's data to update
+      if (flightLogData && Object.keys(flightLogData).length > 1) { // more than just booking_id
+        let flightLogResponse;
         
-        if (bookingDetailsData.id) {
-          // Update existing booking details
-          detailsResponse = await fetch(`/api/booking_details`, {
+        if (flightLogData.id) {
+          // Update existing flight log
+          flightLogResponse = await fetch(`/api/flight-logs`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(bookingDetailsData),
+            body: JSON.stringify(flightLogData),
           });
         } else {
-          // Create new booking details
-          detailsResponse = await fetch(`/api/booking_details`, {
+          // Create new flight log
+          flightLogResponse = await fetch(`/api/flight-logs`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(bookingDetailsData),
+            body: JSON.stringify(flightLogData),
           });
         }
         
-        if (!detailsResponse.ok) {
-          const errorData = await detailsResponse.json();
-          throw new Error(errorData.error || "Failed to save booking details");
+        if (!flightLogResponse.ok) {
+          const errorData = await flightLogResponse.json();
+          throw new Error(errorData.error || "Failed to save flight log");
         }
       }
 
@@ -183,6 +186,8 @@ export function useCheckOutSave() {
       toast.success("Check-Out details saved successfully!");
       // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: checkoutKeys.all });
+      // Call custom onSuccess callback if provided
+      options?.onSuccess?.();
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to save check-out details");

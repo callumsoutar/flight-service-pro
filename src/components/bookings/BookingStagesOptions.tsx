@@ -9,25 +9,30 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, X, MessageCircle, Send, Plane } from "lucide-react";
+// import Link from "next/link";
 import InstructorCommentsModal from "@/components/bookings/InstructorCommentsModal";
 import { CancelBookingModal } from "@/components/bookings/CancelBookingModal";
+import { UncancelBookingWrapper } from "@/components/bookings/UncancelBookingWrapper";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { CancellationCategory, BookingStatus } from "@/types/bookings";
 
 interface BookingStagesOptionsProps {
   bookingId: string;
+  bookingStatus?: BookingStatus;
   instructorCommentsCount?: number;
 }
 
-export default function BookingStagesOptions({ bookingId, instructorCommentsCount = 0 }: BookingStagesOptionsProps) {
+export default function BookingStagesOptions({ bookingId, bookingStatus, instructorCommentsCount = 0 }: BookingStagesOptionsProps) {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [cancellationCategories, setCancellationCategories] = useState<{ id: string; name: string }[]>([]);
+  const [cancellationCategories, setCancellationCategories] = useState<CancellationCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [sendingConfirmation, setSendingConfirmation] = useState(false);
   const [navigatingAircraft, setNavigatingAircraft] = useState(false);
   const router = useRouter();
+  
 
   React.useEffect(() => {
     if (!cancelOpen) return;
@@ -44,17 +49,16 @@ export default function BookingStagesOptions({ bookingId, instructorCommentsCoun
       });
   }, [cancelOpen]);
 
-  const handleCancelSubmit = async (data: { categoryId: string; reason: string }) => {
+  const handleCancelSubmit = async (data: { reason: string; notes?: string; cancellation_category_id?: string }) => {
     setCancelling(true);
     try {
-      const res = await fetch("/api/bookings", {
-        method: "PATCH",
+      const res = await fetch(`/api/bookings/${bookingId}/cancel`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: bookingId,
-          status: "cancelled",
-          cancellation_reason: data.reason,
-          cancellation_category_id: data.categoryId,
+          cancellation_category_id: data.cancellation_category_id,
+          reason: data.reason,
+          notes: data.notes,
         }),
       });
       if (res.ok) {
@@ -137,10 +141,20 @@ export default function BookingStagesOptions({ bookingId, instructorCommentsCoun
             View Aircraft
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setCancelOpen(true)} className="text-red-600">
-            <X className="w-4 h-4 mr-2" />
-            Cancel Booking
-          </DropdownMenuItem>
+          {bookingStatus === 'cancelled' ? (
+            <DropdownMenuItem asChild>
+              <UncancelBookingWrapper 
+                bookingId={bookingId}
+                variant="ghost"
+                size="sm"
+              />
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onClick={() => setCancelOpen(true)} className="text-red-600">
+              <X className="w-4 h-4 mr-2" />
+              Cancel Booking
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

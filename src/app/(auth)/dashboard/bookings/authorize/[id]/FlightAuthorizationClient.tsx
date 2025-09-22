@@ -1,0 +1,331 @@
+"use client";
+import React from 'react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Plane, User, CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FlightAuthorizationForm } from '@/components/flight-authorization/FlightAuthorizationForm';
+import { StatusBadge } from '@/components/bookings/StatusBadge';
+import BookingMemberLink from '@/components/bookings/BookingMemberLink';
+import { useApproveFlightAuthorization, useRejectFlightAuthorization } from '@/hooks/use-flight-authorization';
+import type { Booking } from '@/types/bookings';
+import type { FlightAuthorization } from '@/types/flight_authorizations';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
+
+interface FlightAuthorizationClientProps {
+  booking: Booking;
+  existingAuthorization: FlightAuthorization | null;
+  instructors: Array<{
+    id: string;
+    user_id: string;
+    name: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  }>;
+  user: SupabaseUser;
+  userRole: string | null;
+}
+
+export function FlightAuthorizationClient({
+  booking,
+  existingAuthorization,
+  instructors,
+  user,
+  userRole
+}: FlightAuthorizationClientProps) {
+  const router = useRouter();
+
+  // Check if user is instructor/admin who can approve
+  const canApprove = userRole && ['instructor', 'admin', 'owner'].includes(userRole);
+  const showApprovalActions = canApprove && existingAuthorization?.status === 'pending';
+
+  // Debug logging
+  console.log('FlightAuthorizationClient Debug:', {
+    userRole,
+    canApprove,
+    authorizationStatus: existingAuthorization?.status,
+    showApprovalActions,
+    instructorsLength: instructors.length,
+    userId: user.id
+  });
+
+  // Approval mutations
+  const approveMutation = useApproveFlightAuthorization({
+    onSuccess: () => {
+      router.push(`/dashboard/bookings/view/${booking.id}?authorized=approved`);
+    },
+    onError: (error) => {
+      console.error('Error approving authorization:', error);
+    },
+  });
+
+  const rejectMutation = useRejectFlightAuthorization({
+    onSuccess: () => {
+      router.refresh();
+    },
+    onError: (error) => {
+      console.error('Error rejecting authorization:', error);
+    },
+  });
+
+  const handleApprove = () => {
+    if (!existingAuthorization?.id) return;
+
+    approveMutation.mutate({
+      id: existingAuthorization.id,
+      approval_notes: "Approved via instructor review",
+    });
+  };
+
+  const handleReject = () => {
+    if (!existingAuthorization?.id) return;
+
+    const reason = prompt("Please provide a reason for rejection:");
+    if (reason && reason.trim()) {
+      rejectMutation.mutate({
+        id: existingAuthorization.id,
+        rejection_reason: reason.trim(),
+      });
+    }
+  };
+
+  const handleSuccess = (authorization: FlightAuthorization) => {
+    // Show success message and redirect based on status
+    if (authorization.status === 'pending') {
+      // Redirect to booking view with success message
+      router.push(`/dashboard/bookings/view/${booking.id}?authorized=pending`);
+    } else if (authorization.status === 'approved') {
+      // If already approved, go to checkout
+      router.push(`/dashboard/bookings/check-out/${booking.id}`);
+    } else {
+      // Stay on current page for drafts
+      router.refresh();
+    }
+  };
+
+  const handleCancel = () => {
+    router.push(`/dashboard/bookings/view/${booking.id}`);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push(`/dashboard/bookings/view/${booking.id}`)}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Booking
+              </Button>
+              <div className="h-6 w-px bg-gray-300" />
+              <h1 className="text-xl font-semibold text-gray-900">
+                Flight Authorization
+              </h1>
+            </div>
+            <StatusBadge status={booking.status} />
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Booking Summary */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Plane className="w-5 h-5 text-blue-600" />
+              Booking Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Student */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-500 mb-1">Student</h4>
+                {booking.user_id && (
+                  <BookingMemberLink
+                    userId={booking.user_id}
+                    firstName={booking.user?.first_name}
+                    lastName={booking.user?.last_name}
+                  />
+                )}
+              </div>
+
+              {/* Aircraft */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-500 mb-1">Aircraft</h4>
+                <p className="text-sm font-medium text-gray-900">
+                  {booking.aircraft ? `${booking.aircraft.registration} (${booking.aircraft.type})` : 'Not assigned'}
+                </p>
+              </div>
+
+              {/* Flight Date */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-500 mb-1">Flight Date</h4>
+                <p className="text-sm font-medium text-gray-900">
+                  {new Date(booking.start_time).toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4 pt-4 border-t">
+              {/* Flight Type */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-500 mb-1">Flight Type</h4>
+                <p className="text-sm font-medium text-gray-900">
+                  {booking.flight_type?.name || 'Not specified'}
+                  {booking.flight_type?.instruction_type && (
+                    <span className="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs font-medium rounded">
+                      {booking.flight_type.instruction_type.toUpperCase()}
+                    </span>
+                  )}
+                </p>
+              </div>
+
+              {/* Time */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-500 mb-1">Time</h4>
+                <p className="text-sm font-medium text-gray-900">
+                  {new Date(booking.start_time).toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })} - {new Date(booking.end_time).toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+              </div>
+
+              {/* Purpose */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-500 mb-1">Purpose</h4>
+                <p className="text-sm font-medium text-gray-900">
+                  {booking.purpose || 'Not specified'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Authorization Form */}
+        <FlightAuthorizationForm
+          booking={booking}
+          existingAuthorization={existingAuthorization}
+          onSuccess={handleSuccess}
+          onCancel={handleCancel}
+        />
+
+        {/* Instructor Approval Actions */}
+        {showApprovalActions && (
+          <Card className="mt-6 border-orange-200 bg-orange-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-orange-800">
+                <CheckCircle className="w-5 h-5" />
+                Instructor Review & Approval
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    This flight authorization is pending your review. Please review all sections carefully before making a decision.
+                  </AlertDescription>
+                </Alert>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button
+                    onClick={handleApprove}
+                    disabled={approveMutation.isPending}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white h-12 text-lg font-semibold"
+                  >
+                    {approveMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Approving...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-5 h-5 mr-2" />
+                        Approve Authorization
+                      </>
+                    )}
+                  </Button>
+
+                  <Button
+                    onClick={handleReject}
+                    disabled={rejectMutation.isPending}
+                    variant="destructive"
+                    className="flex-1 h-12 text-lg font-semibold"
+                  >
+                    {rejectMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Rejecting...
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-5 h-5 mr-2" />
+                        Reject Authorization
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {(approveMutation.error || rejectMutation.error) && (
+                  <Alert variant="destructive">
+                    <XCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      {approveMutation.error?.message || rejectMutation.error?.message}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Help Information */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="w-5 h-5 text-green-600" />
+              Need Help?
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">
+                If you have questions about completing this authorization form, please contact:
+              </p>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>• Your flight instructor for technical questions</li>
+                <li>• The front desk for administrative support</li>
+                <li>• Chief Flight Instructor for policy clarifications</li>
+              </ul>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
+                <p className="text-sm text-blue-800">
+                  <strong>Remember:</strong> All solo flights require instructor authorization. 
+                  Complete all sections accurately and ensure all pre-flight requirements are met.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

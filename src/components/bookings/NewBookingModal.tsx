@@ -33,6 +33,8 @@ import { format } from "date-fns";
 import MemberSelect, { UserResult } from "@/components/invoices/MemberSelect";
 import InstructorSelect, { InstructorResult } from "@/components/invoices/InstructorSelect";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useInstructorTypeRating } from "@/hooks/use-instructor-type-rating";
+import { TypeRatingWarning } from "@/components/bookings/TypeRatingWarning";
 
 // Helper to generate 30-min interval times
 const TIME_OPTIONS = Array.from({ length: ((23 - 7) * 2) + 3 }, (_, i) => {
@@ -103,6 +105,9 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  
+  // Type rating validation
+  const { validation, isValidating, error: validationError, validateTypeRating, resetValidation } = useInstructorTypeRating();
 
   // Fetch dropdown data on open
   useEffect(() => {
@@ -178,6 +183,15 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     }
   }, [prefilledData, aircraft]);
 
+  // Validate type rating when instructor or aircraft changes
+  useEffect(() => {
+    if (instructor?.id && aircraftId) {
+      validateTypeRating(instructor.id, aircraftId);
+    } else {
+      resetValidation();
+    }
+  }, [instructor?.id, aircraftId, validateTypeRating, resetValidation]);
+
   function handleClose() {
     onClose();
     setTimeout(() => {
@@ -199,6 +213,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       setCustomerName("");
       setCustomerPhone("");
       setCustomerEmail("");
+      resetValidation(); // Reset type rating validation state
     }, 200);
   }
 
@@ -573,6 +588,17 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                     </div>
                   </div>
 
+                  {/* Type Rating Warning - only show if there's an issue */}
+                  {(instructor?.id && aircraftId && (isValidating || validationError || (validation && !validation.valid))) && (
+                    <div className="mb-4">
+                      <TypeRatingWarning
+                        validation={validation}
+                        isValidating={isValidating}
+                        error={validationError}
+                      />
+                    </div>
+                  )}
+
                   {/* Lesson and Booking Type */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 mb-4">
                     <div className="max-w-[340px] w-full">
@@ -742,6 +768,17 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       </Select>
                     </div>
                   </div>
+                  
+                  {/* Type Rating Warning - only show if there's an issue */}
+                  {(instructor?.id && aircraftId && (isValidating || validationError || (validation && !validation.valid))) && (
+                    <div className="mb-4">
+                      <TypeRatingWarning
+                        validation={validation}
+                        isValidating={isValidating}
+                        error={validationError}
+                      />
+                    </div>
+                  )}
                   
                   {/* Trial Flight Description */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">

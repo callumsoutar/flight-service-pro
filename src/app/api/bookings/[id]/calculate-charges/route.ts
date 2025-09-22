@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { getTaxRateForUser } from "@/lib/tax-rates";
 import { Booking } from "@/types/bookings";
+import { FlightLog } from "@/types/flight_logs";
 import { Invoice } from "@/types/invoices";
 import { InvoiceItem } from "@/types/invoice_items";
 import { User } from "@/types/users";
@@ -17,16 +18,20 @@ interface CalculateChargesRequest {
   hobbsEnd?: number;
   tachStart?: number;
   tachEnd?: number;
+  flightTimeHobbs: number;
+  flightTimeTach: number;
 }
 
 // Type for booking with joined relations from the Supabase query
 type BookingWithRelations = Booking & {
   user: Pick<User, 'id' | 'first_name' | 'last_name' | 'email'>;
   aircraft: { registration: string };
+  flight_logs?: FlightLog[];
 };
 
 interface CalculateChargesResponse {
   booking: BookingWithRelations;
+  flight_log?: FlightLog;
   invoice: Invoice;
   invoiceItems: InvoiceItem[];
   totals: {
@@ -60,17 +65,31 @@ export async function POST(
       hobbsStart,
       hobbsEnd,
       tachStart,
-      tachEnd
+      tachEnd,
+      flightTimeHobbs,
+      flightTimeTach
     } = body;
 
-    // Start a transaction by creating all operations in sequence
-    // 1. Fetch booking data first
+    // 1. Fetch booking data with flight logs
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .select(`
         *,
         user:user_id(id, first_name, last_name, email),
-        aircraft:checked_out_aircraft_id(registration)
+        aircraft:aircraft_id(id, registration, type),
+        flight_logs(
+          *,
+          checked_out_aircraft:checked_out_aircraft_id(id, registration, type),
+          checked_out_instructor:checked_out_instructor_id(
+            *,
+            users:users!instructors_user_id_fkey(
+              id,
+              first_name,
+              last_name,
+              email
+            )
+          )
+        )
       `)
       .eq("id", bookingId)
       .single();
@@ -79,26 +98,71 @@ export async function POST(
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
 
-    // 2. Update booking meters if provided
-    let updatedBooking = booking;
+    // 2. Update or create flight log with meter readings
+    let flightLog = booking.flight_logs?.[0];
     const meterUpdates: Record<string, number> = {};
     if (typeof hobbsStart === 'number') meterUpdates.hobbs_start = hobbsStart;
     if (typeof hobbsEnd === 'number') meterUpdates.hobbs_end = hobbsEnd;
     if (typeof tachStart === 'number') meterUpdates.tach_start = tachStart;
     if (typeof tachEnd === 'number') meterUpdates.tach_end = tachEnd;
+    meterUpdates.flight_time = chargeTime;
+    meterUpdates.flight_time_hobbs = flightTimeHobbs;
+    meterUpdates.flight_time_tach = flightTimeTach;
 
     if (Object.keys(meterUpdates).length > 0) {
-      const { data: patchedBooking, error: patchError } = await supabase
-        .from("bookings")
-        .update(meterUpdates)
-        .eq("id", bookingId)
-        .select("*")
-        .single();
+      if (flightLog) {
+        // Update existing flight log
+        const { data: updatedFlightLog, error: flightLogError } = await supabase
+          .from("flight_logs")
+          .update(meterUpdates)
+          .eq("id", flightLog.id)
+          .select(`
+            *,
+            checked_out_aircraft:checked_out_aircraft_id(id, registration, type),
+            checked_out_instructor:checked_out_instructor_id(
+              *,
+              users:users!instructors_user_id_fkey(
+                id,
+                first_name,
+                last_name,
+                email
+              )
+            )
+          `)
+          .single();
 
-      if (patchError) {
-        return NextResponse.json({ error: `Failed to update booking: ${patchError.message}` }, { status: 500 });
+        if (flightLogError) {
+          return NextResponse.json({ error: `Failed to update flight log: ${flightLogError.message}` }, { status: 500 });
+        }
+        flightLog = updatedFlightLog;
+      } else {
+        // Create new flight log
+        const { data: newFlightLog, error: flightLogError } = await supabase
+          .from("flight_logs")
+          .insert([{
+            booking_id: bookingId,
+            ...meterUpdates
+          }])
+          .select(`
+            *,
+            checked_out_aircraft:checked_out_aircraft_id(id, registration, type),
+            checked_out_instructor:checked_out_instructor_id(
+              *,
+              users:users!instructors_user_id_fkey(
+                id,
+                first_name,
+                last_name,
+                email
+              )
+            )
+          `)
+          .single();
+
+        if (flightLogError) {
+          return NextResponse.json({ error: `Failed to create flight log: ${flightLogError.message}` }, { status: 500 });
+        }
+        flightLog = newFlightLog;
       }
-      updatedBooking = patchedBooking;
     }
 
     // 3. Get or create invoice
@@ -148,7 +212,8 @@ export async function POST(
     const instructorName = instructorUser 
       ? `${instructorUser.first_name || ''} ${instructorUser.last_name || ''}`.trim() || 'Instructor'
       : 'Instructor';
-    const aircraftReg = booking.aircraft?.registration || 'Aircraft';
+    // Use checked_out_aircraft from flight_log instead of booking aircraft
+    const aircraftReg = flightLog?.checked_out_aircraft?.registration || booking.aircraft?.registration || 'Aircraft';
 
     const aircraftDesc = `${flightTypeName} - ${aircraftReg}`;
     const instructorDesc = `${flightTypeName} - ${instructorName}`;
@@ -253,7 +318,11 @@ export async function POST(
     const total = updatedItems?.reduce((sum, item) => sum + (item.line_total || 0), 0) || 0;
 
     return NextResponse.json({
-      booking: updatedBooking,
+      booking: {
+        ...booking,
+        flight_logs: flightLog ? [flightLog] : []
+      },
+      flight_log: flightLog,
       invoice,
       invoiceItems: updatedItems || [],
       totals: {

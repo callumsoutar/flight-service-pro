@@ -22,7 +22,10 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   
-  const { data, error } = await supabase.from('equipment').select('*');
+  const { data, error } = await supabase
+    .from('equipment')
+    .select('*')
+    .is('voided_at', null); // Only return non-voided equipment
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ equipment: data || [] });
 }

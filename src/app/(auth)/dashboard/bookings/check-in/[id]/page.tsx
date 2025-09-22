@@ -15,7 +15,7 @@ export default async function BookingCheckInPage({ params }: BookingCheckInPageP
   const { id: bookingId } = await params;
   const supabase = await createClient();
 
-  // Fetch booking with user join in a single query
+  // Fetch booking with user, flight_type, and flight_logs joins in a single query
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
     .select(`
@@ -25,6 +25,24 @@ export default async function BookingCheckInPage({ params }: BookingCheckInPageP
         first_name,
         last_name,
         email
+      ),
+      flight_type:flight_type_id(*),
+      authorization_override,
+      authorization_override_by,
+      authorization_override_at,
+      authorization_override_reason,
+      flight_logs(
+        *,
+        checked_out_aircraft:checked_out_aircraft_id(id, registration, type),
+        checked_out_instructor:checked_out_instructor_id(
+          *,
+          users:users!instructors_user_id_fkey(
+            id,
+            first_name,
+            last_name,
+            email
+          )
+        )
       )
     `)
     .eq("id", bookingId)
@@ -91,8 +109,8 @@ export default async function BookingCheckInPage({ params }: BookingCheckInPageP
           </div>
           <StatusBadge status={status} className="text-lg px-4 py-2 font-semibold" />
           <div className="flex-none flex items-center justify-end gap-3">
-            <BookingActions status={status} bookingId={booking.id} mode="check-in" />
-            <BookingStagesOptions bookingId={bookingId} instructorCommentsCount={instructorCommentsCount} />
+            <BookingActions booking={booking} status={status} bookingId={booking.id} mode="check-in" />
+            <BookingStagesOptions bookingId={bookingId} bookingStatus={booking.status} instructorCommentsCount={instructorCommentsCount} />
           </div>
         </div>
         <BookingStages stages={BOOKING_STAGES} currentStage={3} />

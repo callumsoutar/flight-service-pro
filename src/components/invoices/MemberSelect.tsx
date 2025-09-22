@@ -94,11 +94,15 @@ export default function MemberSelect({ onSelect, value, disabled = false }: Memb
           </div>
         )}
       </Command>
-      {value && (
+      {value && !disabled && (
         <button
           type="button"
-          className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
-          onClick={() => onSelect(null)}
+          className="absolute right-2 top-2 text-gray-400 hover:text-gray-600 z-10 w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onSelect(null);
+          }}
         >
           ×
         </button>

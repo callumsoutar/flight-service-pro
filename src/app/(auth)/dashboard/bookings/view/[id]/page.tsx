@@ -34,10 +34,10 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
   let lessons: { id: string; name: string }[] = [];
   let flightTypes: { id: string; name: string }[] = [];
 
-  // Fetch booking with full user, instructor, and aircraft objects, plus lesson_id and flight_type_id
+  // Fetch booking with full user, instructor, aircraft, and flight_type objects
   const { data: bookingData } = await supabase
     .from("bookings")
-    .select(`*, user:user_id(*), instructor:instructor_id(*, users:users!instructors_user_id_fkey(*)), aircraft:aircraft_id(*), lesson_id, flight_type_id`)
+    .select(`*, user:user_id(*), instructor:instructor_id(*, users:users!instructors_user_id_fkey(*)), aircraft:aircraft_id(*), flight_type:flight_type_id(*), lesson_id, authorization_override, authorization_override_by, authorization_override_at, authorization_override_reason`)
     .eq("id", bookingId)
     .single();
   booking = bookingData;
@@ -110,8 +110,8 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
   // Fetch all flight types
   const { data: flightTypeRows } = await supabase
     .from("flight_types")
-    .select("id, name");
-  flightTypes = (flightTypeRows || []).map((f: { id: string; name: string }) => ({ id: f.id, name: f.name }));
+    .select("id, name, instruction_type");
+  flightTypes = (flightTypeRows || []).map((f: { id: string; name: string; instruction_type?: string }) => ({ id: f.id, name: f.name, instruction_type: f.instruction_type }));
 
   // Fetch all bookings for conflict checking
   const { data: allBookingsData } = await supabase
@@ -130,8 +130,7 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
     hobbs_end: null,
     tach_start: null,
     tach_end: null,
-    cancellation_reason: null,
-    cancellation_category_id: null,
+
     created_at: "",
     updated_at: ""
   })) as Booking[];
@@ -223,10 +222,10 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
               <BookingConfirmActionClient bookingId={booking.id} status={booking.status} />
             )}
             {booking && booking.id && (
-              <BookingActions status={status} bookingId={booking.id} />
+              <BookingActions booking={booking} status={status} bookingId={booking.id} />
             )}
             {booking && booking.id && (
-              <BookingStagesOptions bookingId={booking.id} />
+              <BookingStagesOptions bookingId={booking.id} bookingStatus={booking.status} />
             )}
           </div>
         </div>

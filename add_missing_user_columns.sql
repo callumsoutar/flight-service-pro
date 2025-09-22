@@ -29,7 +29,7 @@ DROP COLUMN IF EXISTS "country",
 DROP COLUMN IF EXISTS "emergency_contact_name",
 DROP COLUMN IF EXISTS "emergency_contact_phone", 
 DROP COLUMN IF EXISTS "emergency_contact_relationship",
-DROP COLUMN IF EXISTS "medical_certificate_number",
+
 DROP COLUMN IF EXISTS "medical_certificate_expiry",
 DROP COLUMN IF EXISTS "pilot_license_number",
 DROP COLUMN IF EXISTS "pilot_license_type",

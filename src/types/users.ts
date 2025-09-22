@@ -17,10 +17,10 @@ export interface User {
   next_of_kin_name?: string;
   next_of_kin_phone?: string;
   emergency_contact_relationship?: string;
-  medical_certificate_number?: string;
   medical_certificate_expiry?: string; // date (YYYY-MM-DD)
   pilot_license_number?: string;
-  pilot_license_type?: string;
+  pilot_license_type?: string; // Keep for backward compatibility
+  pilot_license_id?: string; // Foreign key to licenses table
   pilot_license_expiry?: string; // date (YYYY-MM-DD)
   date_of_last_flight?: string; // timestamptz (ISO string)
   company_name?: string;

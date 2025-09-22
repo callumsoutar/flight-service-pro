@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Booking } from "@/types/bookings";
+import { FlightLog } from "@/types/flight_logs";
 import { Invoice } from "@/types/invoices";
 import { InvoiceItem } from "@/types/invoice_items";
 
@@ -18,6 +19,8 @@ interface CalculateChargesParams {
   hobbsEnd?: number;
   tachStart?: number;
   tachEnd?: number;
+  flightTimeHobbs: number;
+  flightTimeTach: number;
 }
 
 interface CompleteBookingParams {
@@ -38,6 +41,7 @@ interface CompleteBookingParams {
 
 interface CheckInData {
   booking: Booking;
+  flight_log?: FlightLog;
   invoice: Invoice;
   invoiceItems: InvoiceItem[];
   totals: {
@@ -88,16 +92,11 @@ export function useBookingCheckIn(bookingId: string) {
       // Snapshot the previous value
       const previousData = queryClient.getQueryData(checkInKeys.booking(bookingId));
 
-      // Optimistically update the booking with new meter readings
+      // Optimistically update the booking data
       if (previousData) {
         const bookingData = previousData as Booking;
         const optimisticBooking = {
           ...bookingData,
-          hobbs_start: params.hobbsStart ?? bookingData.hobbs_start,
-          hobbs_end: params.hobbsEnd ?? bookingData.hobbs_end,
-          tach_start: params.tachStart ?? bookingData.tach_start,
-          tach_end: params.tachEnd ?? bookingData.tach_end,
-          flight_time: params.chargeTime,
         };
 
         queryClient.setQueryData(checkInKeys.booking(bookingId), optimisticBooking);
@@ -165,8 +164,24 @@ export function useBookingCheckIn(bookingId: string) {
           updated_at: new Date().toISOString(),
         };
 
+        // Create optimistic flight log
+        const optimisticFlightLog: FlightLog = {
+          id: 'optimistic-flight-log',
+          booking_id: bookingId,
+          hobbs_start: params.hobbsStart ?? null,
+          hobbs_end: params.hobbsEnd ?? null,
+          tach_start: params.tachStart ?? null,
+          tach_end: params.tachEnd ?? null,
+          flight_time: params.chargeTime,
+          briefing_completed: false,
+          authorization_completed: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
         setOptimisticData({
           booking: optimisticBooking,
+          flight_log: optimisticFlightLog,
           invoice: optimisticInvoice,
           invoiceItems: optimisticItems,
           totals: { subtotal, totalTax, total },

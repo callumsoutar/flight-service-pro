@@ -15,7 +15,19 @@ export default async function BookingDebriefPage({ params }: BookingDebriefPageP
   let booking: Booking | null = null;
   const { data: bookingData } = await supabase
     .from("bookings")
-    .select(`*, user:user_id(*)`)
+    .select(`
+      *,
+      user:user_id(*),
+      authorization_override,
+      authorization_override_by,
+      authorization_override_at,
+      authorization_override_reason,
+      flight_logs(
+        *,
+        checked_out_aircraft:checked_out_aircraft_id(id, registration, type),
+        checked_out_instructor:checked_out_instructor_id(*)
+      )
+    `)
     .eq("id", bookingId)
     .single();
   booking = bookingData;

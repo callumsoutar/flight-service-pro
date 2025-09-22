@@ -1221,7 +1221,7 @@ CREATE TABLE IF NOT EXISTS "public"."users" (
     "emergency_contact_name" "text",
     "emergency_contact_phone" "text",
     "emergency_contact_relationship" "text",
-    "medical_certificate_number" "text",
+
     "medical_certificate_expiry" date,
     "pilot_license_number" "text",
     "pilot_license_type" "text",

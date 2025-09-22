@@ -163,6 +163,30 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
     return format(date, "MMM d, yyyy");
   }
 
+  function formatAttemptNumber(attempt: number | null | undefined): string {
+    if (!attempt || attempt < 1) return "1st";
+    
+    const lastDigit = attempt % 10;
+    const lastTwoDigits = attempt % 100;
+    
+    // Handle special cases for 11th, 12th, 13th
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
+      return `${attempt}th`;
+    }
+    
+    // Handle other cases based on last digit
+    switch (lastDigit) {
+      case 1:
+        return `${attempt}st`;
+      case 2:
+        return `${attempt}nd`;
+      case 3:
+        return `${attempt}rd`;
+      default:
+        return `${attempt}th`;
+    }
+  }
+
 
 
   function StatusBadge({ status }: { status?: LessonOutcome | null }) {
@@ -227,7 +251,7 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
               <Target className="w-5 h-5" />
               Training Progress
             </CardTitle>
-            <Badge variant="outline" className="text-lg px-3 py-1">
+            <Badge variant="outline" className="text-base px-3 py-1.5 font-semibold">
               {progressData.percentage}% Complete
             </Badge>
           </div>
@@ -252,11 +276,11 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
           
           {/* Progress Bar */}
           {selectedSyllabusId && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Progress value={progressData.percentage} className="h-3" />
               <div className="flex justify-between text-sm text-gray-600">
-                <span>{progressData.passed} lessons passed</span>
-                <span>{progressData.total - progressData.passed} remaining</span>
+                <span className="font-medium">{progressData.passed} lessons passed</span>
+                <span className="font-medium">{progressData.total - progressData.passed} remaining</span>
               </div>
             </div>
           )}
@@ -301,7 +325,7 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
                     return (
                       <tr 
                         key={record.id} 
-                        className={`border-b border-gray-100 ${isClickable ? 'hover:bg-gray-50 cursor-pointer' : ''}`}
+                        className={`border-b border-gray-100 hover:bg-gray-50 ${isClickable ? 'cursor-pointer' : ''}`}
                         onClick={isClickable ? () => router.push(`/dashboard/bookings/debrief/view/${record.booking_id}`) : undefined}
                       >
                         <td className="py-3 pr-4">
@@ -310,13 +334,13 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
                         <td className="py-3 pr-4 font-medium text-gray-900">
                           <div className="flex items-center gap-2">
                             <BookOpen className="w-4 h-4 text-gray-500" />
-                            {lessonName}
+                            <span className="truncate">{lessonName}</span>
                           </div>
                         </td>
                         <td className="py-3 pr-4 text-sm">
                           <div className="flex items-center gap-2">
                             <Calendar className="w-4 h-4 text-gray-500" />
-                            {dateDisplay}
+                            <span className="font-medium">{dateDisplay}</span>
                           </div>
                         </td>
                         <td className="py-3 pr-4 text-sm">
@@ -326,13 +350,9 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
                           </div>
                         </td>
                         <td className="py-3 pr-4 text-sm">
-                          {record.attempt && record.attempt > 1 ? (
-                            <Badge variant="outline" className="text-xs px-1.5 py-0.5">
-                              Attempt {record.attempt}
-                            </Badge>
-                          ) : (
-                            <span className="text-gray-400">1</span>
-                          )}
+                          <span className="text-gray-600 font-medium">
+                            {formatAttemptNumber(record.attempt)}
+                          </span>
                         </td>
                         <td className="py-3">
                           {isClickable ? (

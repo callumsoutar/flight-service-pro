@@ -13,6 +13,7 @@ import ObservationsTable from '@/components/aircraft/ObservationsTable';
 import type { Aircraft } from "@/types/aircraft";
 import React from "react";
 import AircraftOverviewForm from '@/components/aircraft/AircraftOverviewForm';
+import AircraftFlightHistoryTab from '@/components/aircraft/AircraftFlightHistoryTab';
 import { useEffect } from 'react';
 import type { AircraftComponent } from "@/types/aircraft_components";
 
@@ -226,7 +227,7 @@ export default function AircraftViewPage() {
                 </div>
               </Tabs.Content>
               <Tabs.Content value="flight" className="h-full w-full">
-                <Card className="p-6">Flight History (Coming soon)</Card>
+                <AircraftFlightHistoryTab aircraftId={id} />
               </Tabs.Content>
               <Tabs.Content value="observations" className="h-full w-full">
                 <ObservationsTable aircraftId={id} />

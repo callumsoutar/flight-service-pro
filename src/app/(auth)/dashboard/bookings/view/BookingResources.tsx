@@ -78,18 +78,26 @@ export default function BookingResources({ member, instructor, aircraft }: Booki
               <div className="text-gray-500 text-sm">{member?.email || "-"}</div>
             </div>
           </div>
-          <div className="bg-muted/50 rounded-xl p-4 flex items-center gap-3">
-            <UserCheck className="w-4 h-4 text-muted-foreground" />
-            <div className="flex-1">
-              <div className="font-semibold">Instructor <Badge className="ml-2" variant="secondary">Staff</Badge></div>
-              <div className="mt-1">
-                {instructor
-                  ? `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.users?.email || "-"
-                  : "-"}
+{instructor ? (
+            <div className="bg-muted/50 rounded-xl p-4 flex items-center gap-3">
+              <UserCheck className="w-4 h-4 text-muted-foreground" />
+              <div className="flex-1">
+                <div className="font-semibold">Instructor <Badge className="ml-2" variant="secondary">Staff</Badge></div>
+                <div className="mt-1">
+                  {`${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.users?.email || "-"}
+                </div>
+                <div className="text-gray-500 text-sm">{instructor.users?.email || "-"}</div>
               </div>
-              <div className="text-gray-500 text-sm">{instructor?.users?.email || "-"}</div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-muted/50 rounded-xl p-4 flex items-center gap-3">
+              <UserIcon className="w-4 h-4 text-muted-foreground" />
+              <div className="flex-1">
+                <div className="font-semibold text-muted-foreground">Solo Booking</div>
+                <div className="text-sm text-muted-foreground mt-1">No instructor assigned</div>
+              </div>
+            </div>
+          )}
         </div>
         {/* Divider */}
         <div className="my-4 border-t border-muted" />

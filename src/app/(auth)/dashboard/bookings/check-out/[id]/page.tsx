@@ -5,7 +5,7 @@ import React from "react";
 import { createClient } from "@/lib/SupabaseServerClient";
 import BookingHistoryCollapse from "../../view/BookingHistoryCollapse";
 import CheckOutForm from "@/components/bookings/CheckOutForm";
-import { BookingDetails } from "@/types/booking_details";
+import { FlightLog } from "@/types/flight_logs";
 import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 import { StatusBadge } from "@/components/bookings/StatusBadge";
@@ -24,12 +24,12 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
   let aircraftList: { id: string; registration: string; type: string }[] = [];
   let lessons: { id: string; name: string }[] = [];
   let flightTypes: { id: string; name: string }[] = [];
-  let bookingDetails: BookingDetails | null = null;
+  let flightLog: FlightLog | null = null;
 
-  // Fetch booking with full user, instructor, and aircraft objects, plus lesson_id and flight_type_id
+  // Fetch booking with full user, instructor, aircraft, and flight_type objects
   const { data: bookingData } = await supabase
     .from("bookings")
-    .select(`*, user:user_id(*), instructor:instructor_id(*), aircraft:aircraft_id(*), lesson_id, flight_type_id`)
+    .select(`*, user:user_id(*), instructor:instructor_id(*), aircraft:aircraft_id(*), flight_type:flight_type_id(*), lesson_id, authorization_override, authorization_override_by, authorization_override_at, authorization_override_reason`)
     .eq("id", bookingId)
     .single();
   booking = bookingData;
@@ -43,7 +43,7 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
     name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.id,
   }));
 
-  // Fetch all instructors from the instructors table (consistent with booking view page)
+  // Fetch all instructors from the instructors table
   const { data: instructorRows } = await supabase
     .from("instructors")
     .select(`
@@ -69,7 +69,7 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
       }
     }
     return {
-      id: instructor.id, // This is now the instructor ID, not user ID
+      id: instructor.id, // 
       name,
     };
   });
@@ -97,14 +97,18 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
     .select("id, name");
   flightTypes = (flightTypeRows || []).map((f: { id: string; name: string }) => ({ id: f.id, name: f.name }));
 
-  // Fetch booking_details for this booking
+  // Fetch flight_log for this booking
   if (booking && booking.id) {
-    const { data: detailsData } = await supabase
-      .from("booking_details")
-      .select("*")
+    const { data: flightLogData } = await supabase
+      .from("flight_logs")
+      .select(`
+        *,
+        checked_out_aircraft:checked_out_aircraft_id(id, registration, type),
+        checked_out_instructor:checked_out_instructor_id(*)
+      `)
       .eq("booking_id", booking.id)
       .single();
-    bookingDetails = detailsData;
+    flightLog = flightLogData;
   }
 
   const status = booking?.status ?? "unconfirmed";
@@ -127,10 +131,10 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
           <StatusBadge status={status} className="text-lg px-4 py-2 font-semibold" />
           <div className="flex-none flex items-center justify-end gap-3">
             {booking && booking.id && (
-              <BookingActions status={status} bookingId={booking.id} hideCheckOutButton={true} />
+              <BookingActions booking={booking} status={status} bookingId={booking.id} hideCheckOutButton={true} />
             )}
             {booking && booking.id && (
-              <BookingStagesOptions bookingId={booking.id} />
+              <BookingStagesOptions bookingId={booking.id} bookingStatus={booking.status} />
             )}
           </div>
         </div>
@@ -143,7 +147,7 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
             aircraft={aircraftList}
             lessons={lessons}
             flightTypes={flightTypes}
-            bookingDetails={bookingDetails}
+            flightLog={flightLog}
           />
         )}
       </div>

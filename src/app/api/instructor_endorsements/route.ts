@@ -20,11 +20,17 @@ export async function GET(req: NextRequest) {
   
   const { searchParams } = new URL(req.url);
   const instructorId = searchParams.get("instructor_id");
-  if (!instructorId) return NextResponse.json({ instructor_endorsements: [], error: "Missing instructor_id" }, { status: 400 });
-  const { data, error } = await supabase
+
+  // Build query - if instructor_id is provided, filter by it; otherwise return all
+  let query = supabase
     .from("instructor_endorsements")
-    .select("*")
-    .eq("instructor_id", instructorId);
+    .select("*");
+
+  if (instructorId) {
+    query = query.eq("instructor_id", instructorId);
+  }
+
+  const { data, error } = await query;
   if (error) return NextResponse.json({ instructor_endorsements: [], error: error.message }, { status: 500 });
   return NextResponse.json({ instructor_endorsements: data ?? [] });
 }

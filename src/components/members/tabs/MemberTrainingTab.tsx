@@ -280,7 +280,6 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
                       mode="single"
                       selected={dateCompleted}
                       onSelect={setDateCompleted}
-                      initialFocus
                     />
                   </PopoverContent>
                 </Popover>
@@ -307,12 +306,12 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
               <div className="overflow-x-auto">
                 <Table className="min-w-[700px]">
                   <TableHeader>
-                    <TableRow>
-                      <TableHead></TableHead>
-                      <TableHead>Syllabus</TableHead>
-                      <TableHead>Progress</TableHead>
-                      <TableHead>Passed</TableHead>
-                      <TableHead>Total</TableHead>
+                    <TableRow className="border-b border-gray-200">
+                      <TableHead className="text-left py-3 pr-4 font-medium text-gray-900 w-12"></TableHead>
+                      <TableHead className="text-left py-3 pr-4 font-medium text-gray-900">Syllabus</TableHead>
+                      <TableHead className="text-left py-3 pr-4 font-medium text-gray-900">Progress</TableHead>
+                      <TableHead className="text-center py-3 pr-4 font-medium text-gray-900">Passed</TableHead>
+                      <TableHead className="text-center py-3 font-medium text-gray-900">Total</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -327,55 +326,64 @@ export default function MemberTrainingTab({ memberId }: { memberId: string }) {
                       const isOpen = expanded[syllabusId] || false;
                       return (
                         <React.Fragment key={syllabusId}>
-                          <TableRow key={syllabusId} className="bg-muted/20 hover:bg-muted/30 transition-colors">
-                            <TableCell className="w-10 p-2">
+                          <TableRow className="bg-gray-50/80 border-b border-gray-200 hover:bg-gray-100/80">
+                            <TableCell className="py-4 pr-4">
                               <button
                                 type="button"
                                 aria-label={isOpen ? "Collapse" : "Expand"}
                                 onClick={() => setExpanded(e => ({ ...e, [syllabusId]: !isOpen }))}
-                                className="p-1 hover:bg-muted/50 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                className="p-1 hover:bg-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
                               >
-                                {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                {isOpen ? <ChevronDown className="w-4 h-4 text-gray-600" /> : <ChevronRight className="w-4 h-4 text-gray-600" />}
                               </button>
                             </TableCell>
-                            <TableCell className="font-medium">{displayName}</TableCell>
-                            <TableCell style={{ minWidth: 120 }}>
+                            <TableCell className="py-4 pr-4 text-base font-semibold text-gray-900">{displayName}</TableCell>
+                            <TableCell className="py-4 pr-4" style={{ minWidth: 200 }}>
                               {isOther ? (
-                                <span className="text-sm text-muted-foreground">-</span>
+                                <span className="text-sm text-gray-600 font-medium">Individual Exams</span>
                               ) : (
                                 <div className="flex items-center gap-3">
-                                  <Progress value={percent} className="flex-1" />
-                                  <span className="text-xs text-muted-foreground min-w-[35px]">{percent}%</span>
+                                  <Progress value={percent} className="flex-1 h-2" />
+                                  <span className="text-sm font-semibold text-gray-800 min-w-[40px]">{percent}%</span>
                                 </div>
                               )}
                             </TableCell>
-                            <TableCell className="text-center">{passed}</TableCell>
-                            <TableCell className="text-center">{isOther ? "-" : total}</TableCell>
+                            <TableCell className="py-4 pr-4 text-center text-base font-semibold text-gray-900">{passed}</TableCell>
+                            <TableCell className="py-4 text-center text-base font-semibold text-gray-900">{isOther ? exams.length : total}</TableCell>
                           </TableRow>
                           {isOpen && exams.length > 0 && (
-                            <TableRow key={syllabusId + "-exams"}>
-                              <TableCell colSpan={5} className="p-0 bg-white">
-                                <div className="overflow-x-auto">
-                                  <Table className="w-full min-w-[600px] border-none">
-                                    <TableHeader>
-                                      <TableRow className="bg-muted/20 border-t">
-                                        <TableHead className="py-2 px-4 text-sm font-medium text-gray-600 w-[35%]">Exam</TableHead>
-                                        <TableHead className="py-2 px-4 text-sm font-medium text-gray-600 text-center w-[15%]">Score</TableHead>
-                                        <TableHead className="py-2 px-4 text-sm font-medium text-gray-600 text-center w-[15%]">Result</TableHead>
-                                        <TableHead className="py-2 px-4 text-sm font-medium text-gray-600 text-center w-[35%]">Date Completed</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {exams.map((row, i) => (
-                                        <TableRow key={row.id || i} className={`hover:bg-muted/10 transition-colors ${row.result === "FAIL" ? "bg-red-50/50" : ""}`}>
-                                          <TableCell className="py-2 px-4 text-sm w-[35%]">{row.exam?.name || "-"}</TableCell>
-                                          <TableCell className="py-2 px-4 text-sm text-center w-[15%]">{row.score != null ? `${row.score}%` : "-"}</TableCell>
-                                          <TableCell className="py-2 px-4 text-center w-[15%]"><ResultBadge result={row.result} /></TableCell>
-                                          <TableCell className="py-2 px-4 text-sm text-center w-[35%]">{row.exam_date ? format(new Date(row.exam_date), 'dd MMM yyyy') : "-"}</TableCell>
+                            <TableRow>
+                              <TableCell colSpan={5} className="p-0 bg-gray-50/30">
+                                <div className="px-6 py-4">
+                                  <div className="overflow-x-auto">
+                                    <Table className="w-full border-none">
+                                      <TableHeader>
+                                        <TableRow className="border-b border-gray-200">
+                                          <TableHead className="py-2 text-sm font-semibold text-gray-700">Exam</TableHead>
+                                          <TableHead className="py-2 text-sm font-semibold text-gray-700 text-center">Score</TableHead>
+                                          <TableHead className="py-2 text-sm font-semibold text-gray-700 text-center">Result</TableHead>
+                                          <TableHead className="py-2 text-sm font-semibold text-gray-700 text-center">Date Completed</TableHead>
                                         </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {exams.map((row, i) => (
+                                          <TableRow 
+                                            key={row.id || i} 
+                                            className={`border-b border-gray-100 hover:bg-gray-50 ${
+                                              row.result === "FAIL" ? "bg-red-50" : ""
+                                            }`}
+                                          >
+                                            <TableCell className="py-3 pr-4 text-sm font-medium text-gray-900">{row.exam?.name || "-"}</TableCell>
+                                            <TableCell className="py-3 pr-4 text-sm text-center text-gray-700">{row.score != null ? `${row.score}%` : "-"}</TableCell>
+                                            <TableCell className="py-3 pr-4 text-center"><ResultBadge result={row.result} /></TableCell>
+                                            <TableCell className="py-3 text-sm text-center text-gray-700">
+                                              {row.exam_date ? format(new Date(row.exam_date), 'dd MMM yyyy') : "-"}
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
                                 </div>
                               </TableCell>
                             </TableRow>

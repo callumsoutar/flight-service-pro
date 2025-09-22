@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { User } from "lucide-react";
+import { PLACEHOLDER_VALUES } from "@/constants/placeholders";
 
 export type InstructorResult = {
   id: string; // This is the instructor ID from the instructors table
@@ -52,10 +53,12 @@ export default function InstructorSelect({ onSelect, value, disabled = false, un
   return (
     <div className="relative w-full">
       <Select 
-        value={selectedInstructor?.id || (value?.id || "")} 
+        value={selectedInstructor?.id || (value?.id || PLACEHOLDER_VALUES.INSTRUCTOR)} 
         onValueChange={disabled ? undefined : (instructor_id) => {
-          // Only trigger onSelect if instructors are loaded and we have a valid selection
-          if (instructors.length > 0) {
+          // Handle "No instructor" selection
+          if (instructor_id === PLACEHOLDER_VALUES.INSTRUCTOR) {
+            onSelect(null);
+          } else if (instructors.length > 0) {
             const instructor = instructors.find(i => i.id === instructor_id);
             onSelect(instructor || null);
           }
@@ -70,23 +73,33 @@ export default function InstructorSelect({ onSelect, value, disabled = false, un
             <div className="px-2 py-1.5 text-sm text-muted-foreground">Loading instructors...</div>
           ) : error ? (
             <div className="px-2 py-1.5 text-sm text-destructive">Error loading instructors</div>
-          ) : instructors.length > 0 ? (
-            instructors.map((instructor) => {
-              const isUnavailable = unavailableInstructorIds?.has(instructor.id) || false;
-              return (
-                <SelectItem key={instructor.id} value={instructor.id} disabled={isUnavailable}>
-                  <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-indigo-500" />
-                    <span>
-                      {instructor.first_name} {instructor.last_name}
-                      {isUnavailable ? " (booked)" : ""}
-                    </span>
-                  </div>
-                </SelectItem>
-              );
-            })
           ) : (
-            <div className="px-2 py-1.5 text-sm text-muted-foreground">No instructors found</div>
+            <>
+              <SelectItem value={PLACEHOLDER_VALUES.INSTRUCTOR}>
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-gray-400" />
+                  <span>No instructor</span>
+                </div>
+              </SelectItem>
+              {instructors.length > 0 ? (
+                instructors.map((instructor) => {
+                  const isUnavailable = unavailableInstructorIds?.has(instructor.id) || false;
+                  return (
+                    <SelectItem key={instructor.id} value={instructor.id} disabled={isUnavailable}>
+                      <div className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-indigo-500" />
+                        <span>
+                          {instructor.first_name} {instructor.last_name}
+                          {isUnavailable ? " (booked)" : ""}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  );
+                })
+              ) : (
+                <div className="px-2 py-1.5 text-sm text-muted-foreground">No instructors found</div>
+              )}
+            </>
           )}
         </SelectContent>
       </Select>

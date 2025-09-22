@@ -2,7 +2,7 @@
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { CalendarIcon, UserIcon, CheckIcon, Loader2, Plane, BadgeCheck, BookOpen, ClipboardList, StickyNote, AlignLeft } from "lucide-react";
+import { CalendarIcon, UserIcon, CheckIcon, Loader2, Plane, BadgeCheck, BookOpen, ClipboardList, AlignLeft, AlertTriangle } from "lucide-react";
 import { useForm, Controller } from "react-hook-form";
 import { format, parseISO } from "date-fns";
 import React from "react";
@@ -13,7 +13,9 @@ import { Booking } from "@/types/bookings";
 import MemberSelect from "@/components/invoices/MemberSelect";
 import InstructorSelect from "@/components/invoices/InstructorSelect";
 import { useBookingUpdate, useMemberValue, useInstructorValue } from "@/hooks/use-booking-view";
+import { useRouter } from "next/navigation";
 import type { User } from "@/types/users";
+import { PLACEHOLDER_VALUES } from "@/constants/placeholders";
 
 // Types to match what the hooks expect
 type MemberForHook = {
@@ -52,7 +54,7 @@ interface BookingDetailsProps {
   instructors: { id: string; name: string }[];
   aircraft: { id: string; registration: string; type: string }[];
   lessons: { id: string; name: string }[];
-  flightTypes: { id: string; name: string }[];
+  flightTypes: { id: string; name: string; instruction_type?: string }[];
   bookings: Booking[]; // All bookings for conflict checking
 }
 
@@ -73,12 +75,6 @@ function getUtcIsoString(dateStr: string, timeStr: string): string | null {
   return local.toISOString();
 }
 
-// Special placeholder values for select components (shadcn doesn't allow empty strings)
-const PLACEHOLDER_VALUES = {
-  AIRCRAFT: '__no_aircraft__',
-  LESSON: '__no_lesson__',
-  FLIGHT_TYPE: '__no_flight_type__'
-} as const;
 
 // Helper to convert User to MemberForHook
 function convertUserToMemberForHook(user?: User): MemberForHook {
@@ -116,15 +112,16 @@ function convertInstructorForHook(instructor?: unknown): InstructorForHook {
 export default function BookingDetails({ booking, members, instructors, aircraft, lessons, flightTypes, bookings }: BookingDetailsProps) {
   // Check if booking is read-only (completed bookings cannot be edited)
   const isReadOnly = booking.status === 'complete';
+  const router = useRouter();
   
-  const { control, handleSubmit, reset, formState, watch } = useForm<BookingDetailsFormData>({
+  const { control, handleSubmit, reset, formState, watch, setValue } = useForm<BookingDetailsFormData>({
     defaultValues: {
       start_date: booking?.start_time ? format(parseISO(booking.start_time), "yyyy-MM-dd") : "",
       start_time: booking?.start_time ? format(parseISO(booking.start_time), "HH:mm") : "",
       end_date: booking?.end_time ? format(parseISO(booking.end_time), "yyyy-MM-dd") : "",
       end_time: booking?.end_time ? format(parseISO(booking.end_time), "HH:mm") : "",
       member: booking?.user_id || "",
-      instructor: booking?.instructor_id || "",
+      instructor: booking?.instructor_id || PLACEHOLDER_VALUES.INSTRUCTOR,
       aircraft: booking?.aircraft_id || PLACEHOLDER_VALUES.AIRCRAFT,
       lesson: booking?.lesson_id || PLACEHOLDER_VALUES.LESSON,
       remarks: booking?.remarks || "",
@@ -138,11 +135,30 @@ export default function BookingDetails({ booking, members, instructors, aircraft
   const memberFieldValue = watch("member");
   const instructorFieldValue = watch("instructor");
   
+  // Watch flight type field to determine if instructor should be hidden
+  const flightTypeFieldValue = watch("flight_type");
+  
   // Watch time fields for conflict checking
   const startDate = watch("start_date");
   const startTime = watch("start_time");
   const endDate = watch("end_date");
   const endTime = watch("end_time");
+  
+  // Determine if selected flight type is solo
+  const isSoloFlightType = React.useMemo(() => {
+    if (flightTypeFieldValue === PLACEHOLDER_VALUES.FLIGHT_TYPE || !flightTypeFieldValue) {
+      return false;
+    }
+    const selectedFlightType = flightTypes.find(ft => ft.id === flightTypeFieldValue);
+    return selectedFlightType?.instruction_type === 'solo';
+  }, [flightTypeFieldValue, flightTypes]);
+  
+  // Clear instructor field when solo flight type is selected
+  React.useEffect(() => {
+    if (isSoloFlightType && instructorFieldValue && instructorFieldValue !== PLACEHOLDER_VALUES.INSTRUCTOR) {
+      setValue('instructor', PLACEHOLDER_VALUES.INSTRUCTOR);
+    }
+  }, [isSoloFlightType, instructorFieldValue, setValue]);
   
   // Compute unavailable aircraft/instructors for the selected time
   const unavailable = React.useMemo(() => {
@@ -200,7 +216,10 @@ export default function BookingDetails({ booking, members, instructors, aircraft
   );
   
   // Use optimized mutation for saving
-  const { mutate: updateBooking, isPending: saving, isSuccess: saveSuccess } = useBookingUpdate();
+  const { mutate: updateBooking, isPending: saving, isSuccess: saveSuccess } = useBookingUpdate(() => {
+    // Refresh the page to show updated data
+    router.refresh();
+  });
 
   const onSubmit = async (data: BookingDetailsFormData) => {
     // Check for resource conflicts before submission
@@ -225,7 +244,8 @@ export default function BookingDetails({ booking, members, instructors, aircraft
       if (value.trim() === "" || 
           value === PLACEHOLDER_VALUES.AIRCRAFT || 
           value === PLACEHOLDER_VALUES.LESSON || 
-          value === PLACEHOLDER_VALUES.FLIGHT_TYPE) {
+          value === PLACEHOLDER_VALUES.FLIGHT_TYPE ||
+          value === PLACEHOLDER_VALUES.INSTRUCTOR) {
         return null;
       }
       return value;
@@ -251,7 +271,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
       purpose: data.purpose,
       remarks: data.remarks,
       booking_type: data.booking_type,
-      instructor_id: data.instructor.trim() !== "" ? sanitizeUuid(data.instructor) : null,
+      instructor_id: data.instructor !== PLACEHOLDER_VALUES.INSTRUCTOR && data.instructor.trim() !== "" ? sanitizeUuid(data.instructor) : null,
       user_id: data.member.trim() !== "" ? sanitizeUuid(data.member) : null,
       aircraft_id: data.aircraft !== PLACEHOLDER_VALUES.AIRCRAFT && data.aircraft.trim() !== "" 
         ? sanitizeUuid(data.aircraft) : null,
@@ -285,7 +305,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                 end_date: booking?.end_time ? format(parseISO(booking.end_time), "yyyy-MM-dd") : "",
                 end_time: booking?.end_time ? format(parseISO(booking.end_time), "HH:mm") : "",
                 member: booking?.user_id || "",
-                instructor: booking?.instructor_id || "",
+                instructor: booking?.instructor_id || PLACEHOLDER_VALUES.INSTRUCTOR,
                 aircraft: booking?.aircraft_id || PLACEHOLDER_VALUES.AIRCRAFT,
                 lesson: booking?.lesson_id || PLACEHOLDER_VALUES.LESSON,
                 remarks: booking?.remarks || "",
@@ -346,7 +366,6 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                               onSelect={date => {
                                 field.onChange(date ? format(date, "yyyy-MM-dd") : "");
                               }}
-                              initialFocus
                             />
                           </PopoverContent>
                         </Popover>
@@ -404,7 +423,6 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                               onSelect={date => {
                                 field.onChange(date ? format(date, "yyyy-MM-dd") : "");
                               }}
-                              initialFocus
                             />
                           </PopoverContent>
                         </Popover>
@@ -460,35 +478,40 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                 )}
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Instructor</label>
-              <Controller
-                name="instructor"
-                control={control}
-                render={({ field }) => (
-                  <div className="relative">
-                    <InstructorSelect
-                      value={instructorValue}
-                      unavailableInstructorIds={unavailable.instructors}
-                      onSelect={instructor => {
-                        // Prevent selection of conflicted instructors
-                        if (instructor && unavailable.instructors.has(instructor.id)) {
-                          alert("This instructor is already booked during this time. Please choose a different instructor or time slot.");
-                          return;
-                        }
-                        field.onChange(instructor ? instructor.id : "");
-                      }}
-                      disabled={isReadOnly}
-                    />
-                    {instructorFieldValue && !instructorValue && (
-                      <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-md">
-                        <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-                      </div>
-                    )}
-                  </div>
-                )}
-              />
-            </div>
+            {!isSoloFlightType && (
+              <div>
+                <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Instructor</label>
+                <Controller
+                  name="instructor"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="relative">
+                      <InstructorSelect
+                        value={instructorValue}
+                        unavailableInstructorIds={unavailable.instructors}
+                        onSelect={instructor => {
+                          // Prevent selection of conflicted instructors
+                          if (instructor && unavailable.instructors.has(instructor.id)) {
+                            alert("This instructor is already booked during this time. Please choose a different instructor or time slot.");
+                            return;
+                          }
+                          field.onChange(instructor ? instructor.id : PLACEHOLDER_VALUES.INSTRUCTOR);
+                        }}
+                        disabled={isReadOnly}
+                      />
+                      {instructorFieldValue && !instructorValue && instructorFieldValue !== PLACEHOLDER_VALUES.INSTRUCTOR && (
+                        <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-md">
+                          <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                />
+              </div>
+            )}
+            {isSoloFlightType && (
+              <div></div>
+            )}
           </div>
 
           {/* Aircraft, Flight Type, Lesson, Booking Type */}
@@ -563,20 +586,8 @@ export default function BookingDetails({ booking, members, instructors, aircraft
             </div>
           </div>
 
-          {/* Remarks & Purpose */}
+          {/* Description & Remarks */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-              <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><StickyNote className="w-4 h-4" /> Booking Remarks</label>
-              <Controller name="remarks" control={control} render={({ field }) => (
-                <textarea
-                  {...field}
-                  placeholder="Enter booking remarks"
-                  disabled={isReadOnly}
-                  className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top"
-                  rows={4}
-                />
-              )} />
-            </div>
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><AlignLeft className="w-4 h-4" /> Description</label>
               <Controller name="purpose" control={control} render={({ field }) => (
@@ -585,6 +596,21 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                   placeholder="Description"
                   disabled={isReadOnly}
                   className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top"
+                  rows={4}
+                />
+              )} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-2 flex items-center gap-1">
+                <AlertTriangle className="w-4 h-4 text-amber-600" /> 
+                <span className="text-amber-800">Operational Remarks</span>
+              </label>
+              <Controller name="remarks" control={control} render={({ field }) => (
+                <textarea
+                  {...field}
+                  placeholder="Important operational notes (e.g., fuel requirements, special instructions, safety notes)"
+                  disabled={isReadOnly}
+                  className="resize-none h-16 w-full rounded-md border border-amber-300 bg-amber-50/50 px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-amber-500 focus-visible:ring-amber-500/20 focus-visible:ring-[3px] outline-none align-top placeholder:text-amber-600/60"
                   rows={4}
                 />
               )} />

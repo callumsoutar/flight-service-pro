@@ -17,6 +17,7 @@ export interface Equipment {
   updated_at: string | null;
   location?: string | null;
   year_purchased?: number | null;
+  voided_at?: string | null;
 }
 
 export interface EquipmentIssuance {   

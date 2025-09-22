@@ -1,6 +1,7 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { isPlaceholderValue } from "@/constants/placeholders";
 
 // Types
 interface BookingUpdateParams {
@@ -73,10 +74,12 @@ export function useUserData(userId: string | null) {
 
 // Hook for fetching instructor data
 export function useInstructorData(instructorId: string | null) {
+  const isPlaceholder = isPlaceholderValue(instructorId);
+  
   return useQuery({
     queryKey: bookingViewKeys.instructor(instructorId || ''),
     queryFn: async (): Promise<InstructorResult | null> => {
-      if (!instructorId) return null;
+      if (!instructorId || isPlaceholder) return null;
       
       const response = await fetch(`/api/instructors?id=${instructorId}`);
       if (!response.ok) {
@@ -96,14 +99,14 @@ export function useInstructorData(instructorId: string | null) {
       }
       return null;
     },
-    enabled: !!instructorId,
+    enabled: !!instructorId && !isPlaceholder,
     staleTime: 1000 * 60 * 10, // 10 minutes
     retry: 1,
   });
 }
 
 // Hook for booking updates
-export function useBookingUpdate() {
+export function useBookingUpdate(onSuccessCallback?: () => void) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -142,6 +145,10 @@ export function useBookingUpdate() {
       toast.success("Booking updated successfully");
       // Invalidate related queries if needed
       queryClient.invalidateQueries({ queryKey: bookingViewKeys.all });
+      // Call the optional callback (e.g., to refresh the page)
+      if (onSuccessCallback) {
+        onSuccessCallback();
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message || "An error occurred while saving");
@@ -162,8 +169,13 @@ export function useMemberValue(
 ): UserResult | null {
   const { data: userData, isLoading } = useUserData(userId);
   
+  // Handle empty strings and null values immediately
+  if (!userId || userId.trim() === "") {
+    return null;
+  }
+  
   // Priority 1: Use existing user data from server-side join if available
-  if (existingUser) {
+  if (existingUser && existingUser.id === userId) {
     return {
       id: existingUser.id,
       first_name: existingUser.first_name || "",
@@ -183,27 +195,23 @@ export function useMemberValue(
   }
   
   // Priority 3: Fallback to members list if available
-  if (userId) {
-    const selectedMember = members.find(m => m.id === userId);
-    if (selectedMember) {
-      return {
-        id: selectedMember.id,
-        first_name: selectedMember.name.split(" ")[0] || "",
-        last_name: selectedMember.name.split(" ").slice(1).join(" ") || "",
-        email: "",
-      };
-    }
-    
-    // Last resort fallback
+  const selectedMember = members.find(m => m.id === userId);
+  if (selectedMember) {
     return {
-      id: userId,
-      first_name: "Unknown",
-      last_name: "User",
+      id: selectedMember.id,
+      first_name: selectedMember.name.split(" ")[0] || "",
+      last_name: selectedMember.name.split(" ").slice(1).join(" ") || "",
       email: "",
     };
   }
   
-  return null;
+  // Last resort fallback
+  return {
+    id: userId,
+    first_name: "Unknown",
+    last_name: "User",
+    email: "",
+  };
 }
 
 // Helper hook to get instructor display value from available data
@@ -219,6 +227,11 @@ export function useInstructorValue(
   } | null
 ): InstructorResult | null {
   const { data: instructorData, isLoading } = useInstructorData(instructorId);
+  
+  // If it's a placeholder value, return null immediately
+  if (isPlaceholderValue(instructorId)) {
+    return null;
+  }
   
   // Priority 1: Use existing instructor data from server-side if available
   if (existingInstructor) {

@@ -13,7 +13,10 @@ export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
   const id = searchParams.get("id");
 
-  let query = supabase.from("aircraft").select("*");
+  let query = supabase.from("aircraft").select(`
+    *,
+    aircraft_type:aircraft_type_id(id, name, category, description)
+  `);
 
   if (id) {
     query = query.eq("id", id);
@@ -24,7 +27,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ aircraft: data });
   }
 
-  const { data, error } = await query;
+  const { data, error } = await query.order("registration");
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

@@ -3,7 +3,8 @@ export type TotalTimeMethod = "hobbs" | "tacho" | "airswitch" | "hobbs less 5%" 
 export interface Aircraft {
   id: string;
   registration: string;
-  type?: string;
+  type?: string; // Keep for backward compatibility during migration
+  aircraft_type_id?: string | null; // New foreign key
   model?: string | null;
   manufacturer?: string | null;
   year_manufactured?: number | null;
@@ -26,4 +27,6 @@ export interface Aircraft {
   prioritise_scheduling?: boolean;
   aircraft_image_url?: string | null;
   total_time_method?: TotalTimeMethod | null;
+  // Optional joined aircraft type data
+  aircraft_type?: import("./aircraft_types").AircraftType;
 } 

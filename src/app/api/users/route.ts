@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   // Fetch all users with all fields
   const { data, error } = await supabase
     .from("users")
-    .select("id, first_name, last_name, email, phone, date_of_birth, gender, street_address, city, state, postal_code, country, next_of_kin_name, next_of_kin_phone, emergency_contact_relationship, medical_certificate_number, medical_certificate_expiry, pilot_license_number, pilot_license_type, pilot_license_expiry, date_of_last_flight, company_name, occupation, employer, notes, account_balance, is_active, created_at, updated_at")
+    .select("id, first_name, last_name, email, phone, date_of_birth, gender, street_address, city, state, postal_code, country, next_of_kin_name, next_of_kin_phone, emergency_contact_relationship, medical_certificate_expiry, pilot_license_number, pilot_license_type, pilot_license_id, pilot_license_expiry, date_of_last_flight, company_name, occupation, employer, notes, account_balance, is_active, created_at, updated_at")
     .order("last_name", { ascending: true });
 
   if (error) {
@@ -43,10 +43,11 @@ export async function GET(req: NextRequest) {
     next_of_kin_name: user.next_of_kin_name || "",
     next_of_kin_phone: user.next_of_kin_phone || "",
     emergency_contact_relationship: user.emergency_contact_relationship || "",
-    medical_certificate_number: user.medical_certificate_number || "",
+
     medical_certificate_expiry: user.medical_certificate_expiry || null,
     pilot_license_number: user.pilot_license_number || "",
     pilot_license_type: user.pilot_license_type || "",
+    pilot_license_id: user.pilot_license_id || null,
     pilot_license_expiry: user.pilot_license_expiry || null,
     date_of_last_flight: user.date_of_last_flight || null,
     company_name: user.company_name || "",
@@ -104,10 +105,10 @@ export async function POST(req: NextRequest) {
     next_of_kin_name,
     next_of_kin_phone,
     emergency_contact_relationship,
-    medical_certificate_number,
     medical_certificate_expiry,
     pilot_license_number,
     pilot_license_type,
+    pilot_license_id,
     pilot_license_expiry,
     company_name,
     occupation,
@@ -170,10 +171,10 @@ export async function POST(req: NextRequest) {
       next_of_kin_name,
       next_of_kin_phone,
       emergency_contact_relationship,
-      medical_certificate_number,
       medical_certificate_expiry,
       pilot_license_number,
       pilot_license_type,
+      pilot_license_id,
       pilot_license_expiry,
       company_name,
       occupation,

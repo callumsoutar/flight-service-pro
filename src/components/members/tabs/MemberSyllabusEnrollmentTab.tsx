@@ -13,10 +13,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { Syllabus } from "@/types/syllabus";
 import type { StudentSyllabusEnrollment } from "@/types/student_syllabus_enrollment";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Command, CommandInput, CommandList, CommandEmpty, CommandItem } from "@/components/ui/command";
-import { Loader2, Info, User, Check } from "lucide-react";
+import { Loader2, Info, User } from "lucide-react";
 import { toast } from "sonner";
 
 const enrollSchema = z.object({
@@ -172,18 +169,7 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
     }
   };
 
-  // Helper for instructor chip
-  function InstructorChip({ instructor }: { instructor: UserResult | InstructorResult }) {
-    return (
-      <div className="flex items-center gap-2 px-2 py-1 bg-muted rounded-lg">
-        <Avatar className="w-6 h-6">
-          {/* No profile_image_url on UserResult/InstructorResult, fallback to initials */}
-          <AvatarFallback>{(instructor.first_name?.[0] || "").toUpperCase()}</AvatarFallback>
-        </Avatar>
-        <span className="font-medium text-sm">{instructor.first_name} {instructor.last_name}</span>
-      </div>
-    );
-  }
+
 
   return (
     <Card className="w-full rounded-md">
@@ -270,7 +256,7 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
                   <TableHead className="w-2/5 min-w-[180px]">Syllabus</TableHead>
                   <TableHead className="w-1/5 min-w-[120px]">Enrolled At</TableHead>
                   <TableHead className="w-1/4 min-w-[180px]">Primary Instructor</TableHead>
-                  <TableHead className="w-1/6 min-w-[80px]">Status</TableHead>
+                  <TableHead className="w-1/6 min-w-[80px] text-center">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -296,36 +282,43 @@ export default function MemberSyllabusEnrollmentTab({ memberId }: MemberSyllabus
                         {row.enrolled_at ? new Date(row.enrolled_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
                       </TableCell>
                       <TableCell className="align-top">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            {instructor ? (
-                              <button className="focus:outline-none">
-                                <InstructorChip instructor={instructor} />
-                              </button>
-                            ) : (
-                              <Button size="sm" variant="outline" className="text-xs">Assign</Button>
-                            )}
-                          </PopoverTrigger>
-                          <PopoverContent className="p-0 w-72">
-                            <Command>
-                              <CommandInput placeholder="Search instructor..." />
-                              <CommandList>
-                                <CommandEmpty>No instructors found</CommandEmpty>
-                                {instructors.map(i => (
-                                  <CommandItem key={i.id} onSelect={() => handleInstructorChange(row.id, i)}>
-                                    <User className="w-4 h-4 mr-2" />
-                                    {i.first_name} {i.last_name} 
-                                    {row.primary_instructor_id === i.id && <Check className="ml-auto w-4 h-4 text-green-500" />}
-                                  </CommandItem>
-                                ))}
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
+                        <Select 
+                          value={row.primary_instructor_id || ""} 
+                          onValueChange={(instructorId) => {
+                            const instructor = instructors.find(i => i.id === instructorId);
+                            if (instructor) {
+                              handleInstructorChange(row.id, instructor);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-full min-w-[200px]">
+                            <SelectValue placeholder="Select instructor">
+                              {instructor ? (
+                                <div className="flex items-center gap-2">
+                                  <User className="w-4 h-4 text-indigo-500" />
+                                  <span>{instructor.first_name} {instructor.last_name}</span>
+                                </div>
+                              ) : (
+                                "Select instructor"
+                              )}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {instructors.map(i => (
+                              <SelectItem key={i.id} value={i.id} className="flex items-center gap-2">
+                                <User className="w-4 h-4 text-indigo-500" />
+                                <span>{i.first_name} {i.last_name}</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </TableCell>
-                      <TableCell className="align-top">
-                        <Badge variant="secondary">
-                          <span className={row.status === "active" ? "text-green-600 font-semibold" : undefined}>{row.status}</span>
+                      <TableCell className="align-middle text-center">
+                        <Badge 
+                          variant={row.status === "active" ? "default" : "secondary"}
+                          className={row.status === "active" ? "bg-green-100 text-green-800 hover:bg-green-100" : ""}
+                        >
+                          {row.status}
                         </Badge>
                       </TableCell>
                     </TableRow>

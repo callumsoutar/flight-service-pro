@@ -9,4 +9,5 @@ export interface Instructor {
   // Optionally joined objects from Supabase
   user?: import("./users").User;
   instructor_category?: import("./instructor_categories").InstructorCategory; // Joined instructor category data
+  aircraft_ratings?: import("./instructor_aircraft_ratings").InstructorAircraftRatingWithDetails[]; // Joined aircraft type ratings
 } 

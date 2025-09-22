@@ -178,8 +178,9 @@ export async function PATCH(req: NextRequest) {
     "date_of_birth",
     "pilot_license_number",
     "pilot_license_type",
+    "pilot_license_id",
     "pilot_license_expiry",
-    "medical_certificate_number",
+
     "medical_certificate_expiry",
     "role"
   ];
@@ -200,8 +201,9 @@ export async function PATCH(req: NextRequest) {
     date_of_birth?: string | null;
     pilot_license_number?: string;
     pilot_license_type?: string;
+    pilot_license_id?: string | null;
     pilot_license_expiry?: string | null;
-    medical_certificate_number?: string;
+
     medical_certificate_expiry?: string | null;
     role?: string;
   }
@@ -213,6 +215,10 @@ export async function PATCH(req: NextRequest) {
       
       // Handle date fields - convert empty strings to null
       if (field === 'date_of_birth' || field === 'pilot_license_expiry' || field === 'medical_certificate_expiry') {
+        updates[field as keyof UpdateUserFields] = value === '' ? null : value;
+      }
+      // Handle UUID fields - convert empty strings to null
+      else if (field === 'pilot_license_id') {
         updates[field as keyof UpdateUserFields] = value === '' ? null : value;
       }
       // Handle other optional fields - only include if not empty string

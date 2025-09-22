@@ -4,6 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Calendar, Plane, User } from "lucide-react";
 import { format } from "date-fns";
 import { Booking } from "@/types/bookings";
+import { CancelBookingModal } from "@/components/bookings/CancelBookingModal";
+import { useCancelBooking } from "@/hooks/use-cancel-booking";
+import { useCancellationCategories } from "@/hooks/use-cancellation-categories";
+import { toast } from "sonner";
 
 interface MemberBookingsTabProps {
   memberId: string;
@@ -14,6 +18,11 @@ export default function MemberBookingsTab({ memberId }: MemberBookingsTabProps) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [instructorNameById, setInstructorNameById] = useState<Record<string, { first_name?: string; last_name?: string }>>({});
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  
+  const cancelBooking = useCancelBooking();
+  const { data: categoriesData } = useCancellationCategories();
 
   useEffect(() => {
     const loadBookings = async () => {
@@ -108,6 +117,61 @@ export default function MemberBookingsTab({ memberId }: MemberBookingsTabProps) 
 
     loadBookings();
   }, [memberId]);
+
+  const handleCancelClick = (bookingId: string) => {
+    setSelectedBookingId(bookingId);
+    setCancelModalOpen(true);
+  };
+
+  const handleCancelSubmit = async (data: {
+    cancellation_category_id?: string;
+    reason?: string;
+    notes?: string;
+  }) => {
+    if (!selectedBookingId) return;
+
+    try {
+      await cancelBooking.mutateAsync({
+        bookingId: selectedBookingId,
+        data
+      });
+      
+      // Refresh the bookings list to reflect the cancellation
+      const response = await fetch(`/api/bookings`);
+      const responseData = await response.json();
+      
+      if (response.ok) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const memberBookings = (responseData.bookings || [])
+          .filter((booking: Booking) => {
+            const bookingDate = new Date(booking.start_time);
+            return (
+              booking.user_id === memberId && 
+              booking.status === 'confirmed' && 
+              bookingDate >= today
+            );
+          })
+          .sort((a: Booking, b: Booking) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+        
+        setBookings(memberBookings);
+      }
+      
+      toast.success("Booking cancelled successfully");
+      
+      setCancelModalOpen(false);
+      setSelectedBookingId(null);
+    } catch (error) {
+      console.error('Failed to cancel booking:', error);
+      toast.error(error instanceof Error ? error.message : "Failed to cancel booking");
+    }
+  };
+
+  const handleCancelModalClose = () => {
+    setCancelModalOpen(false);
+    setSelectedBookingId(null);
+  };
 
 
 
@@ -221,8 +285,10 @@ export default function MemberBookingsTab({ memberId }: MemberBookingsTabProps) 
                               variant="outline" 
                               size="sm"
                               className="text-red-600 hover:text-red-700"
+                              onClick={() => handleCancelClick(booking.id)}
+                              disabled={cancelBooking.isPending}
                             >
-                              Cancel
+                              {cancelBooking.isPending && selectedBookingId === booking.id ? 'Cancelling...' : 'Cancel'}
                             </Button>
                           )}
                         </div>
@@ -235,6 +301,17 @@ export default function MemberBookingsTab({ memberId }: MemberBookingsTabProps) 
           </CardContent>
         </Card>
       )}
+      
+      {/* Cancel Booking Modal */}
+      <CancelBookingModal
+        open={cancelModalOpen}
+        onOpenChange={handleCancelModalClose}
+        onSubmit={handleCancelSubmit}
+        categories={categoriesData?.categories || []}
+        loading={cancelBooking.isPending}
+        error={cancelBooking.error?.message || null}
+        bookingId={selectedBookingId || undefined}
+      />
     </div>
   );
 } 

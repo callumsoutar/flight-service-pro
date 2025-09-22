@@ -3,7 +3,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Button } from "@/components/ui/button";
 import { Mail, Eye, User, Printer, ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/SupabaseServerClient";
-import { MessageCircle, ListChecks, ArrowRightCircle, UserCircle2, ClipboardList, Plane, Star, Navigation, TrendingUp, Target, Cloud, Shield } from "lucide-react";
+import { MessageCircle, ListChecks, ArrowRightCircle, UserCircle2, ClipboardList, Plane, Star, Navigation, TrendingUp, Target, Cloud, Shield, Clock } from "lucide-react";
 import React from "react";
 import type { Booking } from "@/types/bookings";
 import type { User as UserType } from "@/types/users";
@@ -12,6 +12,9 @@ import type { Lesson } from "@/types/lessons";
 import type { LessonProgress } from "@/types/lesson_progress";
 import LessonProgressComments from "../LessonProgressComments";
 import { format, parseISO } from "date-fns";
+import FlightExperienceDisplay from "@/components/debrief/FlightExperienceDisplay";
+import type { FlightExperience } from "@/types/flight_experience";
+import type { ExperienceType } from "@/types/experience_types";
 
 // Define a type for the joined booking object
 interface BookingWithJoins extends Booking {
@@ -41,7 +44,16 @@ export default async function DebriefViewPage({ params }: { params: Promise<{ id
   let booking: BookingWithJoins | null = null;
   const { data: bookingData } = await supabase
     .from("bookings")
-    .select(`*, user:user_id(*), instructor:instructor_id(*), lesson:lesson_id(*), aircraft:checked_out_aircraft_id(*)`)
+    .select(`
+      *,
+      user:user_id(*),
+      instructor:instructor_id(*),
+      lesson:lesson_id(*),
+      flight_logs(
+        *,
+        checked_out_aircraft:checked_out_aircraft_id(*)
+      )
+    `)
     .eq("id", bookingId)
     .single();
   booking = bookingData;
@@ -60,6 +72,9 @@ export default async function DebriefViewPage({ params }: { params: Promise<{ id
   // Fetch lesson_progress for this booking with instructor details
   let lessonProgress: LessonProgressWithInstructor | null = null;
   let lesson: Lesson | null = null;
+  let flightExperiences: FlightExperience[] = [];
+  let experienceTypes: ExperienceType[] = [];
+  
   if (booking?.id) {
     const { data: lpData } = await supabase
       .from("lesson_progress")
@@ -80,6 +95,7 @@ export default async function DebriefViewPage({ params }: { params: Promise<{ id
       .limit(1)
       .single();
     lessonProgress = lpData;
+    
     // Fetch lesson details if lesson_id exists
     if (lessonProgress?.lesson_id) {
       const { data: lessonData } = await supabase
@@ -89,6 +105,24 @@ export default async function DebriefViewPage({ params }: { params: Promise<{ id
         .single();
       lesson = lessonData;
     }
+    
+    // Fetch flight experiences if lesson progress exists
+    if (lessonProgress?.id) {
+      const { data: feData } = await supabase
+        .from("flight_experience")
+        .select("*")
+        .eq("lesson_progress_id", lessonProgress.id)
+        .order("created_at", { ascending: true });
+      flightExperiences = feData || [];
+    }
+    
+    // Fetch experience types
+    const { data: etData } = await supabase
+      .from("experience_types")
+      .select("*")
+      .eq("is_active", true)
+      .order("name", { ascending: true });
+    experienceTypes = etData || [];
   }
 
   return (
@@ -186,16 +220,16 @@ export default async function DebriefViewPage({ params }: { params: Promise<{ id
               <div className="text-center">
                 <div className="text-sm font-medium text-gray-500 mb-1">Aircraft</div>
                 <div className="font-semibold text-gray-900">
-                  {booking.aircraft ? booking.aircraft.registration : '—'}
+                  {booking.flight_logs?.[0]?.checked_out_aircraft ? booking.flight_logs[0].checked_out_aircraft.registration : '—'}
                 </div>
-                {booking.aircraft?.type && (
-                  <div className="text-xs text-gray-500">{booking.aircraft.type}</div>
+                {booking.flight_logs?.[0]?.checked_out_aircraft?.type && (
+                  <div className="text-xs text-gray-500">{booking.flight_logs[0].checked_out_aircraft.type}</div>
                 )}
               </div>
               <div className="text-center">
                 <div className="text-sm font-medium text-gray-500 mb-1">Flight Time</div>
                 <div className="font-semibold text-gray-900">
-                  {booking.flight_time != null ? `${booking.flight_time}h` : '—'}
+                  {booking.flight_logs?.[0]?.flight_time != null ? `${booking.flight_logs[0].flight_time}h` : '—'}
                 </div>
               </div>
               <div className="text-center">
@@ -227,51 +261,51 @@ export default async function DebriefViewPage({ params }: { params: Promise<{ id
               <ListChecks className="w-5 h-5 text-violet-600" />
               <h2 className="text-xl font-bold text-gray-900">Lesson Assessment</h2>
             </div>
-                         <div className="space-y-8">
-                               {/* Lesson Highlights */}
-                <div>
-                  <h3 className="text-base font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                    <Star className="w-4 h-4" />
-                    Lesson Highlights
-                  </h3>
-                  <div className="text-base text-gray-900 whitespace-pre-line leading-relaxed">
-                    {lessonProgress?.lesson_highlights || 'No highlights recorded.'}
-                  </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Lesson Highlights */}
+              <div>
+                <h3 className="text-base font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                  <Star className="w-4 h-4" />
+                  Lesson Highlights
+                </h3>
+                <div className="text-base text-gray-900 whitespace-pre-line leading-relaxed">
+                  {lessonProgress?.lesson_highlights || 'No highlights recorded.'}
                 </div>
+              </div>
 
-                               {/* General Airmanship */}
-                <div>
-                  <h3 className="text-base font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                    <Navigation className="w-4 h-4" />
-                    General Airmanship
-                  </h3>
-                  <div className="text-base text-gray-900 whitespace-pre-line leading-relaxed">
-                    {lessonProgress?.airmanship || 'No airmanship notes recorded.'}
-                  </div>
+              {/* General Airmanship */}
+              <div>
+                <h3 className="text-base font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                  <Navigation className="w-4 h-4" />
+                  General Airmanship
+                </h3>
+                <div className="text-base text-gray-900 whitespace-pre-line leading-relaxed">
+                  {lessonProgress?.airmanship || 'No airmanship notes recorded.'}
                 </div>
+              </div>
 
-                               {/* Student Strengths & Areas for Improvement */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <h3 className="text-base font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4" />
-                      Student Strengths
-                    </h3>
-                    <div className="text-base text-gray-900 whitespace-pre-line leading-relaxed">
-                      {lessonProgress?.focus_next_lesson || 'No strengths recorded.'}
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="text-base font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                      <Target className="w-4 h-4" />
-                      Areas for Improvement
-                    </h3>
-                    <div className="text-base text-gray-900 whitespace-pre-line leading-relaxed">
-                      {lessonProgress?.areas_for_improvement || 'No areas for improvement recorded.'}
-                    </div>
-                  </div>
+              {/* Student Strengths */}
+              <div>
+                <h3 className="text-base font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  Student Strengths
+                </h3>
+                <div className="text-base text-gray-900 whitespace-pre-line leading-relaxed">
+                  {lessonProgress?.focus_next_lesson || 'No strengths recorded.'}
                 </div>
-             </div>
+              </div>
+
+              {/* Areas for Improvement */}
+              <div>
+                <h3 className="text-base font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                  <Target className="w-4 h-4" />
+                  Areas for Improvement
+                </h3>
+                <div className="text-base text-gray-900 whitespace-pre-line leading-relaxed">
+                  {lessonProgress?.areas_for_improvement || 'No areas for improvement recorded.'}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Flight Details */}
@@ -312,6 +346,20 @@ export default async function DebriefViewPage({ params }: { params: Promise<{ id
                {lessonProgress?.focus_next_lesson || 'No next steps recorded.'}
              </div>
           </div>
+
+          {/* Flight Experience Section */}
+          {lessonProgress && (
+            <div className="bg-white rounded-2xl shadow-sm border p-6">
+              <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
+                <Clock className="w-5 h-5 text-orange-600" />
+                <h2 className="text-xl font-bold text-gray-900">Flight Experience</h2>
+              </div>
+              <FlightExperienceDisplay
+                flightExperiences={flightExperiences}
+                experienceTypes={experienceTypes}
+              />
+            </div>
+          )}
         </div>
 
         {/* Print Footer */}

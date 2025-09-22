@@ -26,7 +26,24 @@ export async function GET(req: NextRequest) {
         *,
         user:user_id(id, first_name, last_name, email),
         instructor:instructor_id(*),
-        aircraft:aircraft_id(id, registration, type)
+        aircraft:aircraft_id(id, registration, type),
+        authorization_override,
+        authorization_override_by,
+        authorization_override_at,
+        authorization_override_reason,
+        flight_logs(
+          *,
+          checked_out_aircraft:checked_out_aircraft_id(id, registration, type),
+          checked_out_instructor:checked_out_instructor_id(
+            *,
+            users:users!instructors_user_id_fkey(
+              id,
+              first_name,
+              last_name,
+              email
+            )
+          )
+        )
       `);
 
     if (bookingId) {
@@ -84,6 +101,23 @@ export async function POST(req: NextRequest) {
     }, { status: 409 });
   }
 
+  // Check instructor type rating if instructor is assigned
+  if (body.instructor_id && body.aircraft_id) {
+    try {
+      const { verifyInstructorTypeRating } = await import("@/lib/instructor-type-rating-validation");
+      const validation = await verifyInstructorTypeRating(supabase, body.instructor_id, body.aircraft_id);
+      
+      if (!validation.valid) {
+        return NextResponse.json({ 
+          error: `Type rating validation failed: ${validation.message}` 
+        }, { status: 409 });
+      }
+    } catch (typeRatingError) {
+      console.error("Type rating validation error:", typeRatingError);
+      // Don't block booking creation if validation service fails, just log the error
+    }
+  }
+
   // Compose insert payload
   const insertPayload: Record<string, unknown> = {
     aircraft_id: body.aircraft_id,
@@ -98,8 +132,7 @@ export async function POST(req: NextRequest) {
     lesson_id: body.lesson_id || null,
     flight_type_id: body.flight_type_id || null,
     status: body.status || "unconfirmed",
-    cancellation_reason: body.cancellation_reason || null,
-    cancellation_category_id: body.cancellation_category_id || null,
+
   };
   const { data, error } = await supabase
     .from("bookings")
@@ -208,16 +241,12 @@ export async function PATCH(req: NextRequest) {
   // Only allow patching safe fields
   const allowedFields = [
     "start_time", "end_time", "purpose", "remarks", "instructor_id", "user_id", "aircraft_id", "lesson_id", "flight_type_id", "booking_type", "status",
-    "checked_out_aircraft_id", "checked_out_instructor_id", // <-- allow these fields
-    // Add meter fields for patching
-    "hobbs_start", "hobbs_end", "tach_start", "tach_end",
-    // Add cancellation fields
-    "cancellation_reason", "cancellation_category_id"
+    // Note: checked_out_aircraft_id, checked_out_instructor_id, and meter readings are now in flight_logs table only
   ];
   const updates: Record<string, unknown> = {};
   
   // UUID fields that should be converted from empty strings to null
-  const uuidFields = ["instructor_id", "user_id", "aircraft_id", "lesson_id", "flight_type_id", "checked_out_aircraft_id", "checked_out_instructor_id", "cancellation_category_id"];
+  const uuidFields = ["instructor_id", "user_id", "aircraft_id", "lesson_id", "flight_type_id"];
   
   for (const key of allowedFields) {
     if (key in updateFields) {
@@ -264,12 +293,45 @@ export async function PATCH(req: NextRequest) {
         error: conflictError instanceof Error ? conflictError.message : "Resource conflict detected" 
       }, { status: 409 });
     }
+
+    // Check instructor type rating if instructor or aircraft is being updated
+    if (updates.instructor_id || updates.aircraft_id) {
+      try {
+        // Get current booking data to fill in missing values
+        const { data: currentBooking, error: currentError } = await supabase
+          .from("bookings")
+          .select("aircraft_id, instructor_id")
+          .eq("id", id)
+          .single();
+        
+        if (currentError) {
+          return NextResponse.json({ error: currentError.message }, { status: 404 });
+        }
+
+        const instructorId = updates.instructor_id || currentBooking.instructor_id;
+        const aircraftId = updates.aircraft_id || currentBooking.aircraft_id;
+
+        if (instructorId && aircraftId) {
+          const { verifyInstructorTypeRating } = await import("@/lib/instructor-type-rating-validation");
+          const validation = await verifyInstructorTypeRating(supabase, instructorId, aircraftId);
+          
+          if (!validation.valid) {
+            return NextResponse.json({ 
+              error: `Type rating validation failed: ${validation.message}` 
+            }, { status: 409 });
+          }
+        }
+      } catch (typeRatingError) {
+        console.error("Type rating validation error:", typeRatingError);
+        // Don't block booking update if validation service fails, just log the error
+      }
+    }
   }
   
   // First, get the existing booking to check for status changes
   const { data: existingBooking, error: existingError } = await supabase
     .from("bookings")
-    .select("status, checked_out_aircraft_id, hobbs_start, hobbs_end, tach_start, tach_end")
+    .select("status")
     .eq("id", id)
     .single();
   
@@ -302,15 +364,22 @@ export async function PATCH(req: NextRequest) {
   }
 
   // Handle aircraft updates for booking completion or meter corrections
-  if (existingBooking.checked_out_aircraft_id) {
+  // First, check if there's a flight_log with checked_out_aircraft_id
+  const { data: flightLog } = await supabase
+    .from("flight_logs")
+    .select("checked_out_aircraft_id, hobbs_start, hobbs_end, tach_start, tach_end")
+    .eq("booking_id", id)
+    .single();
+    
+  if (flightLog?.checked_out_aircraft_id) {
     try {
       // Case 1: Booking being set to 'complete' for the first time
       if (updates.status === 'complete' && existingBooking.status !== 'complete') {
-        await updateAircraftOnBookingCompletion(supabase, existingBooking, updates);
+        await updateAircraftOnBookingCompletion(supabase, { ...existingBooking, ...flightLog }, updates);
       }
       // Case 2: Booking is already 'complete' and meter readings are being corrected
-      else if (existingBooking.status === 'complete' && isMeterCorrection(existingBooking, updates)) {
-        await handleMeterCorrection(supabase, id, existingBooking, updates, user.id);
+      else if (existingBooking.status === 'complete' && isMeterCorrection({ ...existingBooking, ...flightLog }, updates)) {
+        await handleMeterCorrection(supabase, id, { ...existingBooking, ...flightLog }, updates, user.id);
       }
     } catch (aircraftError) {
       console.error('Failed to update aircraft:', aircraftError);
@@ -412,12 +481,13 @@ export async function PATCH(req: NextRequest) {
 }
 
 // Type for booking data with the fields used in aircraft updates
+// Note: checked_out_aircraft_id and meter readings are now in flight_logs table
 type BookingForAircraftUpdate = {
-  checked_out_aircraft_id: string;
-  hobbs_start: number | null;
-  hobbs_end: number | null;
-  tach_start: number | null;
-  tach_end: number | null;
+  checked_out_aircraft_id: string; // This comes from flight_logs now
+  hobbs_start: number | null; // This comes from flight_logs now
+  hobbs_end: number | null; // This comes from flight_logs now
+  tach_start: number | null; // This comes from flight_logs now
+  tach_end: number | null; // This comes from flight_logs now
   status: string;
 };
 

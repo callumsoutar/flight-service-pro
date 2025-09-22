@@ -1,12 +1,13 @@
 "use client";
-import { Plane, CalendarIcon, UserIcon, BadgeCheck, ClipboardList as ClipboardListIcon, StickyNote, AlignLeft, ClipboardList, BookOpen, Loader2, Clock } from "lucide-react";
+import { Plane, CalendarIcon, UserIcon, BadgeCheck, ClipboardList as ClipboardListIcon, StickyNote, AlignLeft, ClipboardList, BookOpen, Loader2, Clock, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import React from "react";
+import { Switch } from "@/components/ui/switch";
+import React, { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { format, parseISO } from "date-fns";
 import { Booking } from "@/types/bookings";
-import { BookingDetails } from "@/types/booking_details";
+import { FlightLog } from "@/types/flight_logs";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Calendar } from "@/components/ui/calendar";
@@ -15,18 +16,33 @@ import { useRouter } from "next/navigation";
 import MemberSelect, { UserResult } from "@/components/invoices/MemberSelect";
 import InstructorSelect from "@/components/invoices/InstructorSelect";
 import { useCheckOutSave, useAircraftMeters, useInstructorValue } from "@/hooks/use-checkout";
+import { useQueryClient } from "@tanstack/react-query";
+import { useFlightAuthorizationByBooking } from '@/hooks/use-flight-authorization';
+import { useCanOverrideAuthorization } from '@/hooks/use-can-override-authorization';
+import { useOverrideAuthorization } from '@/hooks/use-authorization-override';
+import OverrideConfirmDialog from './OverrideConfirmDialog';
+import AuthorizationErrorDialog from './AuthorizationErrorDialog';
 
 
 
-// Type for booking details data (matches CheckOutParams.bookingDetailsData)
-type BookingDetailsData = {
+// Type for flight log data (matches CheckOutParams.flightLogData)
+type FlightLogData = {
   id?: string;
   eta?: string | null;
   fuel_on_board?: number;
   passengers?: string;
   route?: string;
-  remarks?: string;
+  flight_remarks?: string;
   booking_id: string;
+  checked_out_aircraft_id?: string;
+  checked_out_instructor_id?: string;
+  hobbs_start?: number;
+  hobbs_end?: number;
+  tach_start?: number;
+  tach_end?: number;
+  flight_time?: number;
+  briefing_completed?: boolean;
+  authorization_completed?: boolean;
 };
 
 // Helper to generate 30-min interval times
@@ -55,6 +71,7 @@ interface CheckOutFormData {
   passengers: string;
   route: string;
   remarks_flight_out: string;
+  briefing_completed: boolean;
 }
 
 interface CheckOutFormProps {
@@ -64,7 +81,7 @@ interface CheckOutFormProps {
   aircraft: { id: string; registration: string; type: string }[];
   lessons: { id: string; name: string }[];
   flightTypes: { id: string; name: string }[];
-  bookingDetails: BookingDetails | null;
+  flightLog: FlightLog | null;
 }
 
 // Helper to combine date and time strings into a UTC ISO string
@@ -94,17 +111,25 @@ function formatEndurance(endurance: { hours: number; minutes: number } | null): 
   return `${endurance.hours}h ${endurance.minutes.toString().padStart(2, '0')}m`;
 }
 
-export default function CheckOutForm({ booking, members, instructors, aircraft, lessons, flightTypes, bookingDetails }: CheckOutFormProps) {
+export default function CheckOutForm({ booking, members, instructors, aircraft, lessons, flightTypes, flightLog }: CheckOutFormProps) {
   // Check if booking is read-only (completed bookings cannot be edited)
   const isReadOnly = booking.status === 'complete';
+  
+  // Authorization override state and hooks
+  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
+  const [authErrorDialogOpen, setAuthErrorDialogOpen] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<CheckOutFormData | null>(null);
+  const { data: canOverride = false } = useCanOverrideAuthorization();
+  const { data: authorization } = useFlightAuthorizationByBooking(booking.id);
+  const overrideMutation = useOverrideAuthorization();
   
   // Parse eta into date and time for default values
   // Default to booking end time if no existing ETA, otherwise use existing ETA
   let etaDateDefault = "";
   let etaTimeDefault = "";
-  if (bookingDetails?.eta) {
+  if (flightLog?.eta) {
     try {
-      const etaDateObj = parseISO(bookingDetails.eta);
+      const etaDateObj = parseISO(flightLog.eta);
       etaDateDefault = format(etaDateObj, "yyyy-MM-dd");
       etaTimeDefault = format(etaDateObj, "HH:mm");
     } catch {}
@@ -116,9 +141,9 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
       etaTimeDefault = format(endDateObj, "HH:mm");
     } catch {}
   }
-  const checkedOutAircraftDefault = booking?.checked_out_aircraft_id || booking?.aircraft_id || "";
+  const checkedOutAircraftDefault = flightLog?.checked_out_aircraft_id || booking?.aircraft_id || "";
   // Proper fallback logic: checked_out_instructor_id first, then instructor_id, then empty
-  const checkedOutInstructorDefault = booking?.checked_out_instructor_id || booking?.instructor_id || "";
+  const checkedOutInstructorDefault = flightLog?.checked_out_instructor_id || booking?.instructor_id || "";
   
   const { control, handleSubmit, watch } = useForm<CheckOutFormData>({
     defaultValues: {
@@ -136,10 +161,11 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
       checked_out_instructor_id: checkedOutInstructorDefault,
       eta_date: etaDateDefault,
       eta_time: etaTimeDefault,
-      fuel_on_board: bookingDetails?.fuel_on_board?.toString() || "",
-      passengers: bookingDetails?.passengers || "",
-      route: bookingDetails?.route || "",
-      remarks_flight_out: bookingDetails?.remarks || "",
+      fuel_on_board: flightLog?.fuel_on_board?.toString() || "",
+      passengers: flightLog?.passengers || "",
+      route: flightLog?.route || "",
+      remarks_flight_out: flightLog?.flight_remarks || "",
+      briefing_completed: flightLog?.briefing_completed ?? false,
     },
   });
 
@@ -166,27 +192,70 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
     } : null
   );
   
-  // Use optimized mutation for save operations
-  const { mutate: saveCheckOut, isPending: saving } = useCheckOutSave();
+  // Use optimized mutation for save operations with comprehensive refresh
+  const queryClient = useQueryClient();
+  const { mutate: saveCheckOut, isPending: saving } = useCheckOutSave({
+    onSuccess: () => {
+      // Invalidate booking-related queries to ensure fresh data
+      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['flight-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['flight-authorizations'] });
+      
+      // Refresh the page to show updated status (confirmed → flying)
+      router.refresh();
+    }
+  });
 
   // Calculate endurance based on fuel on board and aircraft fuel consumption
   const fuelOnBoard = watchedFuelOnBoard ? parseInt(watchedFuelOnBoard, 10) : 0;
   const fuelConsumption = selectedAircraftMeters?.fuel_consumption || null;
   const endurance = fuelOnBoard && fuelConsumption ? calculateEndurance(fuelOnBoard, fuelConsumption) : null;
 
+  // Check if this is a solo flight requiring authorization
+  const isSoloFlight = Boolean(
+    booking.flight_type && 
+    booking.flight_type.instruction_type === 'solo' && 
+    !booking.instructor_id
+  );
+  
+  // Check if authorization requirements are met
+  const authorizationApproved = authorization?.status === 'approved';
+  const authorizationOverridden = booking.authorization_override === true;
+  const authorizationRequirementsMet = !isSoloFlight || authorizationApproved || authorizationOverridden;
+
 
 
   const onSubmit = async (data: CheckOutFormData) => {
+    // Check authorization requirements for solo flights
+    if (!authorizationRequirementsMet) {
+      // Store pending form data and show appropriate dialog
+      setPendingFormData(data);
+      
+      if (canOverride) {
+        // Show override dialog for instructors/admins (preferred dialog)
+        setOverrideDialogOpen(true);
+      } else {
+        // Show authorization dialog for students/others (still allows override)
+        setAuthErrorDialogOpen(true);
+      }
+      return;
+    }
+
+    // Proceed with normal check-out
+    await performCheckOut(data);
+  };
+
+  const performCheckOut = async (data: CheckOutFormData) => {
     // Use robust UTC ISO string logic for start_time and end_time
     const start_time = getUtcIsoString(data.start_date, data.start_time);
     const end_time = getUtcIsoString(data.end_date, data.end_time);
     
-    // Prepare booking data
+    // Prepare booking data (only general booking fields, not checked_out fields)
     const bookingData: Record<string, unknown> = {};
     
     // Only include fields that have valid values (empty strings will be sanitized in the hook)
-    if (data.checked_out_aircraft_id) bookingData.checked_out_aircraft_id = data.checked_out_aircraft_id;
-    if (data.checked_out_instructor_id) bookingData.checked_out_instructor_id = data.checked_out_instructor_id;
+    // Note: checked_out_aircraft_id and checked_out_instructor_id are now in flight_logs table only
     if (start_time) bookingData.start_time = start_time;
     if (end_time) bookingData.end_time = end_time;
     if (data.member) bookingData.user_id = data.member;
@@ -199,42 +268,77 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
     // Always set status to 'flying' if not already
     bookingData.status = booking.status !== 'flying' ? 'flying' : booking.status;
     
-    // Include aircraft meter readings as start values
-    if (selectedAircraftMeters?.current_hobbs != null) {
-      bookingData.hobbs_start = Number(selectedAircraftMeters.current_hobbs);
-    }
-    if (selectedAircraftMeters?.current_tach != null) {
-      bookingData.tach_start = Number(selectedAircraftMeters.current_tach);
-    }
-    
-    // Prepare booking details data
-    const bookingDetailsData: BookingDetailsData = {
+    // Prepare flight log data
+    const flightLogData: FlightLogData = {
       booking_id: booking.id,
     };
     
-    if (bookingDetails?.id) {
-      bookingDetailsData.id = bookingDetails.id;
+    if (flightLog?.id) {
+      flightLogData.id = flightLog.id;
     }
     
     const etaIso = getUtcIsoString(data.eta_date, data.eta_time);
-    if (etaIso) bookingDetailsData.eta = etaIso;
+    if (etaIso) flightLogData.eta = etaIso;
     if (data.fuel_on_board && data.fuel_on_board.trim() !== '') {
       const fuelValue = parseInt(data.fuel_on_board, 10);
-      if (!isNaN(fuelValue)) bookingDetailsData.fuel_on_board = fuelValue;
+      if (!isNaN(fuelValue)) flightLogData.fuel_on_board = fuelValue;
     }
-    if (data.passengers && data.passengers.trim() !== '') bookingDetailsData.passengers = data.passengers;
-    if (data.route && data.route.trim() !== '') bookingDetailsData.route = data.route;
-    if (data.remarks_flight_out && data.remarks_flight_out.trim() !== '') bookingDetailsData.remarks = data.remarks_flight_out;
+    if (data.passengers && data.passengers.trim() !== '') flightLogData.passengers = data.passengers;
+    if (data.route && data.route.trim() !== '') flightLogData.route = data.route;
+    if (data.remarks_flight_out && data.remarks_flight_out.trim() !== '') flightLogData.flight_remarks = data.remarks_flight_out;
+    
+    // Add briefing completion status
+    flightLogData.briefing_completed = data.briefing_completed;
+    
+    // Add aircraft and instructor data
+    if (data.checked_out_aircraft_id) flightLogData.checked_out_aircraft_id = data.checked_out_aircraft_id;
+    if (data.checked_out_instructor_id) flightLogData.checked_out_instructor_id = data.checked_out_instructor_id;
+    
+    // Add meter readings
+    if (selectedAircraftMeters?.current_hobbs != null) {
+      flightLogData.hobbs_start = Number(selectedAircraftMeters.current_hobbs);
+    }
+    if (selectedAircraftMeters?.current_tach != null) {
+      flightLogData.tach_start = Number(selectedAircraftMeters.current_tach);
+    }
     
     // Save using optimized mutation
     saveCheckOut({
       bookingId: booking.id,
       bookingData,
-      bookingDetailsData: Object.keys(bookingDetailsData).length > 1 ? bookingDetailsData : undefined,
+      flightLogData: Object.keys(flightLogData).length > 1 ? flightLogData : undefined,
     });
-    
-    // Refresh the page after successful save (handled by mutation onSuccess)
-    router.refresh();
+  };
+
+  // Handle override confirmation (shared by both dialogs)
+  const handleOverrideConfirm = async () => {
+    if (!pendingFormData) return;
+
+    try {
+      // Apply override with automatic reason
+      await overrideMutation.mutateAsync({ 
+        bookingId: booking.id, 
+        reason: 'Manual override during check-out' 
+      });
+      
+      // Close both dialogs and proceed with check-out
+      setOverrideDialogOpen(false);
+      setAuthErrorDialogOpen(false);
+      setPendingFormData(null);
+      
+      // Proceed with the original form submission
+      await performCheckOut(pendingFormData);
+    } catch (error) {
+      console.error('Failed to override authorization:', error);
+      // Error handling could be improved with a proper error dialog, but for now just log
+    }
+  };
+
+  // Handle override dialog close
+  const handleOverrideCancel = () => {
+    setOverrideDialogOpen(false);
+    setAuthErrorDialogOpen(false);
+    setPendingFormData(null);
   };
 
   // Helper to find UserResult for a given member id
@@ -527,11 +631,11 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
               )} />
             </div>
           </div>
-          {/* Remarks & Purpose */}
+          {/* Description & Remarks */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
-              <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><StickyNote className="w-4 h-4" /> Booking Remarks</label>
-              <Controller name="remarks" control={control} render={({ field }) => (
+              <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><AlignLeft className="w-4 h-4" /> Description</label>
+              <Controller name="purpose" control={control} render={({ field }) => (
                 <textarea
                   {...field}
                   disabled={isReadOnly}
@@ -541,8 +645,8 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
               )} />
             </div>
             <div>
-              <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><AlignLeft className="w-4 h-4" /> Description</label>
-              <Controller name="purpose" control={control} render={({ field }) => (
+              <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><StickyNote className="w-4 h-4" /> Booking Remarks</label>
+              <Controller name="remarks" control={control} render={({ field }) => (
                 <textarea
                   {...field}
                   disabled={isReadOnly}
@@ -686,7 +790,7 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
           />
         </div>
         {/* Remarks (Flight Out) */}
-        <div className="mb-2">
+        <div className="mb-4">
           <label className="block text-xs font-semibold mb-2">REMARKS (FLIGHT OUT)</label>
           <Controller
             name="remarks_flight_out"
@@ -698,6 +802,29 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
                 disabled={isReadOnly}
                 className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
               />
+            )}
+          />
+        </div>
+        {/* Briefing Completed */}
+        <div className="mb-2">
+          <label className="block text-xs font-semibold mb-2 flex items-center gap-1">
+            <CheckCircle className="w-4 h-4" /> BRIEFING COMPLETED
+          </label>
+          <Controller
+            name="briefing_completed"
+            control={control}
+            render={({ field }) => (
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="briefing-completed"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  disabled={isReadOnly}
+                />
+                <label htmlFor="briefing-completed" className="text-sm font-medium">
+                  {field.value ? "Completed" : "Not Completed"}
+                </label>
+              </div>
             )}
           />
         </div>
@@ -717,6 +844,22 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
           </form>
         )}
       </div>
+      
+      {/* Override confirmation dialog */}
+      <OverrideConfirmDialog
+        isOpen={overrideDialogOpen}
+        onClose={handleOverrideCancel}
+        onConfirm={handleOverrideConfirm}
+        isLoading={overrideMutation.isPending}
+      />
+
+      {/* Authorization error dialog for students */}
+      <AuthorizationErrorDialog
+        isOpen={authErrorDialogOpen}
+        onClose={() => setAuthErrorDialogOpen(false)}
+        onOverride={handleOverrideConfirm}
+        isLoading={overrideMutation.isPending}
+      />
     </div>
   );
 } 

@@ -23,6 +23,8 @@ interface CheckInDetailsProps {
     hobbsEnd?: number;
     tachStart?: number;
     tachEnd?: number;
+    flightTimeHobbs: number;
+    flightTimeTach: number;
   }) => void;
   // Use booking start values (from check-out) instead of aircraft current values
   bookingStartHobbs?: number | null;
@@ -33,6 +35,13 @@ interface CheckInDetailsProps {
     endHobbs: string;
     endTacho: string;
   }) => void;
+  // Add joined instructor data from flight log
+  checkedOutInstructor?: {
+    id: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
+  } | null;
 }
 
 export default function CheckInDetails({ 
@@ -47,7 +56,8 @@ export default function CheckInDetails({
   bookingStartTacho, 
   initialEndHobbs, 
   initialEndTacho, 
-  onFormValuesChange 
+  onFormValuesChange,
+  checkedOutInstructor
 }: CheckInDetailsProps) {
   // Start values: ONLY from booking start values (from check-out)
   const [startHobbs, setStartHobbs] = useState<string>("");
@@ -85,6 +95,29 @@ export default function CheckInDetails({
   useEffect(() => {
     setEndTacho(initialEndTacho !== undefined && initialEndTacho !== null ? String(initialEndTacho) : "");
   }, [initialEndTacho]);
+
+  // Create comprehensive instructors list that includes checked-out instructor
+  const allInstructors = useMemo(() => {
+    const instructorMap = new Map<string, { id: string; name: string }>();
+    
+    // Add all instructors from the props
+    instructors.forEach(inst => {
+      instructorMap.set(inst.id, inst);
+    });
+    
+    // Add checked-out instructor if it exists and is not already in the list
+    if (checkedOutInstructor && !instructorMap.has(checkedOutInstructor.id)) {
+      const fullName = `${checkedOutInstructor.first_name || ""} ${checkedOutInstructor.last_name || ""}`.trim();
+      const displayName = fullName || checkedOutInstructor.email || "Unknown Instructor";
+      instructorMap.set(checkedOutInstructor.id, {
+        id: checkedOutInstructor.id,
+        name: displayName
+      });
+    }
+    
+    
+    return Array.from(instructorMap.values());
+  }, [instructors, checkedOutInstructor]);
 
   // Initialize selected values
   useEffect(() => {
@@ -209,6 +242,8 @@ export default function CheckInDetails({
         hobbsEnd,
         tachStart,
         tachEnd,
+        flightTimeHobbs: parseFloat(hobbsTotal),
+        flightTimeTach: parseFloat(tachoTotal),
       });
     }
   }, [
@@ -294,12 +329,12 @@ export default function CheckInDetails({
               <SelectValue placeholder="Select instructor" />
             </SelectTrigger>
             <SelectContent>
-              {instructors.length === 0 && (
+              {allInstructors.length === 0 && (
                 <SelectItem value="placeholder" disabled>
                   --
                 </SelectItem>
               )}
-              {instructors.map((inst) => (
+              {allInstructors.map((inst) => (
                 <SelectItem key={inst.id} value={inst.id}>{inst.name}</SelectItem>
               ))}
             </SelectContent>

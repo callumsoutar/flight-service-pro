@@ -12,6 +12,14 @@ import type { Lesson } from "@/types/lessons";
 import type { Booking } from "@/types/bookings";
 import type { LessonProgress } from "@/types/lesson_progress";
 import type { Invoice } from "@/types/invoices";
+import FlightExperienceSection from "@/components/debrief/FlightExperienceSection";
+
+interface ExperienceFormData {
+  experience_type_id: string;
+  duration_hours: number;
+  notes?: string;
+  conditions?: string;
+}
 
 export interface DebriefFormClientHandle {
   saveAllFormData: () => Promise<void>;
@@ -25,6 +33,9 @@ interface DebriefFormClientProps {
 
 const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientProps>(
   function DebriefFormClient({ booking, member }, ref) {
+    // Get flight log data (should be the first/only flight log for this booking)
+    const flightLog = booking.flight_logs?.[0];
+    
     // State for aircraft and lesson
     const [aircraft, setAircraft] = useState<Aircraft | null>(null);
     const [aircraftLoading, setAircraftLoading] = useState(false);
@@ -48,14 +59,17 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
     const [flightHoursLogged, setFlightHoursLogged] = useState("");
     const [weatherConditions, setWeatherConditions] = useState("");
     const [safetyObservations, setSafetyObservations] = useState("");
+    
+    // State for flight experiences
+    const [flightExperiences, setFlightExperiences] = useState<ExperienceFormData[]>([]);
 
-    // Fetch aircraft by checked_out_aircraft_id
+    // Fetch aircraft by checked_out_aircraft_id from flight_log
     useEffect(() => {
       const fetchAircraft = async () => {
-        if (!booking?.checked_out_aircraft_id) return;
+        if (!flightLog?.checked_out_aircraft_id) return;
         setAircraftLoading(true);
         try {
-          const res = await fetch(`/api/aircraft?id=${booking.checked_out_aircraft_id}`);
+          const res = await fetch(`/api/aircraft?id=${flightLog.checked_out_aircraft_id}`);
           const data = await res.json();
           setAircraft(data.aircraft || null);
         } catch {
@@ -65,7 +79,7 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
         }
       };
       fetchAircraft();
-    }, [booking?.checked_out_aircraft_id]);
+    }, [flightLog?.checked_out_aircraft_id]);
 
     // Fetch lesson by lesson_id
     useEffect(() => {
@@ -192,6 +206,37 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
           if (res.ok) {
             const newProgress = await res.json();
             setLessonProgress(newProgress.data);
+            
+            // Create flight experience records if any exist
+            if (flightExperiences.length > 0) {
+              try {
+                const experiencePromises = flightExperiences.map(experience =>
+                  fetch('/api/flight-experience', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      lesson_progress_id: newProgress.data.id,
+                      booking_id: booking.id,
+                      user_id: booking.user_id,
+                      instructor_id: booking.instructor_id,
+                      experience_type_id: experience.experience_type_id,
+                      duration_hours: experience.duration_hours,
+                      notes: experience.notes || null,
+                      conditions: experience.conditions || null,
+                    }),
+                  })
+                );
+                
+                await Promise.all(experiencePromises);
+                setFlightExperiences([]); // Clear local experiences
+              } catch (error) {
+                console.error('Failed to save flight experiences:', error);
+                toast.error('Debrief saved but failed to save some flight experiences');
+              }
+            }
+            
             toast.success('Debrief saved successfully!');
           } else {
             const errorData = await res.json();
@@ -229,6 +274,37 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
         if (res.ok) {
           const updatedProgress = await res.json();
           setLessonProgress(updatedProgress.data);
+          
+          // Create flight experience records if any exist (for existing lesson progress)
+          if (flightExperiences.length > 0) {
+            try {
+              const experiencePromises = flightExperiences.map(experience =>
+                fetch('/api/flight-experience', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    lesson_progress_id: lessonProgress.id,
+                    booking_id: booking.id,
+                    user_id: booking.user_id,
+                    instructor_id: booking.instructor_id,
+                    experience_type_id: experience.experience_type_id,
+                    duration_hours: experience.duration_hours,
+                    notes: experience.notes || null,
+                    conditions: experience.conditions || null,
+                  }),
+                })
+              );
+              
+              await Promise.all(experiencePromises);
+              setFlightExperiences([]); // Clear local experiences
+            } catch (error) {
+              console.error('Failed to save flight experiences:', error);
+              toast.error('Debrief updated but failed to save some flight experiences');
+            }
+          }
+          
           toast.success('Debrief updated successfully!');
         } else {
           const errorData = await res.json();
@@ -388,7 +464,7 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
                   )}
                   {/* Duration */}
                   <div className="text-xs text-muted-foreground mt-2">Duration</div>
-                  <div className="font-medium">{booking.flight_time !== null && booking.flight_time !== undefined ? `${booking.flight_time} hours` : "-"}</div>
+                  <div className="font-medium">{flightLog?.flight_time !== null && flightLog?.flight_time !== undefined ? `${flightLog.flight_time} hours` : "-"}</div>
                   {/* Lesson */}
                   <div className="text-xs text-muted-foreground mt-2">Lesson</div>
                   {lessonLoading ? (
@@ -428,6 +504,15 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
               />
             </CardContent>
           </Card>
+          
+          {/* Flight Experience Section */}
+          <FlightExperienceSection
+            lessonProgressId={lessonProgress?.id}
+            bookingId={booking.id}
+            userId={booking.user_id || undefined}
+            instructorId={booking.instructor_id || undefined}
+            onFlightExperienceChange={setFlightExperiences}
+          />
         </div>
       </div>
     );

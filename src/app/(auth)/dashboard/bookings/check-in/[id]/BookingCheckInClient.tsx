@@ -25,12 +25,18 @@ interface BookingCheckInClientProps {
 export default function BookingCheckInClient({ booking, instructors }: BookingCheckInClientProps) {
   const router = useRouter();
   
+  // Get flight log data (should be the first/only flight log for this booking)
+  const flightLog = booking.flight_logs?.[0];
+  
+  
   // Custom hooks for optimized data management
   const { data: invoice, isLoading: invoiceLoading } = useInvoiceData(booking.id);
   const { data: invoiceItems = [] } = useInvoiceItems(invoice?.id || null);
   const { isLoading: flightTypesLoading } = useFlightTypes();
-  const { data: aircraft } = useAircraftData(booking.checked_out_aircraft_id);
-  const { data: instructorRate, isLoading: instructorRateLoading } = useInstructorRate(booking.instructor_id, booking.flight_type_id);
+  // Use checked_out_aircraft_id from flight_log instead of booking
+  const { data: aircraft } = useAircraftData(flightLog?.checked_out_aircraft_id || null);
+  // Use checked_out_instructor_id from flight_log instead of booking instructor_id
+  const { data: instructorRate, isLoading: instructorRateLoading } = useInstructorRate(flightLog?.checked_out_instructor_id || null, booking.flight_type_id);
   
   // Check-in operations
   const {
@@ -71,6 +77,8 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
     hobbsEnd?: number;
     tachStart?: number;
     tachEnd?: number;
+    flightTimeHobbs: number;
+    flightTimeTach: number;
   }): Promise<void> => {
     // Prevent calculation if instructor rate is loading or missing
     if (instructorRateLoading) {
@@ -96,6 +104,8 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
       hobbsEnd: details.hobbsEnd,
       tachStart: details.tachStart,
       tachEnd: details.tachEnd,
+      flightTimeHobbs: details.flightTimeHobbs,
+      flightTimeTach: details.flightTimeTach,
     });
   }, [booking.id, instructorRate, instructorRateLoading, calculateCharges, resetCalculate]);
 
@@ -219,17 +229,18 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
             </div>
           )}
           <CheckInDetails 
-            aircraftId={booking?.checked_out_aircraft_id || undefined}
+            aircraftId={flightLog?.checked_out_aircraft_id || undefined}
             selectedFlightTypeId={booking?.flight_type_id}
-            instructorId={booking?.instructor_id}
+            instructorId={flightLog?.checked_out_instructor_id || undefined}
             instructors={instructors}
             instructorRate={instructorRate ? { rate: Number(instructorRate.rate), currency: instructorRate.currency } : undefined}
             instructorRateLoading={instructorRateLoading}
             onCalculateCharges={handleCalculateCharges}
-            bookingStartHobbs={booking?.hobbs_start}
-            bookingStartTacho={booking?.tach_start}
-            initialEndHobbs={booking?.hobbs_end}
-            initialEndTacho={booking?.tach_end}
+            bookingStartHobbs={flightLog?.hobbs_start}
+            bookingStartTacho={flightLog?.tach_start}
+            initialEndHobbs={flightLog?.hobbs_end}
+            initialEndTacho={flightLog?.tach_end}
+            checkedOutInstructor={flightLog?.checked_out_instructor}
           />
         </div>
       </div>
@@ -304,9 +315,9 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
             <div className="text-muted-foreground">No invoice yet. Click Calculate Flight Charges.</div>
           )}
           {/* Show current flight time */}
-          {booking.flight_time !== undefined && booking.flight_time !== null && (
+          {flightLog?.flight_time !== undefined && flightLog?.flight_time !== null && (
             <div className="mb-2 text-sm text-muted-foreground">
-              <span className="font-semibold">Flight Time (charged):</span> {booking.flight_time} hours
+              <span className="font-semibold">Flight Time (charged):</span> {flightLog.flight_time} hours
             </div>
           )}
           {/* Add Extra Charges directly below the table */}
@@ -398,7 +409,7 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
               type="button"
             >
               {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              Confirm and Save
+              Save and Confirm
             </button>
           </div>
         </div>
@@ -407,7 +418,7 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
       {/* Success Modal with Debrief Option */}
       {showSuccessModal && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-10 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+          <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
@@ -448,10 +459,17 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
                   Start Debrief
                 </button>
                 <button
-                  onClick={() => setShowSuccessModal(false)}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg transition-colors"
+                  onClick={() => {
+                    if (displayInvoice?.id) {
+                      router.push(`/dashboard/invoices/view/${displayInvoice.id}`);
+                    } else {
+                      setShowSuccessModal(false);
+                    }
+                  }}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
-                  Close
+                  <CheckCircle2 className="w-4 h-4" />
+                  Continue to Payment
                 </button>
               </div>
             </div>

@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Package, ClipboardList, History, Settings, Info, ArrowLeft } from "lucide-react";
+import { Package, ClipboardList, History, Settings, Info, ArrowLeft, ChevronDown, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
 import type { Equipment, EquipmentStatus, EquipmentType } from "@/types/equipment";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import type { EquipmentIssuance } from "@/types/equipment";
 import { EquipmentUpdatesTable } from "@/components/equipment/EquipmentUpdatesTable";
@@ -46,6 +48,7 @@ const EQUIPMENT_STATUSES: EquipmentStatus[] = [
 
 export default function EquipmentViewPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [equipment, setEquipment] = useState<Equipment & {
     location?: string;
     last_issued?: string;
@@ -202,6 +205,36 @@ export default function EquipmentViewPage() {
     setIsDirty(false);
   }
 
+  // Delete handler
+  async function handleDelete() {
+    if (!id) return;
+    
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/equipment/${id}`, {
+        method: "DELETE",
+      });
+      
+      if (!res.ok) {
+        const json = await res.json();
+        toast.error(json.error || "Failed to delete equipment");
+        return;
+      }
+      
+      toast.success("Equipment deleted successfully");
+      setShowDeleteDialog(false);
+      router.push("/dashboard/equipment");
+    } catch {
+      toast.error("Network error while deleting equipment");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  // Delete confirmation dialog state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [selectedTab, setSelectedTab] = useState("overview");
   const mainTabs = tabItems.slice(0, 3); // Only overview, issuance, updates
 
@@ -222,6 +255,25 @@ export default function EquipmentViewPage() {
               <div className="text-2xl font-bold">{equipment.name}</div>
               <div className="text-muted-foreground text-sm">{equipment.type} &bull; Serial: {equipment.serial_number}</div>
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="flex items-center gap-2">
+                  Options
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem 
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Equipment
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
         {/* Tabs Layout */}
@@ -425,6 +477,33 @@ export default function EquipmentViewPage() {
           </Tabs.Root>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Delete Equipment
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{equipment.name}</strong>? This action cannot be undone and will permanently remove the equipment from your inventory.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Equipment'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 } 

@@ -15,26 +15,33 @@ export interface Booking {
   lesson_id: string | null;
   flight_type_id: string | null;
   booking_type: BookingType | null;
-  briefing_completed: boolean;
-  checked_out_aircraft_id: string | null;
-  checked_out_instructor_id: string | null;
-  hobbs_start: number | null;
-  hobbs_end: number | null;
-  tach_start: number | null;
-  tach_end: number | null;
-  flight_time: number | null;
-  cancellation_reason?: string | null;
-  cancellation_category_id?: string | null;
   created_at: string;
   updated_at: string;
+  // Flight authorization override fields
+  authorization_override?: boolean;
+  authorization_override_by?: string;
+  authorization_override_at?: string;
+  authorization_override_reason?: string;
+  // Cancellation fields (now stored directly in bookings table)
+  cancellation_category_id?: string | null;
+  cancellation_reason?: string | null;
+  cancelled_by?: string | null;
+  cancelled_notes?: string | null;
+  cancelled_at?: string | null;
   // Optionally joined objects from Supabase
   user?: import("./users").User;
   instructor?: import("./users").User;
   aircraft?: import("./aircraft").Aircraft;
+  flight_type?: import("./flight_types").FlightType;
+  flight_logs?: import("./flight_logs").FlightLog[];
+  cancellation_category?: CancellationCategory;
+  cancelled_by_user?: import("./users").User;
 }
 
 export interface CancellationCategory {
   id: string;
   name: string;
   description?: string | null;
-} 
+  created_at: string;
+  updated_at: string;
+}
