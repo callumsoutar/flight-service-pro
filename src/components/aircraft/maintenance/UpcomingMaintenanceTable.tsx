@@ -122,9 +122,38 @@ export default function UpcomingMaintenanceTable({ aircraft_id }: UpcomingMainte
   };
 
   const handleNewComponentSave = async (newComponent: Partial<AircraftComponent>) => {
-    // Optionally, you could POST to the API here, but for now just add to local state
-    setComponents(prev => [...prev, { ...newComponent, id: Math.random().toString() } as AircraftComponent]);
-    setNewModalOpen(false);
+    const newComp = {
+      ...newComponent,
+      aircraft_id: aircraft_id,
+      current_due_date: newComponent.current_due_date === "" ? null : newComponent.current_due_date,
+      last_completed_date: newComponent.last_completed_date === "" ? null : newComponent.last_completed_date,
+    };
+    try {
+      const res = await fetch("/api/aircraft_components", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newComp),
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        const errorMessage = errorData.error || "Failed to create component";
+        toast.error(errorMessage);
+        throw new Error(errorMessage);
+      }
+      const created = await res.json();
+      setComponents(prev => [...prev, created]);
+      toast.success("Component created");
+      setNewModalOpen(false);
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        toast.error(e.message || "Failed to create component");
+        throw e;
+      } else {
+        const errorMessage = "Failed to create component";
+        toast.error(errorMessage);
+        throw new Error(errorMessage);
+      }
+    }
   };
 
   // Sort by soonest due (hours or date)

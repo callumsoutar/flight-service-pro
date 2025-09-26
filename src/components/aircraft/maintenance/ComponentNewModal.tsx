@@ -80,8 +80,12 @@ const ComponentNewModal: React.FC<ComponentNewModalProps> = ({ open, onOpenChang
       priority,
       notes,
     };
-    await Promise.resolve(onSave(payload));
-    onOpenChange(false);
+    try {
+      await onSave(payload);
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Failed to save component:', error);
+    }
   }
 
   return (

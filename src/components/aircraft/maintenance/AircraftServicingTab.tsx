@@ -292,8 +292,9 @@ export default function AircraftServicingTab() {
             });
             if (!res.ok) {
               const errorData = await res.json();
-              toast.error(errorData.error || "Failed to create component");
-              return;
+              const errorMessage = errorData.error || "Failed to create component";
+              toast.error(errorMessage);
+              throw new Error(errorMessage);
             }
             const created = await res.json();
             setComponents(prev => [...prev, created]);
@@ -301,8 +302,11 @@ export default function AircraftServicingTab() {
           } catch (e: unknown) {
             if (e instanceof Error) {
               toast.error(e.message || "Failed to create component");
+              throw e;
             } else {
-              toast.error("Failed to create component");
+              const errorMessage = "Failed to create component";
+              toast.error(errorMessage);
+              throw new Error(errorMessage);
             }
           }
         }}
