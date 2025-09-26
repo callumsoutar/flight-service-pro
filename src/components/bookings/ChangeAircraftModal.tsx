@@ -103,7 +103,7 @@ export const ChangeAircraftModal: React.FC<ChangeAircraftModalProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Time:</span>
                   <span className="font-medium text-gray-900">
-                    {new Date(booking.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(booking.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {booking.start_time} - {booking.end_time}
                   </span>
                 </div>
               </div>

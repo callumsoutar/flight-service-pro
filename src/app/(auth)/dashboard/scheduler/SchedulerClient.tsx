@@ -99,16 +99,6 @@ interface ShiftOverride {
   voided_at?: string;
 }
 
-interface DragData {
-  booking: Booking;
-  resource: string;
-  originalResource: string;
-  startX: number;
-  startY: number;
-  offsetX: number;
-  offsetY: number;
-  containerLeft?: number;
-}
 
 interface ResizeData {
   booking: Booking;
@@ -128,6 +118,7 @@ const FlightScheduler = () => {
   // State for bookings
   const [_bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // State for aircraft
@@ -151,6 +142,16 @@ const FlightScheduler = () => {
   const [_selectedAircraft, setSelectedAircraft] = useState<Aircraft | null>(null);
   const [_selectedInstructor, _setSelectedInstructor] = useState<Instructor | null>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
+  const [prefilledBookingData, setPrefilledBookingData] = useState<{
+    date: Date;
+    startTime: string;
+    instructorName?: string;
+    aircraftName?: string;
+    instructorId?: string;
+    instructorUserId?: string;
+    aircraftId?: string;
+    aircraftRegistration?: string;
+  } | null>(null);
 
   // State for hover effects
   const [hoveredBooking, setHoveredBooking] = useState<Booking | null>(null);
@@ -161,19 +162,18 @@ const FlightScheduler = () => {
 
   // State for timeline scrolling
   const [timelineOffset, setTimelineOffset] = useState(0);
-  const _timelineRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
 
-  // State for drag and resize functionality
-  const [dragData, setDragData] = useState<DragData | null>(null);
+  // State for resize functionality
   const [resizeData, setResizeData] = useState<ResizeData | null>(null);
   const [hasResized, setHasResized] = useState(false);
-  const dragRef = useRef<HTMLDivElement>(null);
 
   // State for context menu and double-click
   const [contextMenu, setContextMenu] = useState<{
     booking: Booking;
     x: number;
     y: number;
+    transform: string;
   } | null>(null);
   const [clickTimeout, setClickTimeout] = useState<NodeJS.Timeout | null>(null);
 
@@ -198,7 +198,7 @@ const FlightScheduler = () => {
 
   // Hooks
   const { mutate: cancelBooking } = useCancelBooking();
-  const { data: _businessHours } = useBusinessHours();
+  const { data: businessHours, isLoading: businessHoursLoading } = useBusinessHours();
   const { data: cancellationCategories } = useCancellationCategories();
   const router = useRouter();
   const { isRestricted, isLoading: roleLoading, error: roleError } = useIsRestrictedUser();
@@ -238,22 +238,55 @@ const FlightScheduler = () => {
   };
 
   // Configuration
-  const VISIBLE_SLOTS = 18;
+  const VISIBLE_SLOTS = 24;
   const _ROW_HEIGHT = 60;
 
-  // Time slots from 7:00 AM to 10:00 PM (30-minute intervals)
-  const timeSlots: string[] = [];
-  for (let hour = 7; hour <= 22; hour++) {
-    timeSlots.push(`${hour.toString().padStart(2, '0')}:00`);
-    if (hour < 22) {
-      timeSlots.push(`${hour.toString().padStart(2, '0')}:30`);
+  // Generate time slots based on business hours (30-minute intervals)
+  const generateTimeSlots = (): string[] => {
+    const slots: string[] = [];
+
+    // Default fallback times if business hours not available
+    let startHour = 7;
+    let endHour = 22;
+
+    if (businessHours && !businessHours.is_closed) {
+      if (businessHours.is_24_hours) {
+        startHour = 0;
+        endHour = 23;
+      } else {
+        // Parse open_time and close_time
+        const openTime = businessHours.open_time.split(':');
+        const closeTime = businessHours.close_time.split(':');
+        startHour = parseInt(openTime[0], 10);
+        endHour = parseInt(closeTime[0], 10);
+
+        // If close time has minutes, add an extra hour to include that time slot
+        if (parseInt(closeTime[1], 10) > 0) {
+          endHour += 1;
+        }
+      }
     }
-  }
+
+    for (let hour = startHour; hour <= endHour; hour++) {
+      slots.push(`${hour.toString().padStart(2, '0')}:00`);
+      if (hour < endHour) {
+        slots.push(`${hour.toString().padStart(2, '0')}:30`);
+      }
+    }
+
+    return slots;
+  };
+
+  const timeSlots = generateTimeSlots();
 
   // Fetch all data - restored from original
-  const fetchAllData = useCallback(async () => {
+  const fetchAllData = useCallback(async (isInitialLoad = false) => {
     setError(null);
-    setLoading(true);
+    if (isInitialLoad) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
 
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -453,16 +486,24 @@ const FlightScheduler = () => {
       setRawBookings([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
       setAircraftLoading(false);
       setInstructorsLoading(false);
     }
   }, [selectedDate]);
 
-  // Fetch data when component mounts or selected date changes
+  // Initial load when component mounts
   useEffect(() => {
-    console.log('useEffect triggered, calling fetchAllData');
-    fetchAllData();
+    console.log('Initial load triggered');
+    fetchAllData(true);
   }, [fetchAllData]);
+
+  // Refresh data when selected date or business hours changes
+  useEffect(() => {
+    console.log('Data refresh triggered for date/business hours change');
+    if (loading) return; // Skip if initial load is still happening
+    fetchAllData(false);
+  }, [selectedDate, businessHours, fetchAllData, loading]);
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -606,6 +647,27 @@ const FlightScheduler = () => {
     }
   };
 
+  // Handle horizontal scroll with mouse wheel
+  const handleWheelScroll = (event: React.WheelEvent) => {
+    // Always prevent default to stop browser navigation
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Only handle horizontal scrolling or when shift is held
+    if (Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey) {
+      // Determine scroll direction and amount
+      const scrollDelta = event.deltaX !== 0 ? event.deltaX : event.deltaY;
+      const scrollSensitivity = 0.2; // Reduced sensitivity for smoother scrolling
+      const scrollAmount = Math.sign(scrollDelta) * Math.max(1, Math.abs(scrollDelta) * scrollSensitivity / 100);
+
+      const newOffset = Math.max(0, Math.min(timeSlots.length - VISIBLE_SLOTS, timelineOffset + scrollAmount));
+
+      if (newOffset !== timelineOffset) {
+        setTimelineOffset(Math.round(newOffset));
+      }
+    }
+  };
+
   // Get current time range for display
   const getCurrentTimeRange = () => {
     const visibleSlots = getVisibleTimeSlots();
@@ -652,47 +714,39 @@ const FlightScheduler = () => {
     // Check if user can access this booking
     const canAccess = canAccessBooking(booking);
     
-    let backgroundColor = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'; // Default purple for 'confirmed'
-    let boxShadow = '0 4px 12px rgba(102, 126, 234, 0.25)';
+    let backgroundColor = '#6366f1'; // Modern indigo for 'confirmed'
     const opacity = '1';
-    let cursor = 'move';
+    let cursor = 'pointer';
     
     // Status-based colors (takes priority over type-based colors)
     switch (booking.status) {
       case 'confirmed':
-        backgroundColor = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'; // Purple
-        boxShadow = '0 4px 12px rgba(102, 126, 234, 0.25)';
+        backgroundColor = '#6366f1'; // Modern indigo
         break;
       case 'flying':
-        backgroundColor = 'linear-gradient(135deg, #ff9a56 0%, #ffad56 100%)'; // Orange
-        boxShadow = '0 4px 12px rgba(255, 154, 86, 0.25)';
+        backgroundColor = '#f59e0b'; // Modern amber
         break;
       case 'complete':
-        backgroundColor = 'linear-gradient(135deg, #4ade80 0%, #22c55e 100%)'; // Green
-        boxShadow = '0 4px 12px rgba(74, 222, 128, 0.25)';
+        backgroundColor = '#10b981'; // Modern emerald
         break;
       case 'unconfirmed':
-        backgroundColor = 'linear-gradient(135deg, #9ca3af 0%, #6b7280 100%)'; // Grey
-        boxShadow = '0 4px 12px rgba(156, 163, 175, 0.25)';
+        backgroundColor = '#6b7280'; // Modern gray
         break;
       default:
-        // Keep default purple for confirmed and any other status
+        // Keep default indigo for confirmed and any other status
         break;
     }
     
     // Type-based colors (only if not overridden by status)
     if (booking.status === 'confirmed') {
       if (booking.type === 'maintenance') {
-        backgroundColor = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
-        boxShadow = '0 4px 12px rgba(245, 87, 108, 0.25)';
+        backgroundColor = '#e11d48'; // Modern red
       }
       if (booking.type === 'trial' || booking.name === 'TRIAL FLIGHT') {
-        backgroundColor = 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)';
-        boxShadow = '0 4px 12px rgba(79, 172, 254, 0.25)';
+        backgroundColor = '#0ea5e9'; // Modern sky blue
       }
       if (booking.type === 'fuel' || booking.name.includes('F...')) {
-        backgroundColor = 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)';
-        boxShadow = '0 4px 12px rgba(168, 237, 234, 0.25)';
+        backgroundColor = '#14b8a6'; // Modern teal
       }
     }
     
@@ -705,26 +759,25 @@ const FlightScheduler = () => {
       position: 'absolute' as const,
       left: `${startPercent}%`,
       width: `${finalWidth}%`,
-      height: `${rowHeight - 6}px`,
+      height: `${rowHeight - 2}px`,
       background: backgroundColor,
       color: 'white',
-      fontSize: '12px',
-      fontWeight: '600',
-      padding: '8px 12px',
-      borderRadius: '8px',
-      border: 'none',
+      fontSize: '11px',
+      fontWeight: '500',
+      padding: '6px 8px',
+      borderRadius: '6px',
+      border: '1px solid rgba(255, 255, 255, 0.2)',
       whiteSpace: 'nowrap' as const,
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       zIndex: 20,
-      top: '3px',
+      top: '1px',
       cursor: cursor,
       userSelect: 'none' as const,
       display: 'flex',
       alignItems: 'center',
-      boxShadow: boxShadow,
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
       transition: 'all 0.2s ease-in-out',
-      backdropFilter: 'blur(10px)',
       opacity: opacity
     };
   };
@@ -774,7 +827,7 @@ const FlightScheduler = () => {
       textOverflow: 'ellipsis',
       zIndex: 100, // Higher z-index for resize
       top: '3px',
-      cursor: 'move',
+      cursor: 'pointer',
       userSelect: 'none' as const,
       display: 'flex',
       alignItems: 'center',
@@ -786,7 +839,6 @@ const FlightScheduler = () => {
 
   // Handle cell click (for creating new bookings)
   const handleCellClick = (resource: string, timeSlot: string, isInstructor: boolean) => {
-    if (dragData) return; // Don't handle cell clicks during drag
     if (isTimeSlotInPast(timeSlot)) return; // Don't allow clicks on past time slots
     
     // Create pre-filled booking data with proper IDs
@@ -826,6 +878,8 @@ const FlightScheduler = () => {
       }
     }
     
+    // Store the prefilled booking data and open modal
+    setPrefilledBookingData(bookingData);
     setSelectedTimeSlot(timeSlot);
     setShowNewBookingModal(true);
   };
@@ -883,15 +937,19 @@ const FlightScheduler = () => {
     
     // Close hover modal when showing context menu
     setHoveredBooking(null);
-    
-    // Show context menu at cursor position
+
+    // Calculate optimal position for context menu (approximate size: 200px width, 200px height)
+    const position = calculatePopupPosition(event.clientX, event.clientY, 200, 200);
+
+    // Show context menu at calculated position
     setContextMenu({
       booking,
-      x: event.clientX,
-      y: event.clientY
+      x: position.x,
+      y: position.y,
+      transform: position.transform
     });
-    
-    console.log('Context menu set:', { x: event.clientX, y: event.clientY });
+
+    console.log('Context menu set:', { x: position.x, y: position.y, transform: position.transform });
   };
 
   // Handle booking right click
@@ -908,19 +966,23 @@ const FlightScheduler = () => {
     
     // Close hover modal when showing context menu
     setHoveredBooking(null);
-    
-    // Show context menu at cursor position
+
+    // Calculate optimal position for context menu (approximate size: 200px width, 200px height)
+    const position = calculatePopupPosition(event.clientX, event.clientY, 200, 200);
+
+    // Show context menu at calculated position
     setContextMenu({
       booking,
-      x: event.clientX,
-      y: event.clientY
+      x: position.x,
+      y: position.y,
+      transform: position.transform
     });
-    
-    console.log('Context menu set from right click:', { x: event.clientX, y: event.clientY });
+
+    console.log('Context menu set from right click:', { x: position.x, y: position.y, transform: position.transform });
   };
 
   // Handle context menu actions
-  const handleContextMenuAction = (action: 'view' | 'cancel' | 'change-aircraft' | 'contact-details', booking: Booking) => {
+  const handleContextMenuAction = (action: 'view' | 'cancel' | 'change-aircraft' | 'contact-details' | 'confirm', booking: Booking) => {
     setContextMenu(null);
 
     switch (action) {
@@ -949,6 +1011,9 @@ const FlightScheduler = () => {
           toast.error('No contact details available for this booking');
         }
         break;
+      case 'confirm':
+        handleConfirmBooking(booking);
+        break;
     }
   };
 
@@ -963,7 +1028,7 @@ const FlightScheduler = () => {
   };
 
   const handleBookingMouseMove = (event: React.MouseEvent) => {
-    if (hoveredBooking && !dragData) {
+    if (hoveredBooking) {
       setMousePosition({ x: event.clientX, y: event.clientY });
     }
   };
@@ -979,96 +1044,58 @@ const FlightScheduler = () => {
     setHoveredTimeSlot(null);
   };
 
-  // Drag and resize handlers
-  const handleBookingMouseDown = (event: React.MouseEvent, booking: Booking, resource: string) => {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    // Check if user can access this booking
-    if (!canAccessBooking(booking)) {
-      toast.error('You can only modify your own bookings');
-      return;
+  // Helper function to calculate optimal popup position
+  const calculatePopupPosition = (x: number, y: number, popupWidth: number = 200, popupHeight: number = 200) => {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const margin = 10; // Margin from screen edge
+
+    let adjustedX = x;
+    let adjustedY = y;
+    let transform = 'translate(-50%, -10px)'; // Default transform
+
+    // Check if popup would go off the right edge
+    if (x + popupWidth / 2 + margin > viewportWidth) {
+      adjustedX = x - popupWidth / 2 - margin;
+      transform = 'translate(0, -10px)'; // Align to left edge of popup
     }
-    
-    const rect = event.currentTarget.getBoundingClientRect();
-    const containerRect = (event.currentTarget.closest('.timeline-container') as HTMLElement)?.getBoundingClientRect();
-    
-    setDragData({
-      booking,
-      resource,
-      originalResource: resource,
-      startX: event.clientX,
-      startY: event.clientY,
-      offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
-      containerLeft: containerRect?.left
-    });
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    // Check if popup would go off the left edge
+    else if (x - popupWidth / 2 - margin < 0) {
+      adjustedX = x + popupWidth / 2 + margin;
+      transform = 'translate(-100%, -10px)'; // Align to right edge of popup
+    }
+
+    // Check if popup would go off the bottom edge
+    if (y + popupHeight + margin > viewportHeight) {
+      adjustedY = y - popupHeight - margin;
+      // Adjust transform for upward positioning
+      if (transform.includes('-50%')) {
+        transform = 'translate(-50%, -100%)';
+      } else if (transform.includes('translate(0')) {
+        transform = 'translate(0, -100%)';
+      } else {
+        transform = 'translate(-100%, -100%)';
+      }
+    }
+    // Check if popup would go off the top edge
+    else if (y - margin < 0) {
+      adjustedY = y + margin;
+    }
+
+    return { x: adjustedX, y: adjustedY, transform };
   };
 
+  // Resize handlers
+
   const handleMouseMove = (event: MouseEvent) => {
-    if (dragData) {
-      const deltaX = event.clientX - dragData.startX;
-      const deltaY = event.clientY - dragData.startY;
-      
-      // Update the visual position of the dragged booking
-      if (dragRef.current) {
-        dragRef.current.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-        dragRef.current.style.zIndex = '100';
-        dragRef.current.style.opacity = '0.8';
-      }
-    } else if (resizeData) {
+    if (resizeData) {
       // Handle visual feedback for resize
       handleResizeMouseMove(event);
     }
   };
 
   const handleMouseUp = (event: MouseEvent) => {
-    if (dragData) {
-      // Handle normal drag operations
-      const elementBelow = document.elementFromPoint(event.clientX, event.clientY);
-      const cellElement = elementBelow?.closest('.time-cell') as HTMLElement;
-      const resourceElement = elementBelow?.closest('.resource-row') as HTMLElement;
-      
-      if (cellElement && resourceElement) {
-        const targetResource = resourceElement.dataset.resource;
-        const targetTimeSlot = cellElement.dataset.timeslot;
-        const targetTime = convertTimeToPosition(targetTimeSlot || '');
-        
-        // Update booking position
-        if (targetResource && targetTimeSlot) {
-          setBookingsByResource(prev => {
-            const newBookings = { ...prev };
-            
-            // Remove from original resource
-            newBookings[dragData.originalResource] = newBookings[dragData.originalResource].filter(
-              (b: Booking) => b.id !== dragData.booking.id
-            );
-            
-            // Add to new resource with new time
-            const updatedBooking: Booking = {
-              ...dragData.booking,
-              start: targetTime
-            };
-            
-            newBookings[targetResource] = [...(newBookings[targetResource] || []), updatedBooking];
-            
-            return newBookings;
-          });
-        }
-      }
-      
-      // Reset drag state
-      if (dragRef.current) {
-        dragRef.current.style.transform = '';
-        dragRef.current.style.zIndex = '';
-        dragRef.current.style.opacity = '';
-      }
-      
-      setDragData(null);
-    } else if (resizeData) {
+    if (resizeData) {
       // Handle resize operations
       const deltaX = event.clientX - resizeData.startX;
       const timelineWidth = resizeData.containerRect.width;
@@ -1284,6 +1311,34 @@ const FlightScheduler = () => {
     setPendingTimeChange(null);
   };
 
+  // Handle booking confirmation
+  const handleConfirmBooking = async (booking: Booking) => {
+    try {
+      const response = await fetch('/api/bookings', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: booking.id,
+          status: 'confirmed',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to confirm booking');
+      }
+
+      toast.success('Booking confirmed successfully');
+      fetchAllData(false); // Refresh data
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to confirm booking';
+      toast.error(errorMessage);
+      console.error('Error confirming booking:', error);
+    }
+  };
+
   // Handle booking cancellation
   const handleCancelBooking = async (data: {
     cancellation_category_id?: string;
@@ -1366,9 +1421,9 @@ const FlightScheduler = () => {
               return (
                 <div
                   key={`${resourceKey}-${timeSlot}`}
-                  className={`border-r time-cell transition-all duration-200 min-w-[32px] ${
-                    isPast 
-                      ? 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-70' 
+                  className={`border-r time-cell transition-all duration-200 min-w-[22px] ${
+                    isPast
+                      ? 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-70'
                       : 'border-gray-200 hover:bg-blue-100 hover:border-blue-300 cursor-pointer'
                   }`}
                   data-timeslot={timeSlot}
@@ -1409,16 +1464,9 @@ const FlightScheduler = () => {
               <div
                 key={`${resourceKey}-${booking.id}-${index}`}
                 data-booking-id={booking.id}
-                ref={dragData?.booking.id === booking.id ? dragRef : null}
                 style={getBookingStyle(booking, rowHeight)}
-                onMouseDown={(e) => {
-                  // Only start drag if Shift key is held and interaction is not restricted
-                  if (e.shiftKey && !shouldRestrictInteraction) {
-                    handleBookingMouseDown(e, booking, resourceKey!);
-                  }
-                }}
                 onMouseEnter={(e) => {
-                  if (!dragData && !resizeData) {
+                  if (!resizeData) {
                     if (!shouldRestrictInteraction) {
                       (e.target as HTMLElement).style.transform = 'scale(1.02)';
                       (e.target as HTMLElement).style.zIndex = '30';
@@ -1427,7 +1475,7 @@ const FlightScheduler = () => {
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (!dragData && !resizeData) {
+                  if (!resizeData) {
                     (e.target as HTMLElement).style.transform = 'scale(1)';
                     (e.target as HTMLElement).style.zIndex = '20';
                     handleBookingMouseLeave();
@@ -1556,7 +1604,7 @@ const FlightScheduler = () => {
     }
   };
 
-  if (loading) {
+  if (loading || businessHoursLoading) {
     return (
       <div className="w-full min-h-screen flex items-center justify-center">
         <div className="flex items-center space-x-2">
@@ -1574,9 +1622,22 @@ const FlightScheduler = () => {
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Scheduler</h2>
           <p className="text-gray-600 mb-4">{error}</p>
-          <Button onClick={fetchAllData} variant="outline">
+          <Button onClick={() => fetchAllData(true)} variant="outline">
             Try Again
           </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show message if business is closed
+  if (businessHours && businessHours.is_closed) {
+    return (
+      <div className="w-full min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Clock className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Business Closed</h2>
+          <p className="text-gray-600">The scheduler is not available when the business is closed.</p>
         </div>
       </div>
     );
@@ -1645,7 +1706,22 @@ const FlightScheduler = () => {
 
           {/* Main Scheduler */}
           <div className="w-full overflow-hidden mx-auto">
-            <div className="w-full bg-white select-none rounded-md overflow-x-auto shadow-lg border min-w-[800px] max-w-full">
+            <div className="relative">
+              {/* Refreshing overlay */}
+              {refreshing && (
+                <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center rounded-md">
+                  <div className="bg-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                    <span className="text-sm text-gray-700">Updating schedule...</span>
+                  </div>
+                </div>
+              )}
+
+              <div
+                ref={timelineRef}
+                className="w-full bg-white select-none rounded-md overflow-x-auto shadow-lg border min-w-[800px] max-w-full"
+                onWheel={handleWheelScroll}
+              >
               {/* Time Header with Navigation */}
               <div className="flex border-b border-gray-300 bg-gradient-to-r from-blue-50 to-indigo-50">
                 <div className="w-52 border-r border-gray-200 flex items-center justify-center bg-white">
@@ -1685,7 +1761,7 @@ const FlightScheduler = () => {
                     {getVisibleTimeSlots().map((timeSlot) => (
                       <div
                         key={timeSlot}
-                        className="border-r border-gray-200 text-xs py-1 px-0.5 text-center bg-gradient-to-r from-blue-50 to-indigo-50 font-semibold text-gray-700 hover:bg-gradient-to-b hover:from-blue-100 hover:to-indigo-100 transition-all duration-200 min-w-[32px]"
+                        className="border-r border-gray-200 text-[10px] py-1 px-0.5 text-center bg-gradient-to-r from-blue-50 to-indigo-50 font-semibold text-gray-700 hover:bg-gradient-to-b hover:from-blue-100 hover:to-indigo-100 transition-all duration-200 min-w-[22px]"
                       >
                         {timeSlot}
                       </div>
@@ -1717,6 +1793,7 @@ const FlightScheduler = () => {
                   : aircraftItem.registration;
                 return renderResourceRow(displayName, false);
               })}
+              </div>
             </div>
           </div>
         </div>
@@ -1729,6 +1806,7 @@ const FlightScheduler = () => {
               setShowNewBookingModal(false);
               setSelectedAircraft(null);
               setSelectedTimeSlot(null);
+              setPrefilledBookingData(null);
             }}
             aircraft={aircraft.map(a => ({
               id: a.id,
@@ -1736,10 +1814,10 @@ const FlightScheduler = () => {
               type: a.type
             }))}
             bookings={rawBookings}
-            prefilledData={selectedTimeSlot ? {
+            prefilledData={prefilledBookingData || (selectedTimeSlot ? {
               date: selectedDate,
               startTime: selectedTimeSlot
-            } : undefined}
+            } : undefined)}
             onBookingCreated={addBookingOptimistically}
           />
         )}
@@ -1780,11 +1858,33 @@ const FlightScheduler = () => {
               registration: a.registration,
               type: a.type
             }))}
-            onAircraftChanged={(_bookingId, _newAircraftId) => {
-              // Handle aircraft change logic here
-              fetchAllData(); // Refresh data
-              setShowChangeAircraftModal(false);
-              setSelectedBooking(null);
+            onAircraftChanged={async (bookingId, newAircraftId) => {
+              try {
+                const response = await fetch('/api/bookings', {
+                  method: 'PATCH',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    id: bookingId,
+                    aircraft_id: newAircraftId,
+                  }),
+                });
+
+                if (!response.ok) {
+                  const errorData = await response.json();
+                  throw new Error(errorData.error || 'Failed to change aircraft');
+                }
+
+                toast.success('Aircraft changed successfully');
+                fetchAllData(false); // Refresh data
+                setShowChangeAircraftModal(false);
+                setSelectedBooking(null);
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Failed to change aircraft';
+                toast.error(errorMessage);
+                console.error('Error changing aircraft:', error);
+              }
             }}
           />
         )}
@@ -1803,14 +1903,17 @@ const FlightScheduler = () => {
         )}
 
         {/* Booking Hover Modal */}
-        {hoveredBooking && (
-          <div 
-            className="fixed z-50 pointer-events-none"
-            style={{
-              left: mousePosition.x + 15,
-              top: mousePosition.y - 10,
-              transform: 'translateY(-50%)'
-            }}
+        {hoveredBooking && (() => {
+          // Calculate position for hover tooltip (approximate size: 280px width, 200px height)
+          const position = calculatePopupPosition(mousePosition.x + 15, mousePosition.y, 280, 200);
+          return (
+            <div
+              className="fixed z-50 pointer-events-none"
+              style={{
+                left: position.x,
+                top: position.y,
+                transform: position.transform
+              }}
           >
             <div className="bg-white rounded-lg shadow-lg border border-gray-200 border-l-4 border-l-blue-500 p-3 max-w-xs animate-in fade-in duration-150">
               {/* Header */}
@@ -1843,18 +1946,22 @@ const FlightScheduler = () => {
                 )}
               </div>
             </div>
-          </div>
-        )}
+            </div>
+          );
+        })()}
 
         {/* Time Slot Hover Tooltip */}
-        {hoveredTimeSlot && !hoveredBooking && (
-          <div 
-            className="fixed z-50 pointer-events-none"
-            style={{
-              left: mousePosition.x + 15,
-              top: mousePosition.y - 10,
-              transform: 'translateY(-50%)'
-            }}
+        {hoveredTimeSlot && !hoveredBooking && (() => {
+          // Calculate position for time slot tooltip (approximate size: 200px width, 100px height)
+          const position = calculatePopupPosition(mousePosition.x + 15, mousePosition.y, 200, 100);
+          return (
+            <div
+              className="fixed z-50 pointer-events-none"
+              style={{
+                left: position.x,
+                top: position.y,
+                transform: position.transform
+              }}
           >
             <div className="bg-gray-900 text-white rounded-lg shadow-xl p-3 text-sm">
               <div className="font-medium">Click to create booking</div>
@@ -1865,17 +1972,18 @@ const FlightScheduler = () => {
                 Time: {hoveredTimeSlot.timeSlot}
               </div>
             </div>
-          </div>
-        )}
+            </div>
+          );
+        })()}
 
         {/* Context Menu */}
         {contextMenu && (
-          <div 
-            className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-2 min-w-[180px]"
+          <div
+            className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-2 min-w-[200px]"
             style={{
               left: contextMenu.x,
               top: contextMenu.y,
-              transform: 'translate(-50%, -10px)'
+              transform: contextMenu.transform
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -1904,7 +2012,18 @@ const FlightScheduler = () => {
                 <Plane className="w-4 h-4" />
                 Change Aircraft
               </button>
-              
+
+              {/* Confirm Booking - only show for unconfirmed bookings */}
+              {contextMenu.booking.status === 'unconfirmed' && (
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-green-600 hover:bg-green-50 hover:text-green-700 transition-colors duration-150"
+                  onClick={() => handleContextMenuAction('confirm', contextMenu.booking)}
+                >
+                  <CalendarIcon className="w-4 h-4" />
+                  Confirm Booking
+                </button>
+              )}
+
               <button
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors duration-150"
                 onClick={() => handleContextMenuAction('cancel', contextMenu.booking)}
