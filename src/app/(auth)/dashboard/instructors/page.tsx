@@ -2,8 +2,10 @@ import StaffTable from "@/components/members/StaffTable";
 import { createClient } from "@/lib/SupabaseServerClient";
 import type { Member } from "@/components/members/columns";
 import { Users, UserCog, UserCheck, MailPlus } from "lucide-react";
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
 
-export default async function InstructorsPage() {
+// Component now receives guaranteed authenticated user and role data
+async function InstructorsPage({}: ProtectedPageProps) {
   const supabase = await createClient();
 
   // Fetch all instructors with their own name fields
@@ -96,4 +98,8 @@ export default async function InstructorsPage() {
       <StaffTable initialData={initialData} />
     </main>
   );
-} 
+}
+
+// Export the protected component using the standardized HOC
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default withRoleProtection(InstructorsPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any; 

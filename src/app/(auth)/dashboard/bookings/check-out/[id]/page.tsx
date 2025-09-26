@@ -1,5 +1,5 @@
 import { BookingStages, BOOKING_STAGES } from "@/components/bookings/BookingStages";
-import BookingActions from "@/components/bookings/BookingActions";
+import BookingActions from "@/components/bookings/BookingActionsClient";
 import { Booking } from "@/types/bookings";
 import React from "react";
 import { createClient } from "@/lib/SupabaseServerClient";
@@ -9,12 +9,13 @@ import { FlightLog } from "@/types/flight_logs";
 import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 import { StatusBadge } from "@/components/bookings/StatusBadge";
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
 
-interface BookingCheckOutPageProps {
+interface BookingCheckOutPageProps extends ProtectedPageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function BookingCheckOutPage({ params }: BookingCheckOutPageProps) {
+async function BookingCheckOutPage({ params }: BookingCheckOutPageProps) {
   const { id: bookingId } = await params;
   const supabase = await createClient();
 
@@ -33,6 +34,12 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
     .eq("id", bookingId)
     .single();
   booking = bookingData;
+
+  // Fetch instructor comments count
+  const { count: instructorCommentsCount } = await supabase
+    .from("instructor_comments")
+    .select("id", { count: "exact", head: true })
+    .eq("booking_id", bookingId);
 
   // Fetch all members (users)
   const { data: memberRows } = await supabase
@@ -134,7 +141,11 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
               <BookingActions booking={booking} status={status} bookingId={booking.id} hideCheckOutButton={true} />
             )}
             {booking && booking.id && (
-              <BookingStagesOptions bookingId={booking.id} bookingStatus={booking.status} />
+              <BookingStagesOptions 
+                bookingId={booking.id} 
+                bookingStatus={booking.status} 
+                instructorCommentsCount={instructorCommentsCount || 0} 
+              />
             )}
           </div>
         </div>
@@ -155,4 +166,8 @@ export default async function BookingCheckOutPage({ params }: BookingCheckOutPag
       <BookingHistoryCollapse bookingId={bookingId || ""} lessons={lessons} />
     </div>
   );
-} 
+}
+
+// Export protected component with role restriction for instructors and above
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export default withRoleProtection(BookingCheckOutPage as any, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any; 

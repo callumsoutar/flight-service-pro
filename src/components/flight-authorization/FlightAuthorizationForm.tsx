@@ -15,8 +15,9 @@ import { SignatureCanvas } from './SignatureCanvas';
 import { InstructorAuthorizationSection } from './InstructorAuthorizationSection';
 import {
   flightAuthorizationFormSchema,
+  flightAuthorizationEditSchema,
   draftFlightAuthorizationSchema,
-  type FlightAuthorizationFormData
+  type FlightAuthorizationEditData
 } from '@/lib/validations/flight-authorization';
 import {
   useCreateFlightAuthorization,
@@ -41,20 +42,21 @@ export function FlightAuthorizationForm({
 }: FlightAuthorizationFormProps) {
   const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isEditing = !!existingAuthorization;
   const isReadOnly = existingAuthorization?.status === 'approved' || existingAuthorization?.status === 'rejected';
   const canSubmit = existingAuthorization?.status === 'draft' || existingAuthorization?.status === 'rejected';
 
-  // Form setup with default values
-  const form = useForm<FlightAuthorizationFormData>({
-    resolver: zodResolver(flightAuthorizationFormSchema),
+  // Form setup with default values - use lenient schema for editing
+  const form = useForm<FlightAuthorizationEditData>({
+    resolver: zodResolver(flightAuthorizationEditSchema),
     defaultValues: {
       purpose_of_flight: existingAuthorization?.purpose_of_flight || 'solo',
       passenger_names: existingAuthorization?.passenger_names || [],
       runway_in_use: existingAuthorization?.runway_in_use || '',
-      fuel_level_liters: existingAuthorization?.fuel_level_liters || 0,
-      oil_level_quarts: existingAuthorization?.oil_level_quarts || 0,
+      fuel_level_liters: existingAuthorization?.fuel_level_liters ?? 50, // Default to reasonable value
+      oil_level_quarts: existingAuthorization?.oil_level_quarts ?? 8, // Default to reasonable value
       notams_reviewed: existingAuthorization?.notams_reviewed || false,
       weather_briefing_complete: existingAuthorization?.weather_briefing_complete || false,
       payment_method: existingAuthorization?.payment_method || 'account',
@@ -88,8 +90,8 @@ export function FlightAuthorizationForm({
   });
 
   // Save draft function
-  const saveDraft = useCallback(async (data: FlightAuthorizationFormData) => {
-    if (isReadOnly || isDraftSaving) return;
+  const saveDraft = useCallback(async (data: FlightAuthorizationEditData, forceStatus?: 'draft') => {
+    if (isReadOnly || isDraftSaving || isSubmitting) return;
 
     setIsDraftSaving(true);
     try {
@@ -98,11 +100,17 @@ export function FlightAuthorizationForm({
       if (!draftValidation.success) return;
 
       if (isEditing && existingAuthorization) {
-        await updateMutation.mutateAsync({
+        // Only set status to draft if explicitly requested or if current status allows it
+        const shouldSetDraft = forceStatus === 'draft' || 
+          ['draft', 'rejected'].includes(existingAuthorization.status);
+        
+        const updatePayload = {
           id: existingAuthorization.id,
           ...draftValidation.data,
-          status: 'draft'
-        });
+          ...(shouldSetDraft && { status: 'draft' as const })
+        };
+        
+        await updateMutation.mutateAsync(updatePayload);
       } else {
         // Filter out undefined values for creation
         const createData = Object.fromEntries(
@@ -118,7 +126,7 @@ export function FlightAuthorizationForm({
     } finally {
       setIsDraftSaving(false);
     }
-  }, [isReadOnly, isDraftSaving, isEditing, existingAuthorization, updateMutation, createMutation, booking.id]);
+  }, [isReadOnly, isDraftSaving, isSubmitting, isEditing, existingAuthorization, updateMutation, createMutation, booking.id]);
 
   // Auto-save draft functionality
   useEffect(() => {
@@ -127,7 +135,7 @@ export function FlightAuthorizationForm({
     const subscription = form.watch((values) => {
       // Auto-save after 2 seconds of inactivity
       const timeoutId = setTimeout(() => {
-        saveDraft(values as FlightAuthorizationFormData);
+        saveDraft(values as FlightAuthorizationEditData);
       }, 2000);
 
       return () => clearTimeout(timeoutId);
@@ -139,36 +147,65 @@ export function FlightAuthorizationForm({
   // Manual save draft
   const handleSaveDraft = async () => {
     const formData = form.getValues();
-    await saveDraft(formData);
+    await saveDraft(formData, 'draft');
   };
 
-  // Submit for approval
-  const handleSubmit = async (data: FlightAuthorizationFormData) => {
+  // Submit for approval - validate with strict schema
+  const handleSubmit = async (data: FlightAuthorizationEditData) => {
+    if (isSubmitting) return; // Prevent double submission
+    
+    setIsSubmitting(true);
     try {
+      // First validate with strict schema for submission
+      const validationResult = flightAuthorizationFormSchema.safeParse(data);
+
+      if (!validationResult.success) {
+        // Show detailed validation errors
+        console.error('Form validation failed:', validationResult.error.issues);
+        alert('Form validation failed: ' + validationResult.error.issues.map(i => i.message).join(', '));
+        return;
+      }
+      
+      const validatedData = validationResult.data;
       let authorizationId: string;
 
       if (isEditing && existingAuthorization) {
-        // Update existing authorization with form data first
+        // Update existing authorization with validated data first, but DO NOT set status
+        // The submit endpoint will handle setting the status to pending
         const updatedAuth = await updateMutation.mutateAsync({
           id: existingAuthorization.id,
-          ...data
+          ...validatedData
+          // Note: Do not include status here - let submit endpoint handle it
         });
         authorizationId = updatedAuth.id;
       } else {
         // Create new authorization
         const newAuth = await createMutation.mutateAsync({
           booking_id: booking.id,
-          ...data
+          ...validatedData
         });
         authorizationId = newAuth.id;
       }
 
-      // Submit for approval
+      // Submit for approval - this endpoint will set status to 'pending'
       await submitMutation.mutateAsync(authorizationId);
     } catch (error) {
       console.error('Error submitting authorization:', error);
+      
+      // Show user-friendly error message
+      if (error instanceof Error) {
+        // If it's a validation error, show more details
+        if (error.message.includes('incomplete')) {
+          alert('Please fill in all required fields before submitting. Check the form for any missing information.');
+        } else {
+          alert(`Failed to submit authorization: ${error.message}`);
+        }
+      }
+      
       // Re-throw error so the form can handle it properly
       throw error;
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -195,7 +232,7 @@ export function FlightAuthorizationForm({
     );
   };
 
-  const isLoading = createMutation.isPending || updateMutation.isPending || submitMutation.isPending;
+  const isLoading = createMutation.isPending || updateMutation.isPending || submitMutation.isPending || isSubmitting;
 
   return (
     <div className="space-y-6">
@@ -230,13 +267,6 @@ export function FlightAuthorizationForm({
 
       {/* Main Form */}
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-        {/* Alert for authorization requirement */}
-        <Alert className="border-blue-200 bg-blue-50">
-          <AlertTriangle className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-blue-800">
-            This form must be completed and authorized by an instructor before solo flight confirmation.
-          </AlertDescription>
-        </Alert>
 
         {/* Flight Details Section */}
         <FlightDetailsSection
@@ -348,9 +378,17 @@ export function FlightAuthorizationForm({
 
                 {canSubmit && (
                   <Button
-                    type="submit"
-                    disabled={isLoading || !form.formState.isValid}
+                    type="button"
+                    disabled={isLoading}
                     className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
+                    onClick={async () => {
+                      // Force call handleSubmit directly
+                      try {
+                        await handleSubmit(form.getValues());
+                      } catch (error) {
+                        console.error('Direct handleSubmit error:', error);
+                      }
+                    }}
                   >
                     {isLoading ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -360,6 +398,7 @@ export function FlightAuthorizationForm({
                     Submit for Authorization
                   </Button>
                 )}
+
               </div>
             </div>
 

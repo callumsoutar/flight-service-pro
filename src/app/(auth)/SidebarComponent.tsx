@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import {
@@ -17,13 +17,23 @@ import {
   Settings as LucideSettings,
   ChevronRight as LucideChevronRight,
 } from "lucide-react";
+import { useCurrentUserRoles } from "@/hooks/use-user-roles";
 
-const mainNavOptions = [
+interface NavOption {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  href: string;
+  tab: string;
+  dynamicHref?: boolean;
+  hasSubmenu?: boolean;
+}
+
+const mainNavOptions: NavOption[] = [
   { label: "Dashboard", icon: LucideHome, href: "/dashboard", tab: "dashboard" },
   { label: "Scheduler", icon: LucideCalendar, href: "/dashboard/scheduler", tab: "scheduler" },
   { label: "Bookings", icon: LucideBookOpen, href: "/dashboard/bookings", tab: "bookings" },
   { label: "Aircraft", icon: LucidePlane, href: "/dashboard/aircraft", tab: "aircraft" },
-  { label: "Members", icon: LucideUsers, href: "/dashboard/members", tab: "members" },
+  { label: "Members", icon: LucideUsers, href: "/dashboard/members", tab: "members", dynamicHref: true },
   { label: "Staff", icon: LucideUserCog, href: "/dashboard/instructors", tab: "staff", hasSubmenu: true },
   { label: "Invoicing", icon: LucideFileText, href: "/dashboard/invoices", tab: "invoices" },
   { label: "Training", icon: LucideGraduationCap, href: "/dashboard/training", tab: "training" },
@@ -41,76 +51,137 @@ export function SidebarComponent() {
   const [submenuPosition, setSubmenuPosition] = useState({ top: 0, left: 0 });
   const [hideTimeout, setHideTimeout] = useState<NodeJS.Timeout | null>(null);
 
+  // Get current user role using the secure endpoint
+  const { data: userRoleData, isLoading: rolesLoading, error: rolesError } = useCurrentUserRoles();
+
+  // Get user's role name
+  const userRole = userRoleData?.role?.toLowerCase() || '';
+
+  // Debug logging
+  console.log('SidebarComponent Debug:', {
+    userRoleData,
+    userRole,
+    rolesLoading,
+    rolesError
+  });
+
+  // Track role changes
+  useEffect(() => {
+    console.log('Role data changed:', { userRole, rolesLoading });
+  }, [userRole, rolesLoading]);
+
+  // Define restricted items for member and student roles
+  const restrictedTabs = ['aircraft', 'invoices', 'staff', 'training', 'equipment', 'tasks'];
+
+  // Filter navigation items based on user role
+  const filteredNavOptions = mainNavOptions.filter(item => {
+    // If roles are still loading, be conservative and hide restricted items
+    if (rolesLoading) {
+      console.log(`Filtering during loading - hiding ${item.tab}: ${restrictedTabs.includes(item.tab)}`);
+      return !restrictedTabs.includes(item.tab);
+    }
+
+    // If user is member or student, hide restricted items
+    if (userRole === 'member' || userRole === 'student') {
+      const shouldHide = restrictedTabs.includes(item.tab);
+      console.log(`Member/Student filtering - ${item.tab}: hiding=${shouldHide}, userRole=${userRole}`);
+      return !shouldHide;
+    }
+
+    // For all other roles (owner, admin, instructor), show all items
+    console.log(`Higher role access - showing ${item.tab} for role: ${userRole}`);
+    return true;
+  });
+
+  // Debug filtered results
+  console.log('Filtered nav options:', filteredNavOptions.map(item => item.tab));
+
   return (
     <aside className="fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-[#7c3aed] via-[#6d28d9] to-[#3b82f6] text-white flex flex-col z-30 overflow-visible">
       <div className="flex items-center h-16 px-6 font-extrabold text-2xl tracking-tight border-b border-white/10">
         Flight Desk Pro
       </div>
       <nav className="flex-1 overflow-y-auto overflow-x-visible py-6 px-2 gap-1 flex flex-col">
-        {mainNavOptions.map((item) => (
-          <div 
-            key={item.label} 
-            className="relative"
-            onMouseEnter={(e) => {
-              if (item.hasSubmenu) {
-                if (hideTimeout) {
-                  clearTimeout(hideTimeout);
-                  setHideTimeout(null);
+        {filteredNavOptions.map((item) => {
+          // Determine the correct href based on user role and item configuration
+          let href = item.href;
+          if (item.dynamicHref && item.tab === 'members') {
+            // For members tab, route based on user role
+            if (userRole === 'member' || userRole === 'student') {
+              href = '/dashboard/directory'; // Public directory for members/students
+            } else {
+              href = '/dashboard/members'; // Full members management for instructors+
+            }
+          }
+
+          return (
+            <div 
+              key={item.label} 
+              className="relative"
+              onMouseEnter={(e) => {
+                if (item.hasSubmenu) {
+                  if (hideTimeout) {
+                    clearTimeout(hideTimeout);
+                    setHideTimeout(null);
+                  }
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setSubmenuPosition({
+                    top: rect.top,
+                    left: rect.right + 16
+                  });
+                  setShowStaffSubmenu(true);
                 }
-                const rect = e.currentTarget.getBoundingClientRect();
-                setSubmenuPosition({
-                  top: rect.top,
-                  left: rect.right + 16
-                });
-                setShowStaffSubmenu(true);
-              }
-            }}
-            onMouseLeave={() => {
-              if (item.hasSubmenu) {
-                const timeout = setTimeout(() => setShowStaffSubmenu(false), 150);
-                setHideTimeout(timeout);
-              }
-            }}
-          >
-            <Link
-              href={item.href}
-              className="flex items-center justify-between px-3 py-2 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link"
-              style={{
-                fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
-                textShadow: '0 2px 8px rgba(60,0,120,0.10)',
-                letterSpacing: '0.02em',
+              }}
+              onMouseLeave={() => {
+                if (item.hasSubmenu) {
+                  const timeout = setTimeout(() => setShowStaffSubmenu(false), 150);
+                  setHideTimeout(timeout);
+                }
               }}
             >
-              <div className="flex items-center gap-3">
-                <item.icon className="w-5 h-5" />
-                <span className="sidebar-link-label" style={{ fontSize: '1.25rem', fontWeight: 500 }}>
-                  {item.label}
-                </span>
-              </div>
-              {item.hasSubmenu && (
-                <LucideChevronRight className="w-4 h-4 text-white/70" />
-              )}
-            </Link>
-            
-          </div>
-        ))}
+              <Link
+                href={href}
+                className="flex items-center justify-between px-3 py-2 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link"
+                style={{
+                  fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
+                  textShadow: '0 2px 8px rgba(60,0,120,0.10)',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <item.icon className="w-5 h-5" />
+                  <span className="sidebar-link-label" style={{ fontSize: '1.25rem', fontWeight: 500 }}>
+                    {item.label}
+                  </span>
+                </div>
+                {item.hasSubmenu && (
+                  <LucideChevronRight className="w-4 h-4 text-white/70" />
+                )}
+              </Link>
+              
+            </div>
+          );
+        })}
       </nav>
       <div className="mt-auto mb-4 px-4">
         <div className="w-full h-px mb-3" style={{ background: 'rgba(255,255,255,0.10)' }} />
-        <Link
-          href="/settings"
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link mb-2"
-          style={{
-            fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
-            textShadow: '0 2px 8px rgba(60,0,120,0.10)',
-            letterSpacing: '0.02em',
-          }}
-        >
-          <LucideSettings className="w-5 h-5" />
-          <span className="sidebar-link-label" style={{ fontSize: '1.25rem', fontWeight: 500 }}>
-            Settings
-          </span>
-        </Link>
+        {/* Show Settings for all users - different destinations based on role */}
+        {!rolesLoading && (
+          <Link
+            href={userRole === 'admin' || userRole === 'owner' ? "/settings" : "/dashboard/profile"}
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link mb-2"
+            style={{
+              fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
+              textShadow: '0 2px 8px rgba(60,0,120,0.10)',
+              letterSpacing: '0.02em',
+            }}
+          >
+            <LucideSettings className="w-5 h-5" />
+            <span className="sidebar-link-label" style={{ fontSize: '1.25rem', fontWeight: 500 }}>
+              Settings
+            </span>
+          </Link>
+        )}
       </div>
       
       {/* Portal-based Submenu */}

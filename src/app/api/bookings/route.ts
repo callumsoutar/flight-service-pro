@@ -15,9 +15,30 @@ export async function GET(req: NextRequest) {
     console.error("No user found in /api/bookings");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Role authorization check
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  // All authenticated users can access bookings, but with different data levels
+  const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+  const isRestrictedUser = userRole && ['member', 'student'].includes(userRole);
+
+  if (!isPrivilegedUser && !isRestrictedUser) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Booking access requires a valid role' 
+    }, { status: 403 });
+  }
   
   const searchParams = req.nextUrl.searchParams;
   const bookingId = searchParams.get("id");
+  const date = searchParams.get("date"); // YYYY-MM-DD format
 
   try {
     let query = supabase
@@ -53,7 +74,34 @@ export async function GET(req: NextRequest) {
         console.error("Error fetching single booking:", error);
         return NextResponse.json({ error: error.message }, { status: 404 });
       }
+      
+      // Check if user has permission to view detailed booking information
+      // Users can only view their own booking details, unless they are admin/owner/instructor
+      const { data: userRole } = await supabase.rpc('get_user_role', {
+        user_id: user.id
+      });
+      
+      const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+      const isOwnBooking = data.user_id === user.id;
+      
+      if (!isPrivilegedUser && !isOwnBooking) {
+        return NextResponse.json({ error: "Forbidden: You can only view your own booking details" }, { status: 403 });
+      }
+      
       return NextResponse.json({ booking: normalizeBookingTimestamps(data) });
+    }
+
+    // Filter by date if provided (for scheduler performance)
+    if (date) {
+      const startOfDay = `${date}T00:00:00.000Z`;
+      const endOfDay = `${date}T23:59:59.999Z`;
+      query = query.gte("start_time", startOfDay).lt("start_time", endOfDay);
+    }
+
+    // For restricted users (members/students), only show their own bookings unless it's for scheduler
+    if (isRestrictedUser && !date) {
+      // Non-scheduler requests: only show user's own bookings
+      query = query.eq("user_id", user.id);
     }
 
     const { data, error } = await query.order("start_time", { ascending: false });
@@ -61,7 +109,13 @@ export async function GET(req: NextRequest) {
       console.error("Error fetching bookings:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    return NextResponse.json({ bookings: (data ?? []).map(normalizeBookingTimestamps) });
+
+    // Filter sensitive data for restricted users
+    const responseData = isRestrictedUser 
+      ? (data ?? []).map(filterBookingData)
+      : (data ?? []);
+
+    return NextResponse.json({ bookings: responseData.map(normalizeBookingTimestamps) });
   } catch (error) {
     console.error("Unexpected error in /api/bookings:", error);
     return NextResponse.json({ 
@@ -78,6 +132,26 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Role authorization check
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  // All authenticated users can create bookings, but with restrictions
+  const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+  const isRestrictedUser = userRole && ['member', 'student'].includes(userRole);
+
+  if (!isPrivilegedUser && !isRestrictedUser) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Booking creation requires a valid role' 
+    }, { status: 403 });
+  }
   
   const body = await req.json();
   const requiredFields = ["aircraft_id", "start_time", "end_time", "purpose", "booking_type"];
@@ -85,6 +159,18 @@ export async function POST(req: NextRequest) {
     if (!body[field]) {
       return NextResponse.json({ error: `Missing required field: ${field}` }, { status: 400 });
     }
+  }
+
+  // Restricted users can only create bookings for themselves
+  if (isRestrictedUser && body.user_id && body.user_id !== user.id) {
+    return NextResponse.json({ 
+      error: 'Forbidden: You can only create bookings for yourself' 
+    }, { status: 403 });
+  }
+
+  // If no user_id provided and user is restricted, set to current user
+  if (isRestrictedUser && !body.user_id) {
+    body.user_id = user.id;
   }
   // Check for conflicts before attempting to insert
   try {
@@ -101,22 +187,10 @@ export async function POST(req: NextRequest) {
     }, { status: 409 });
   }
 
-  // Check instructor type rating if instructor is assigned
-  if (body.instructor_id && body.aircraft_id) {
-    try {
-      const { verifyInstructorTypeRating } = await import("@/lib/instructor-type-rating-validation");
-      const validation = await verifyInstructorTypeRating(supabase, body.instructor_id, body.aircraft_id);
-      
-      if (!validation.valid) {
-        return NextResponse.json({ 
-          error: `Type rating validation failed: ${validation.message}` 
-        }, { status: 409 });
-      }
-    } catch (typeRatingError) {
-      console.error("Type rating validation error:", typeRatingError);
-      // Don't block booking creation if validation service fails, just log the error
-    }
-  }
+  // Note: Type rating validation is handled in the frontend as a warning only.
+  // The backend allows booking creation regardless of type rating status.
+  // This ensures bookings can be created even if instructors lack type ratings,
+  // with appropriate warnings displayed in the UI.
 
   // Compose insert payload
   const insertPayload: Record<string, unknown> = {
@@ -232,11 +306,49 @@ export async function PATCH(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Role authorization check
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+  const isRestrictedUser = userRole && ['member', 'student'].includes(userRole);
+
+  if (!isPrivilegedUser && !isRestrictedUser) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Booking modification requires a valid role' 
+    }, { status: 403 });
+  }
   
   const body = await req.json();
   const { id, ...updateFields } = body;
   if (!id) {
     return NextResponse.json({ error: "Booking id is required" }, { status: 400 });
+  }
+
+  // Check if restricted user can modify this booking (only their own)
+  if (isRestrictedUser) {
+    const { data: existingBooking, error: checkError } = await supabase
+      .from("bookings")
+      .select("user_id")
+      .eq("id", id)
+      .single();
+    
+    if (checkError) {
+      return NextResponse.json({ error: checkError.message }, { status: 404 });
+    }
+    
+    if (existingBooking.user_id !== user.id) {
+      return NextResponse.json({ 
+        error: 'Forbidden: You can only modify your own bookings' 
+      }, { status: 403 });
+    }
   }
   // Only allow patching safe fields
   const allowedFields = [
@@ -294,38 +406,10 @@ export async function PATCH(req: NextRequest) {
       }, { status: 409 });
     }
 
-    // Check instructor type rating if instructor or aircraft is being updated
-    if (updates.instructor_id || updates.aircraft_id) {
-      try {
-        // Get current booking data to fill in missing values
-        const { data: currentBooking, error: currentError } = await supabase
-          .from("bookings")
-          .select("aircraft_id, instructor_id")
-          .eq("id", id)
-          .single();
-        
-        if (currentError) {
-          return NextResponse.json({ error: currentError.message }, { status: 404 });
-        }
-
-        const instructorId = updates.instructor_id || currentBooking.instructor_id;
-        const aircraftId = updates.aircraft_id || currentBooking.aircraft_id;
-
-        if (instructorId && aircraftId) {
-          const { verifyInstructorTypeRating } = await import("@/lib/instructor-type-rating-validation");
-          const validation = await verifyInstructorTypeRating(supabase, instructorId, aircraftId);
-          
-          if (!validation.valid) {
-            return NextResponse.json({ 
-              error: `Type rating validation failed: ${validation.message}` 
-            }, { status: 409 });
-          }
-        }
-      } catch (typeRatingError) {
-        console.error("Type rating validation error:", typeRatingError);
-        // Don't block booking update if validation service fails, just log the error
-      }
-    }
+    // Note: Type rating validation is handled in the frontend as a warning only.
+    // The backend allows booking updates regardless of type rating status.
+    // This ensures bookings can be created/updated even if instructors lack type ratings,
+    // with appropriate warnings displayed in the UI.
   }
   
   // First, get the existing booking to check for status changes
@@ -757,6 +841,30 @@ function normalizeBookingTimestamps(booking: Record<string, unknown> | null) {
     booking.end_time = isNaN(d.getTime()) ? booking.end_time : d.toISOString();
   }
   return booking;
+}
+
+// Filter sensitive booking data for restricted users (members/students)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function filterBookingData(booking: any) {
+  // Remove sensitive fields that restricted users shouldn't see
+  const filtered = { ...booking };
+  
+  // Remove financial data
+  delete filtered.aircraft_charge_rate;
+  delete filtered.instructor_charge_rate;
+  delete filtered.total_cost;
+  
+  // Remove detailed user information from other users' bookings
+  if (filtered.user && typeof filtered.user === 'object') {
+    filtered.user = {
+      id: filtered.user.id,
+      first_name: filtered.user.first_name,
+      last_name: filtered.user.last_name
+      // Remove email and other sensitive user data
+    };
+  }
+  
+  return filtered;
 }
 
 // Check for booking conflicts with aircraft and instructors

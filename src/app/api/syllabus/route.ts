@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from("syllabus")
     .select("*")
+    .is("voided_at", null)
     .order("created_at", { ascending: false });
 
   if (id) {
@@ -123,27 +124,35 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Missing syllabus ID" }, { status: 400 });
   }
 
-  // Check if syllabus has lessons before deleting
-  const { data: lessons } = await supabase
-    .from("lessons")
-    .select("id")
-    .eq("syllabus_id", id)
-    .limit(1);
+  // Check if the record exists and is not already voided
+  const { data: existingRecord, error: fetchError } = await supabase
+    .from("syllabus")
+    .select("voided_at")
+    .eq("id", id)
+    .single();
 
-  if (lessons && lessons.length > 0) {
-    return NextResponse.json({ 
-      error: "Cannot delete syllabus with existing lessons. Delete lessons first." 
-    }, { status: 400 });
+  if (fetchError) {
+    return NextResponse.json({ error: "Syllabus not found" }, { status: 404 });
   }
 
-  const { error } = await supabase
+  if (existingRecord.voided_at) {
+    return NextResponse.json({ error: "Syllabus is already voided" }, { status: 400 });
+  }
+
+  // Soft delete by setting voided_at timestamp
+  const { data, error } = await supabase
     .from("syllabus")
-    .delete()
-    .eq("id", id);
+    .update({
+      voided_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", id)
+    .select()
+    .single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ syllabus: data });
 } 

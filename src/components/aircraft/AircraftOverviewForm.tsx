@@ -1,13 +1,14 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Aircraft } from "@/types/aircraft";
+import type { AircraftType } from "@/types/aircraft_types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Info, Settings } from "lucide-react";
+import { Info, Settings, DollarSign, Plus } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -16,6 +17,15 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import AircraftChargeRatesTable from "./AircraftChargeRatesTable";
 
 const aircraftSchema = z.object({
   manufacturer: z.string().optional().nullable(),
@@ -38,6 +48,7 @@ const aircraftSchema = z.object({
   record_airswitch: z.boolean().optional(),
   fuel_consumption: z.coerce.number().nullable().optional(),
   total_time_method: z.string().optional().nullable(),
+  aircraft_type_id: z.string().optional().nullable(),
 });
 
 type AircraftFormValues = z.infer<typeof aircraftSchema>;
@@ -45,6 +56,12 @@ type AircraftFormValues = z.infer<typeof aircraftSchema>;
 export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: Aircraft, onSave: (updated: Aircraft) => void }) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aircraftTypes, setAircraftTypes] = useState<AircraftType[]>([]);
+  const [isAddTypeDialogOpen, setIsAddTypeDialogOpen] = useState(false);
+  const [newTypeName, setNewTypeName] = useState("");
+  const [newTypeCategory, setNewTypeCategory] = useState("");
+  const [newTypeDescription, setNewTypeDescription] = useState("");
+  const [isCreatingType, setIsCreatingType] = useState(false);
   const {
     register,
     handleSubmit,
@@ -75,8 +92,52 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
       record_airswitch: aircraft.record_airswitch ?? false,
       fuel_consumption: aircraft.fuel_consumption ?? undefined,
       total_time_method: aircraft.total_time_method ?? undefined,
+      aircraft_type_id: aircraft.aircraft_type_id ?? undefined,
     },
   });
+
+  useEffect(() => {
+    fetch("/api/aircraft-types")
+      .then(res => res.json())
+      .then(data => setAircraftTypes(data.aircraft_types || []))
+      .catch(() => toast.error("Failed to load aircraft types"));
+  }, []);
+
+  const handleCreateAircraftType = async () => {
+    if (!newTypeName.trim()) {
+      toast.error("Aircraft type name is required");
+      return;
+    }
+
+    setIsCreatingType(true);
+    try {
+      const res = await fetch("/api/aircraft-types", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newTypeName.trim(),
+          category: newTypeCategory.trim() || null,
+          description: newTypeDescription.trim() || null,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok || result.error) {
+        toast.error(result.error || "Failed to create aircraft type");
+      } else {
+        toast.success("Aircraft type created!");
+        setAircraftTypes([...aircraftTypes, result.aircraft_type]);
+        setValue("aircraft_type_id", result.aircraft_type.id, { shouldDirty: true });
+        setIsAddTypeDialogOpen(false);
+        setNewTypeName("");
+        setNewTypeCategory("");
+        setNewTypeDescription("");
+      }
+    } catch {
+      toast.error("Failed to create aircraft type");
+    } finally {
+      setIsCreatingType(false);
+    }
+  };
 
   const onSubmit = async (data: AircraftFormValues) => {
     setIsSaving(true);
@@ -144,9 +205,35 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
                 {errors.manufacturer && <p className="text-xs text-red-500 mt-1">{errors.manufacturer.message}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-800">Type</label>
-                <Input {...register("type")} className="bg-white w-64" />
-                {errors.type && <p className="text-xs text-red-500 mt-1">{errors.type.message}</p>}
+                <label className="block text-sm font-medium mb-1 text-gray-800">Aircraft Type</label>
+                <Select
+                  value={watch("aircraft_type_id") || undefined}
+                  onValueChange={v => setValue("aircraft_type_id", v ?? null, { shouldDirty: true })}
+                >
+                  <SelectTrigger className="w-64">
+                    <SelectValue placeholder="Select aircraft type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {aircraftTypes.map(type => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.name}
+                      </SelectItem>
+                    ))}
+                    <div className="border-t mt-1 pt-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                        onClick={() => setIsAddTypeDialogOpen(true)}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Aircraft Type
+                      </Button>
+                    </div>
+                  </SelectContent>
+                </Select>
+                {errors.aircraft_type_id && <p className="text-xs text-red-500 mt-1">{errors.aircraft_type_id.message}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-gray-800">Model</label>
@@ -264,7 +351,71 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
           </div>
         </div>
       </Card>
+
+      {/* Charge Rates Section */}
+      <Card className="mb-8 bg-white border border-gray-200 rounded-2xl p-8 shadow-sm">
+        <h4 className="flex items-center gap-2 text-base font-semibold mb-6 text-gray-900 tracking-tight border-b pb-2">
+          <DollarSign className="w-5 h-5 text-indigo-500" />
+          Charge Rates
+        </h4>
+        <AircraftChargeRatesTable aircraftId={aircraft.id} />
+      </Card>
+
       {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+
+      <Dialog open={isAddTypeDialogOpen} onOpenChange={setIsAddTypeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Aircraft Type</DialogTitle>
+            <DialogDescription>
+              Create a new aircraft type to categorize your aircraft fleet.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Name *</label>
+              <Input
+                value={newTypeName}
+                onChange={(e) => setNewTypeName(e.target.value)}
+                placeholder="e.g., Cessna 172"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Category</label>
+              <Input
+                value={newTypeCategory}
+                onChange={(e) => setNewTypeCategory(e.target.value)}
+                placeholder="e.g., Single Engine"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Description</label>
+              <Input
+                value={newTypeDescription}
+                onChange={(e) => setNewTypeDescription(e.target.value)}
+                placeholder="e.g., Four-seat, single-engine aircraft"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsAddTypeDialogOpen(false)}
+              disabled={isCreatingType}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCreateAircraftType}
+              disabled={isCreatingType || !newTypeName.trim()}
+            >
+              {isCreatingType ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 } 

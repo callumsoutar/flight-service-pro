@@ -44,4 +44,5 @@ export interface CancellationCategory {
   description?: string | null;
   created_at: string;
   updated_at: string;
+  voided_at?: string | null;
 }

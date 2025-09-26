@@ -1,257 +1,308 @@
 # Permissions & Role-Based Access Control (RBAC) System
 
 ## Overview
-This document describes the permissions and role-based access control (RBAC) system implemented in this project. It enables fine-grained, per-organization, per-user, and per-role permission management, supporting both classic RBAC and direct user permission assignments for exceptions.
+This document describes the permissions and role-based access control (RBAC) system implemented in this single-tenant flight school management application. The system uses a simplified role-based approach without organization-level permissions, as this is a single-tenant architecture.
+
+---
+
+## Current System Architecture
+
+### Single-Tenant Design
+- **No multi-tenancy:** The application does not use `organization_id` fields
+- **User-Role Assignment:** Users are assigned roles directly through the `user_roles` table
+- **Role-Based Permissions:** Access control is implemented through RLS policies using role checking functions
 
 ---
 
 ## Table Structure
 
-### 1. `permissions`
-- **Purpose:** Stores all possible actions that can be controlled (e.g., `can_delete_aircraft`).
+### 1. `roles`
+- **Purpose:** Stores available user roles in the system
 - **Columns:**
   - `id` (uuid, PK)
-  - `name` (text, unique, e.g., 'can_delete_aircraft')
+  - `name` (user_role enum: 'admin', 'instructor', 'member', 'student', 'owner')
   - `description` (text)
+  - `is_active` (boolean)
+  - `created_at`, `updated_at` (timestamps)
 
-### 2. `role_permissions`
-- **Purpose:** Maps each role (from the `user_role` enum) to a set of permissions.
-- **Columns:**
-  - `id` (uuid, PK)
-  - `role` (user_role enum, e.g., 'admin', 'instructor')
-  - `permission_id` (uuid, FK to `permissions.id`)
-  - **Unique:** (`role`, `permission_id`)
+**Available Roles:**
+- `owner` - Full system access and control
+- `admin` - Administrative access to manage users and settings  
+- `instructor` - Can manage bookings, lessons, and student progress
+- `member` - Standard member access
+- `student` - Student access for learning and booking
 
-### 3. `user_organizations`
-- **Purpose:** Associates users with organizations and assigns a role per org.
+### 2. `user_roles`
+- **Purpose:** Associates users with their assigned roles
 - **Columns:**
   - `id` (uuid, PK)
   - `user_id` (uuid, FK to `users.id`)
-  - `organization_id` (uuid, FK to `organizations.id`)
-  - `role` (user_role enum)
-  - ...
+  - `role_id` (uuid, FK to `roles.id`)
+  - `granted_by` (uuid, FK to `users.id`)
+  - `granted_at` (timestamp)
+  - `is_active` (boolean)
+  - `created_at`, `updated_at` (timestamps)
 
-### 4. `user_permissions`
-- **Purpose:** Directly assigns or denies a permission to a specific user in a specific organization, regardless of their role.
+### 3. `user_permission_overrides`
+- **Purpose:** Allows individual permission overrides for specific users (currently unused but available)
 - **Columns:**
   - `id` (uuid, PK)
-  - `user_organization_id` (uuid, FK to `user_organizations.id`)
-  - `permission_id` (uuid, FK to `permissions.id`)
-  - `allowed` (boolean)
-  - **Unique:** (`user_organization_id`, `permission_id`)
+  - `user_id` (uuid, FK to `users.id`)
+  - `permission_id` (uuid, FK to permission identifier)
+  - `granted` (boolean)
+  - `created_at`, `updated_at` (timestamps)
+
+### 4. `instructors`
+- **Purpose:** Additional instructor-specific data beyond basic user roles
+- **Columns:**
+  - `id` (uuid, PK)
+  - `user_id` (uuid, FK to `users.id`, unique)
+  - `status` (instructor_status enum)
+  - `employment_type` (employment_type enum)
+  - Various instructor-specific fields (ratings, medical dates, etc.)
 
 ---
 
-## Permission Resolution Logic
+## Permission Resolution System
 
-When checking if a user can perform an action (e.g., delete an aircraft) in a given organization:
+### Functions Used
+The system uses PostgreSQL functions for permission checking:
 
-1. **Direct User Permission:**
-   - Check `user_permissions` for a row matching the user's `user_organization_id` and the `permission_id`.
-   - If found, use the value of `allowed` (true = allow, false = deny).
-2. **Role-Based Permission:**
-   - If no direct user permission exists, look up the user's role in `user_organizations` for the org.
-   - Check if that role has the permission in `role_permissions`.
-   - If found, allow the action.
-3. **Default:**
-   - If neither exists, deny the action by default.
+1. **`check_user_role_simple(user_id, allowed_roles[])`**
+   - Primary function used in RLS policies
+   - Returns boolean indicating if user has any of the specified roles
+   - Includes error handling for security
 
----
+2. **`check_user_role(user_id, allowed_roles[])`**
+   - Alternative role checking function
+   - Similar to simple version but with different implementation
 
-## Example: Can User Delete Aircraft?
+3. **`get_user_role(user_id)`**
+   - Returns the user's primary role name
+   - Prioritizes roles: owner > admin > instructor > member > student
+   - Returns 'member' as default if no role found
 
-Suppose User A and User B are both 'admin' in Org X. By default, both can delete aircraft if the 'admin' role has that permission. If you want only User A to have this permission:
-
-- Add a row to `user_permissions` for User B's `user_organization_id`, the `can_delete_aircraft` permission, and set `allowed = false`.
-- Now, User B is denied, while User A is allowed (via their role).
-
----
-
-## Example SQL Queries
-
-### 1. Check if a user has a permission in an org
-```sql
--- Replace :user_id, :org_id, :permission_name as needed
-WITH user_org AS (
-  SELECT id, role FROM user_organizations
-  WHERE user_id = :user_id AND organization_id = :org_id
-), perm AS (
-  SELECT id FROM permissions WHERE name = :permission_name
-)
-SELECT
-  COALESCE(up.allowed,
-    CASE WHEN rp.permission_id IS NOT NULL THEN true ELSE false END
-  ) AS is_allowed
-FROM user_org uo
-CROSS JOIN perm p
-LEFT JOIN user_permissions up
-  ON up.user_organization_id = uo.id AND up.permission_id = p.id
-LEFT JOIN role_permissions rp
-  ON rp.role = uo.role AND rp.permission_id = p.id
-LIMIT 1;
-```
-
-### 2. Grant a permission to a role
-```sql
-INSERT INTO role_permissions (role, permission_id)
-SELECT 'admin', id FROM permissions WHERE name = 'can_delete_aircraft';
-```
-
-### 3. Grant or deny a permission to a specific user in an org
-```sql
--- Allow
-INSERT INTO user_permissions (user_organization_id, permission_id, allowed)
-VALUES (:user_org_id, :permission_id, true)
-ON CONFLICT (user_organization_id, permission_id) DO UPDATE SET allowed = true;
-
--- Deny
-INSERT INTO user_permissions (user_organization_id, permission_id, allowed)
-VALUES (:user_org_id, :permission_id, false)
-ON CONFLICT (user_organization_id, permission_id) DO UPDATE SET allowed = false;
-```
+### Permission Resolution Logic
+1. **Primary Role Check:** User's role is checked against required roles for the action
+2. **Instructor Special Case:** Some permissions also check if user has an instructor record
+3. **RLS Policy Enforcement:** All database access is controlled through Row Level Security policies
+4. **Default Deny:** If no permission is found, access is denied by default
 
 ---
 
-## Best Practices
-- Use roles and `role_permissions` for most users—this is scalable and easy to manage.
-- Use `user_permissions` only for exceptions (special grants or denials).
-- Always check direct user permissions first, then fall back to role permissions.
-- Deny by default if no permission is found.
-- Keep permission names consistent and descriptive (e.g., `can_edit_invoice`, `can_view_reports`).
+## RLS (Row Level Security) Implementation
+
+### Policy Patterns
+The application uses several consistent patterns in RLS policies:
+
+1. **Role-based policies using `check_user_role_simple()`**
+   ```sql
+   -- Example: Aircraft management
+   CREATE POLICY "aircraft_manage" ON aircraft
+   FOR ALL
+   USING (check_user_role_simple(auth.uid(), ARRAY['admin'::user_role, 'owner'::user_role, 'instructor'::user_role]));
+   ```
+
+2. **Owner-based policies for user data**
+   ```sql
+   -- Example: Users can view their own data
+   CREATE POLICY "users_view_own" ON users
+   FOR SELECT
+   USING (auth.uid() = id);
+   ```
+
+3. **Combined role and ownership policies**
+   ```sql
+   -- Example: Bookings can be viewed by admins or the booking owner
+   CREATE POLICY "bookings_view_own" ON bookings
+   FOR SELECT
+   USING (auth.uid() = user_id);
+   
+   CREATE POLICY "bookings_view_all" ON bookings
+   FOR SELECT
+   USING (check_user_role_simple(auth.uid(), ARRAY['admin'::user_role, 'owner'::user_role, 'instructor'::user_role]));
+   ```
+
+### Current RLS Policies Summary
+
+**Admin/Owner Only Access:**
+- `aircraft_charge_rates`, `cancellation_categories`, `chargeables`, `exam`, `flight_types`
+- `instructor_flight_type_rates`, `instructors`, `invoice_*`, `lessons`, `licenses`
+- `memberships`, `payments`, `roles`, `settings`, `tax_rates`, `transactions`, `user_roles`
+
+**Admin/Owner/Instructor Access:**
+- `aircraft`, `aircraft_components`, `aircraft_tech_log`, `equipment`, `equipment_*`
+- `exam_results`, `instructor_comments`, `lesson_progress`, `maintenance_visits`
+- `observation_comments`, `observations`, `student_syllabus_enrollment`, `users`
+
+**User-Specific Access:**
+- Users can view/modify their own records in most tables
+- Special handling for bookings, flight authorizations, etc.
+
+**Public/Authenticated Access:**
+- `aircraft_types`, `instructor_aircraft_ratings`, `instructor_categories`: Basic CRUD for authenticated users
+- `business_hours`: Public read, authenticated write
+- `flight_logs`: Authenticated users can manage
 
 ---
 
-## RLS (Row Level Security) Policy Guidance
-- Use RLS policies to enforce these checks at the database level for maximum security.
-- Example: Only allow DELETE on `aircraft` if the user has `can_delete_aircraft` in the current org.
+## Frontend Implementation
+
+### Role Checking
+The frontend uses several approaches for role-based access:
+
+1. **Server-side role checking**
+   ```typescript
+   // Example from flight-authorizations page
+   const { data: userRole } = await supabase.rpc('get_user_role', { user_id: user.id });
+   if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+     redirect('/dashboard');
+   }
+   ```
+
+2. **Client-side hooks for permission checking**
+   ```typescript
+   // Example: use-can-override-authorization.ts
+   const { data: userRoles } = await supabase
+     .from('user_roles')
+     .select(`roles!user_roles_role_id_fkey(name)`)
+     .eq('user_id', user.id)
+     .eq('is_active', true);
+   
+   const isAdmin = userRoles?.some((ur: any) => 
+     ur.roles?.name === 'admin' || ur.roles?.name === 'owner');
+   ```
+
+3. **Instructor record checking**
+   ```typescript
+   // Check if user has instructor record (for instructor-specific features)
+   const { data: instructorRecord } = await supabase
+     .from('instructors')
+     .select('id')
+     .eq('user_id', user.id)
+     .single();
+   ```
 
 ---
 
-## Aircraft Permissions, Roles, and RLS Policies
+## API Endpoints
 
-### Aircraft Permissions
-- `can_create_aircraft`: Allows creating new aircraft records.
-- `can_update_aircraft`: Allows updating aircraft details.
-- `can_delete_aircraft`: Allows deleting aircraft records.
-- `can_view_aircraft`: Allows viewing aircraft records.
+### User Role Management
+Currently, the system lacks dedicated API endpoints for role management. Role changes would need to be implemented through:
 
-### Default Role Permissions (for Aircraft)
-| Role        | can_create_aircraft | can_update_aircraft | can_delete_aircraft | can_view_aircraft |
-|------------|---------------------|---------------------|---------------------|-------------------|
-| admin      |         ✅          |         ✅          |         ✅          |        ✅         |
-| instructor |         ❌          |         ❌          |         ❌          |        ✅         |
-| student    |         ❌          |         ❌          |         ❌          |        ✅         |
+1. **Direct database manipulation** (current approach)
+2. **New API endpoints** for role assignment (recommended for instructor management)
 
-- **Admin**: Full CRUD access to aircraft.
-- **Instructor**: Can view aircraft, but cannot create, update, or delete.
-- **Student**: Can view aircraft only.
-
-### RLS Policy Examples for Aircraft Table
-
-Assuming the aircraft table has an `organization_id` column and all access is scoped to the current org.
-
-#### 1. Enable RLS
-```sql
-ALTER TABLE aircraft ENABLE ROW LEVEL SECURITY;
-```
-
-#### 2. Policy: View Aircraft
-```sql
-CREATE POLICY "Allow view if user has can_view_aircraft in org" ON aircraft
-  FOR SELECT
-  USING (
-    auth.uid() IS NOT NULL
-    AND (
-      EXISTS (
-        SELECT 1 FROM user_organizations uo
-        JOIN permissions p ON p.name = 'can_view_aircraft'
-        LEFT JOIN user_permissions up ON up.user_organization_id = uo.id AND up.permission_id = p.id
-        LEFT JOIN role_permissions rp ON rp.role = uo.role AND rp.permission_id = p.id
-        WHERE uo.user_id = auth.uid() AND uo.organization_id = aircraft.organization_id
-        AND (
-          COALESCE(up.allowed, CASE WHEN rp.permission_id IS NOT NULL THEN true ELSE false END)
-        )
-      )
-    )
-  );
-```
-
-#### 3. Policy: Create Aircraft
-```sql
-CREATE POLICY "Allow insert if user has can_create_aircraft in org" ON aircraft
-  FOR INSERT
-  WITH CHECK (
-    auth.uid() IS NOT NULL
-    AND (
-      EXISTS (
-        SELECT 1 FROM user_organizations uo
-        JOIN permissions p ON p.name = 'can_create_aircraft'
-        LEFT JOIN user_permissions up ON up.user_organization_id = uo.id AND up.permission_id = p.id
-        LEFT JOIN role_permissions rp ON rp.role = uo.role AND rp.permission_id = p.id
-        WHERE uo.user_id = auth.uid() AND uo.organization_id = aircraft.organization_id
-        AND (
-          COALESCE(up.allowed, CASE WHEN rp.permission_id IS NOT NULL THEN true ELSE false END)
-        )
-      )
-    )
-  );
-```
-
-#### 4. Policy: Update Aircraft
-```sql
-CREATE POLICY "Allow update if user has can_update_aircraft in org" ON aircraft
-  FOR UPDATE
-  USING (
-    auth.uid() IS NOT NULL
-    AND (
-      EXISTS (
-        SELECT 1 FROM user_organizations uo
-        JOIN permissions p ON p.name = 'can_update_aircraft'
-        LEFT JOIN user_permissions up ON up.user_organization_id = uo.id AND up.permission_id = p.id
-        LEFT JOIN role_permissions rp ON rp.role = uo.role AND rp.permission_id = p.id
-        WHERE uo.user_id = auth.uid() AND uo.organization_id = aircraft.organization_id
-        AND (
-          COALESCE(up.allowed, CASE WHEN rp.permission_id IS NOT NULL THEN true ELSE false END)
-        )
-      )
-    )
-  );
-```
-
-#### 5. Policy: Delete Aircraft
-```sql
-CREATE POLICY "Allow delete if user has can_delete_aircraft in org" ON aircraft
-  FOR DELETE
-  USING (
-    auth.uid() IS NOT NULL
-    AND (
-      EXISTS (
-        SELECT 1 FROM user_organizations uo
-        JOIN permissions p ON p.name = 'can_delete_aircraft'
-        LEFT JOIN user_permissions up ON up.user_organization_id = uo.id AND up.permission_id = p.id
-        LEFT JOIN role_permissions rp ON rp.role = uo.role AND rp.permission_id = p.id
-        WHERE uo.user_id = auth.uid() AND uo.organization_id = aircraft.organization_id
-        AND (
-          COALESCE(up.allowed, CASE WHEN rp.permission_id IS NOT NULL THEN true ELSE false END)
-        )
-      )
-    )
-  );
+### Proposed API Structure for Role Management
+```typescript
+// GET /api/users/[id]/roles - Get user's current roles
+// POST /api/users/[id]/roles - Assign a role to user
+// DELETE /api/users/[id]/roles/[role_id] - Remove a role from user
+// PATCH /api/users/[id]/roles/[role_id] - Update role assignment (activate/deactivate)
 ```
 
 ---
 
-These policies ensure that all aircraft access is enforced at the database level, using the same permission resolution logic described above. You can use this section as a template for other resources (e.g., equipment, bookings) by substituting the relevant permission names and table names.
+## Role Assignment Workflow
+
+### Current Process
+1. Users are created in the `users` table
+2. Roles are manually assigned through database operations
+3. Instructor records are created in the `instructors` table for instructor-related functionality
+
+### Recommended Process for Instructor Role Assignment
+1. Verify current user has admin/owner permissions
+2. Fetch available roles from `roles` table
+3. Check user's current role assignments
+4. Allow assignment/modification of roles through secure API
+5. Maintain audit trail of role changes
+
+---
+
+## Security Considerations
+
+### RLS Policy Security
+- All policies use `auth.uid()` to ensure authenticated access
+- Role checking functions include error handling to fail securely
+- Default deny approach - no access unless explicitly granted
+
+### Function Security
+- `check_user_role_simple()` includes exception handling
+- Falls back to `false` on any error for security
+- Uses direct queries to avoid RLS circular dependencies
+
+### Frontend Security
+- Server-side role verification for page access
+- Client-side role checking for UI elements
+- API endpoints protected by RLS policies
+
+---
+
+## Common Role Patterns
+
+### Hierarchical Access
+Owner > Admin > Instructor > Member > Student
+
+### Access Patterns by Role
+- **Owner**: Full system access, can manage all users and settings
+- **Admin**: Can manage users, settings, and most data
+- **Instructor**: Can manage students, bookings, lessons, and flight operations
+- **Member**: Can manage own bookings and view relevant data
+- **Student**: Can view own progress and create bookings
+
+### Special Cases
+- **Instructor Records**: Users with instructor records get additional permissions even without instructor role
+- **Self-Management**: Users can always manage their own data regardless of role
+- **Resource Ownership**: Users typically have enhanced permissions for resources they created/own
+
+---
+
+## Implementation Notes
+
+### Role Assignment for Instructors
+To implement role selection for instructors in the settings tab, the following components need to be created:
+
+1. **API endpoint** for managing user roles (`/api/users/[id]/roles`)
+2. **Role selector component** in the instructor settings tab
+3. **Permission checking** to ensure only admins/owners can change roles
+4. **Audit logging** for role changes
+
+### Example Implementation
+```typescript
+// API endpoint structure
+POST /api/users/[user_id]/roles
+{
+  "role_name": "instructor" | "admin" | "owner" | "member" | "student",
+  "granted_by": "current_user_id"
+}
+
+// Component structure  
+<Select
+  value={currentRole}
+  onValueChange={handleRoleChange}
+  disabled={!canManageRoles}
+>
+  <SelectItem value="instructor">Instructor</SelectItem>
+  <SelectItem value="admin">Admin</SelectItem>
+  <SelectItem value="owner">Owner</SelectItem>
+</Select>
+```
+
+### Security Requirements
+- Only admin/owner roles can modify other users' roles
+- Role changes must be audited
+- Changes take effect immediately through RLS policies
+- UI should reflect current permissions accurately
 
 ---
 
 ## Extending the System
-- Add new permissions to the `permissions` table as needed.
-- Assign them to roles via `role_permissions`.
-- Use `user_permissions` for per-user exceptions.
-- You can add more granularity (e.g., resource-level permissions) by extending the schema if needed.
+- Role-based permissions are enforced through RLS policies
+- New roles can be added to the `user_role` enum and `roles` table
+- Permission overrides can be implemented through `user_permission_overrides` table
+- Additional granularity can be added by extending the role checking functions
 
 ---
 
 ## Questions?
-For further details or help, see the codebase or contact the system architect.
+For further details or help, see the codebase, RLS policies, or permission checking functions in the database.

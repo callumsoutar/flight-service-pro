@@ -98,6 +98,19 @@ export async function POST(
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
 
+    // Check if user has permission to calculate charges for this booking
+    // Users can only calculate charges for their own bookings, unless they are admin/owner/instructor
+    const { data: userRole } = await supabase.rpc('get_user_role', {
+      user_id: user.id
+    });
+    
+    const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+    const isOwnBooking = booking.user_id === user.id;
+    
+    if (!isPrivilegedUser && !isOwnBooking) {
+      return NextResponse.json({ error: "Forbidden: You can only calculate charges for your own bookings" }, { status: 403 });
+    }
+
     // 2. Update or create flight log with meter readings
     let flightLog = booking.flight_logs?.[0];
     const meterUpdates: Record<string, number> = {};

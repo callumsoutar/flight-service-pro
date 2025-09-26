@@ -4,8 +4,10 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import InvoiceSummaryCardsClient from "@/components/invoices/InvoiceSummaryCardsClient";
 import InvoicesClientView from "@/components/invoices/InvoicesClientView";
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
 
-export default function InvoicesPage() {
+// Component now receives guaranteed authenticated user and role data
+async function InvoicesPage({}: ProtectedPageProps) {
   return (
     <main className="flex flex-col gap-8 p-6 md:p-10">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -25,4 +27,8 @@ export default function InvoicesPage() {
       <InvoicesClientView />
     </main>
   );
-} 
+}
+
+// Export the protected component using the standardized HOC
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default withRoleProtection(InvoicesPage, ROLE_CONFIGS.ADMIN_ONLY) as any; 

@@ -50,10 +50,12 @@ export async function POST(
       );
     }
 
-    // Validate that all required fields are filled for submission
-    const validationResult = flightAuthorizationFormSchema.safeParse({
+    // Log the authorization data for debugging
+    console.log('Authorization data before validation:', {
+      id: authorization.id,
+      status: authorization.status,
       purpose_of_flight: authorization.purpose_of_flight,
-      passenger_names: authorization.passenger_names || [],
+      passenger_names: authorization.passenger_names,
       runway_in_use: authorization.runway_in_use,
       fuel_level_liters: authorization.fuel_level_liters,
       oil_level_quarts: authorization.oil_level_quarts,
@@ -61,12 +63,35 @@ export async function POST(
       weather_briefing_complete: authorization.weather_briefing_complete,
       payment_method: authorization.payment_method,
       authorizing_instructor_id: authorization.authorizing_instructor_id,
+      student_signature_data: authorization.student_signature_data ? 'Present' : 'Not present'
+    });
+
+    // Validate that all required fields are filled for submission
+    // Ensure numeric fields are numbers (they should already be from DB)
+    const validationData = {
+      purpose_of_flight: authorization.purpose_of_flight,
+      passenger_names: authorization.passenger_names || [],
+      runway_in_use: authorization.runway_in_use,
+      fuel_level_liters: typeof authorization.fuel_level_liters === 'number'
+        ? authorization.fuel_level_liters
+        : parseFloat(authorization.fuel_level_liters) || 0,
+      oil_level_quarts: typeof authorization.oil_level_quarts === 'number'
+        ? authorization.oil_level_quarts
+        : parseFloat(authorization.oil_level_quarts) || 0,
+      notams_reviewed: authorization.notams_reviewed,
+      weather_briefing_complete: authorization.weather_briefing_complete,
+      payment_method: authorization.payment_method,
+      authorizing_instructor_id: authorization.authorizing_instructor_id,
       student_signature_data: authorization.student_signature_data,
       instructor_notes: authorization.instructor_notes,
       instructor_limitations: authorization.instructor_limitations,
-    });
+    };
+
+    console.log('Validation data:', validationData);
+    const validationResult = flightAuthorizationFormSchema.safeParse(validationData);
 
     if (!validationResult.success) {
+      console.log('Validation failed:', validationResult.error.issues);
       return NextResponse.json(
         {
           error: "Authorization is incomplete and cannot be submitted",
@@ -80,14 +105,18 @@ export async function POST(
     }
 
     // Update status to pending and set submitted timestamp
+    console.log('About to update status to pending for authorization:', authorizationId);
+    const updatePayload = {
+      status: 'pending',
+      submitted_at: new Date().toISOString(),
+      student_signed_at: authorization.student_signature_data ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString()
+    };
+    console.log('Update payload:', updatePayload);
+
     const { data: updatedAuth, error: updateError } = await supabase
       .from("flight_authorizations")
-      .update({
-        status: 'pending',
-        submitted_at: new Date().toISOString(),
-        student_signed_at: authorization.student_signature_data ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString()
-      })
+      .update(updatePayload)
       .eq("id", authorizationId)
       .select(`
         *,
@@ -111,6 +140,8 @@ export async function POST(
         { status: 500 }
       );
     }
+
+    console.log('Successfully updated authorization to pending. Updated auth:', updatedAuth);
 
     // TODO: In the future, send notification to instructors about pending authorization
     // This could be done via email, in-app notifications, etc.

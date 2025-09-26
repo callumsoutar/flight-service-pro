@@ -4,20 +4,15 @@ import { createClient } from "@/lib/SupabaseServerClient";
 import { FlightAuthorizationClient } from './FlightAuthorizationClient';
 import type { Booking } from '@/types/bookings';
 import type { FlightAuthorization } from '@/types/flight_authorizations';
+import { withRoleProtection, ProtectedPageProps, validateBookingAccess } from '@/lib/rbac-page-wrapper';
 
-interface FlightAuthorizationPageProps {
+interface FlightAuthorizationPageProps extends ProtectedPageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function FlightAuthorizationPage({ params }: FlightAuthorizationPageProps) {
+async function FlightAuthorizationPage({ params, user, userRole }: FlightAuthorizationPageProps) {
   const { id: bookingId } = await params;
   const supabase = await createClient();
-
-  // Auth check
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    redirect('/login');
-  }
 
   // Fetch booking with all related data
   const { data: booking, error: bookingError } = await supabase
@@ -41,13 +36,15 @@ export default async function FlightAuthorizationPage({ params }: FlightAuthoriz
     redirect('/dashboard/bookings');
   }
 
-  // Check if user has permission to view this authorization
-  // Students can only view their own bookings, instructors/admins can view all
-  if (booking.user_id !== user.id) {
-    const { data: userRole } = await supabase.rpc('get_user_role', { user_id: user.id });
-    if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
-      redirect('/dashboard/bookings');
-    }
+  // Check if user has permission to view this authorization using standardized validation
+  const canAccessBooking = await validateBookingAccess({
+    user,
+    userRole,
+    bookingUserId: booking.user_id || ''
+  });
+
+  if (!canAccessBooking) {
+    redirect('/dashboard/bookings');
   }
 
   // Check if this is actually a solo flight that needs authorization
@@ -93,8 +90,7 @@ export default async function FlightAuthorizationPage({ params }: FlightAuthoriz
     .eq("booking_id", bookingId)
     .single();
 
-  // Get current user's role for permission checking
-  const { data: currentUserRole } = await supabase.rpc('get_user_role', { user_id: user.id });
+  // Use the userRole from the HOC (already validated)
 
   // Fetch all instructors for selection
   const { data: instructors } = await supabase
@@ -129,7 +125,14 @@ export default async function FlightAuthorizationPage({ params }: FlightAuthoriz
       existingAuthorization={existingAuthorization as FlightAuthorization | null}
       instructors={formattedInstructors}
       user={user}
-      userRole={currentUserRole}
+      userRole={userRole}
     />
   );
 }
+
+// Export protected component with authenticated users (booking-specific validation inside)
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export default withRoleProtection(FlightAuthorizationPage as any, {
+  allowedRoles: ['student', 'member', 'instructor', 'admin', 'owner'],
+  fallbackUrl: '/dashboard/bookings'
+}) as any;

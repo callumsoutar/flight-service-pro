@@ -1,33 +1,26 @@
+import React from "react";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/SupabaseServerClient";
+import { createClient, createServiceClient } from "@/lib/SupabaseServerClient";
 import { User } from "@/types/users";
 import { MembershipStatus } from "@/types/memberships";
 import MemberProfileCard from "@/components/members/MemberProfileCard";
 import MemberTabs from "@/components/members/MemberTabs";
 import { ArrowLeft } from "lucide-react";
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
 
 function formatJoinDate(dateString: string): string {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-export default async function MemberViewPage({ params }: { params: Promise<{ id: string }> }) {
+interface MemberViewPageProps extends ProtectedPageProps {
+  params: Promise<{ id: string }>;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function MemberViewPage({ params, user: _user, userRole: _userRole }: MemberViewPageProps) {
   const { id } = await params;
   const supabase = await createClient();
-
-  // Fetch the currently logged-in user
-  const { data: authUserData, error: authUserError } = await supabase.auth.getUser();
-  if (authUserError || !authUserData?.user) {
-    console.log('No logged-in user found or error:', authUserError);
-  } else {
-    const user = authUserData.user;
-    console.log('Logged in user:', {
-      id: user.id,
-      email: user.email,
-      name: user.user_metadata?.full_name || user.user_metadata?.name,
-      metadata: user.user_metadata,
-    });
-  }
 
   // Fetch user with roles - specify the exact relationship
   const { data, error } = await supabase
@@ -48,12 +41,21 @@ export default async function MemberViewPage({ params }: { params: Promise<{ id:
     notFound();
   }
 
+  // Check if user has auth account using service client
+  const serviceSupabase = createServiceClient();
+  const { data: authUser } = await serviceSupabase
+    .from("auth.users")
+    .select("id")
+    .eq("id", id)
+    .single();
+
   // Add role information to the user object
   const member: User = {
     ...data,
     role: data.user_roles && data.user_roles.length > 0 
       ? data.user_roles[0]?.roles?.name || 'member'
-      : 'member'
+      : 'member',
+    has_auth_account: !!authUser
   };
   
   const joinDate = formatJoinDate(member.created_at);
@@ -109,4 +111,8 @@ export default async function MemberViewPage({ params }: { params: Promise<{ id:
       </div>
     </main>
   );
-} 
+}
+
+// Export protected component with role restriction for instructors and above
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export default withRoleProtection(MemberViewPage as any, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any;

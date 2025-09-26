@@ -31,8 +31,6 @@ interface FlightAuthorizationClientProps {
 export function FlightAuthorizationClient({
   booking,
   existingAuthorization,
-  instructors,
-  user,
   userRole
 }: FlightAuthorizationClientProps) {
   const router = useRouter();
@@ -40,16 +38,6 @@ export function FlightAuthorizationClient({
   // Check if user is instructor/admin who can approve
   const canApprove = userRole && ['instructor', 'admin', 'owner'].includes(userRole);
   const showApprovalActions = canApprove && existingAuthorization?.status === 'pending';
-
-  // Debug logging
-  console.log('FlightAuthorizationClient Debug:', {
-    userRole,
-    canApprove,
-    authorizationStatus: existingAuthorization?.status,
-    showApprovalActions,
-    instructorsLength: instructors.length,
-    userId: user.id
-  });
 
   // Approval mutations
   const approveMutation = useApproveFlightAuthorization({
@@ -92,10 +80,17 @@ export function FlightAuthorizationClient({
   };
 
   const handleSuccess = (authorization: FlightAuthorization) => {
-    // Show success message and redirect based on status
+    // Show success message and redirect based on status and user role
     if (authorization.status === 'pending') {
-      // Redirect to booking view with success message
-      router.push(`/dashboard/bookings/view/${booking.id}?authorized=pending`);
+      // Only redirect students away after submitting for approval
+      // Instructors/admins/owners should stay to review and approve
+      if (!canApprove) {
+        // Student submitted for approval - redirect to booking view
+        router.push(`/dashboard/bookings/view/${booking.id}?authorized=pending`);
+      } else {
+        // Instructor/admin/owner stays on page to review the pending authorization
+        router.refresh();
+      }
     } else if (authorization.status === 'approved') {
       // If already approved, go to checkout
       router.push(`/dashboard/bookings/check-out/${booking.id}`);

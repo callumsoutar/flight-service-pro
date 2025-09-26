@@ -3,18 +3,9 @@
 import React, { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Aircraft } from "@/types/aircraft";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { Plane } from "lucide-react";
 
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -28,7 +19,7 @@ export default function AircraftListClient() {
   const [aircraftList, setAircraftList] = useState<Aircraft[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage] = useState(0);
   const [pageSize] = useState(10);
   const router = useRouter();
   const [search, setSearch] = React.useState("");
@@ -47,15 +38,12 @@ export default function AircraftListClient() {
   }, [aircraftList, search]);
 
   // Pagination calculations
-  const totalPages = Math.ceil(filteredAircraft.length / pageSize);
   const paginatedAircraft = React.useMemo(() => {
     const start = currentPage * pageSize;
     const end = start + pageSize;
     return filteredAircraft.slice(start, end);
   }, [filteredAircraft, currentPage, pageSize]);
 
-  const canPreviousPage = currentPage > 0;
-  const canNextPage = currentPage < totalPages - 1;
 
   useEffect(() => {
     async function fetchAircraft() {
@@ -108,87 +96,67 @@ export default function AircraftListClient() {
       </div>
       
       {/* Table */}
-      <div className="w-full">
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Image</TableHead>
-                <TableHead>Registration</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Total Hours</TableHead>
-                <TableHead>Last Maintenance</TableHead>
-                <TableHead>Next Due</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedAircraft.length ? (
-                paginatedAircraft.map((ac) => (
-                  <TableRow
-                    key={ac.id}
-                    className="cursor-pointer hover:bg-indigo-50 transition"
-                    onClick={() => router.push(`/dashboard/aircraft/view/${ac.id}`)}
-                  >
-                    <TableCell>
-                      {ac.aircraft_image_url ? (
-                        <Image
-                          src={ac.aircraft_image_url}
-                          alt={ac.registration}
-                          width={48}
-                          height={48}
-                          className="w-12 h-12 object-cover rounded border"
-                          style={{ background: '#f3f4f6' }}
-                          priority={true}
-                        />
-                      ) : (
-                        <div className="w-12 h-12 bg-gray-100 rounded border flex items-center justify-center">
-                          <Plane className="w-6 h-6 text-gray-500" />
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="font-mono font-bold text-base">{ac.registration}</TableCell>
-                    <TableCell>{ac.type}</TableCell>
-                    <TableCell>
-                      <Badge className={`${statusMap[ac.status ?? "available"]?.color || "bg-gray-400"} text-white font-semibold px-3 py-1.5 text-xs`}>
-                        {statusMap[ac.status ?? "available"]?.label || ac.status || "Unknown"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{ac.total_hours}h</TableCell>
-                    <TableCell>{ac.last_maintenance_date ? ac.last_maintenance_date.split("T")[0] : "-"}</TableCell>
-                    <TableCell>{ac.next_maintenance_date ? ac.next_maintenance_date.split("T")[0] : "-"}</TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
-                    No results.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-        
-        {/* Pagination */}
-        <div className="flex items-center justify-end space-x-2 py-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(prev => prev - 1)}
-            disabled={!canPreviousPage}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(prev => prev + 1)}
-            disabled={!canNextPage}
-          >
-            Next
-          </Button>
-        </div>
+      <div className="overflow-x-auto">
+        {paginatedAircraft.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-muted-foreground mb-4">
+              {search ? "No aircraft match your search" : "No aircraft found"}
+            </div>
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 pr-4 font-medium text-gray-900">Aircraft</th>
+                <th className="text-left py-3 pr-4 font-medium text-gray-900">Type</th>
+                <th className="text-left py-3 pr-4 font-medium text-gray-900">Status</th>
+                <th className="text-left py-3 pr-4 font-medium text-gray-900">Total Hours</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedAircraft.map((ac) => (
+                <tr
+                  key={ac.id}
+                  className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                  onClick={() => router.push(`/dashboard/aircraft/view/${ac.id}`)}
+                >
+                  <td className="py-3 pr-4">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                        {ac.aircraft_image_url && (
+                          <AvatarImage src={ac.aircraft_image_url} alt={ac.registration} />
+                        )}
+                        <AvatarFallback>
+                          <Plane className="w-4 h-4" />
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="font-medium text-gray-900">{ac.registration}</div>
+                        {ac.type && (
+                          <div className="text-sm text-gray-500">{ac.type}</div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 pr-4 text-sm text-gray-600">
+                    {ac.type || "-"}
+                  </td>
+                  <td className="py-3 pr-4">
+                    <Badge
+                      variant={ac.status === "active" || ac.status === "available" ? "default" : "destructive"}
+                      className="capitalize"
+                    >
+                      {statusMap[ac.status ?? "available"]?.label || ac.status || "Unknown"}
+                    </Badge>
+                  </td>
+                  <td className="py-3 pr-4 text-sm text-gray-600">
+                    {ac.total_hours}h
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

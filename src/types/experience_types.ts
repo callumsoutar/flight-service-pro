@@ -7,6 +7,7 @@ export type ExperienceType = {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  voided_at: string | null;
 };
 
 export type ExperienceTypeInsert = {
@@ -16,6 +17,7 @@ export type ExperienceTypeInsert = {
   is_active?: boolean;
   created_at?: string;
   updated_at?: string;
+  voided_at?: string | null;
 };
 
 export type ExperienceTypeUpdate = {
@@ -25,4 +27,5 @@ export type ExperienceTypeUpdate = {
   is_active?: boolean;
   created_at?: string;
   updated_at?: string;
+  voided_at?: string | null;
 };

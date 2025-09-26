@@ -8,6 +8,8 @@ A modern SaaS safety management system for flight schools, built with Next.js (A
 - Role-based access (Admin, Instructor, Student)
 - Fast, scalable API and data fetching
 - Clean, maintainable architecture
+- Comprehensive booking time slot management system
+- Configurable default booking durations
 
 ## Getting Started
 
@@ -56,6 +58,10 @@ npm run build
 - `/src/lib` - Supabase clients and utilities
 - `/src/types` - TypeScript types for DB tables
 - `/public` - Static assets
+
+## Documentation
+- [Booking Time Slots & Default Duration System](./BOOKING_TIME_SLOTS_DOCUMENTATION.md) - Comprehensive guide to configuring and using the booking time management system
+- [Booking Time Slots - Quick Reference](./BOOKING_TIME_SLOTS_QUICK_REFERENCE.md) - Quick start guide and troubleshooting for developers
 
 ## Testing
 - (Recommended) Add tests in `/tests` using your preferred framework (Jest, Vitest, Playwright)

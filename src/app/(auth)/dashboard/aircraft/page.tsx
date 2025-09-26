@@ -1,8 +1,12 @@
+import React from "react";
 import { Plane, Wrench, AlertTriangle } from "lucide-react";
 import AircraftListClient from "./AircraftListClient";
 import AircraftPageHeader from "@/components/aircraft/AircraftPageHeader";
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
 
-export default function AircraftPage() {
+// Component now receives guaranteed authenticated user and role data
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function AircraftPage({ user: _user, userRole: _userRole }: ProtectedPageProps) {
   // TODO: Replace with real data from API or props
   const totalAircraft = 0;
   const activeAircraft = 0;
@@ -11,6 +15,7 @@ export default function AircraftPage() {
   return (
     <main className="flex flex-col gap-8 p-6 md:p-10">
       <AircraftPageHeader />
+
       {/* Aircraft Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white dark:bg-zinc-950 rounded-xl shadow p-6 flex flex-col items-start">
@@ -32,4 +37,8 @@ export default function AircraftPage() {
       <AircraftListClient />
     </main>
   );
-} 
+}
+
+// Export the protected component using the standardized HOC
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default withRoleProtection(AircraftPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any; 

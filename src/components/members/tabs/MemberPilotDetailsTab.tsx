@@ -56,7 +56,6 @@ const pilotDetailsSchema = z.object({
   pilot_license_type: z.string().optional(), // Keep for backward compatibility
   pilot_license_id: z.string().optional(),
   pilot_license_expiry: z.string().optional(),
-
   medical_certificate_expiry: z.string().optional(),
 });
 

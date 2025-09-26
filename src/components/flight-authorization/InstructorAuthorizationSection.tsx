@@ -5,11 +5,11 @@ import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { UserCheck, FileText, AlertCircle } from "lucide-react";
-import { FlightAuthorizationFormData } from '@/lib/validations/flight-authorization';
+import { FlightAuthorizationEditData } from '@/lib/validations/flight-authorization';
 import InstructorSelect from "@/components/invoices/InstructorSelect";
 
 interface InstructorAuthorizationSectionProps {
-  control: Control<FlightAuthorizationFormData>;
+  control: Control<FlightAuthorizationEditData>;
   disabled?: boolean;
   status?: 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled';
   approvalInfo?: {
@@ -188,20 +188,6 @@ export function InstructorAuthorizationSection({
           />
         </div>
 
-        {/* Authorization Requirements */}
-        {!isReadOnly && (
-          <div className="bg-purple-100 border border-purple-200 rounded-lg p-4">
-            <h4 className="text-sm font-semibold text-purple-900 mb-2">
-              Authorization Requirements
-            </h4>
-            <ul className="text-sm text-purple-800 space-y-1">
-              <li>• Student must demonstrate current solo flight endorsements</li>
-              <li>• All pre-flight requirements must be completed</li>
-              <li>• Weather conditions must be within student limitations</li>
-              <li>• Aircraft must be approved for solo operations</li>
-            </ul>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

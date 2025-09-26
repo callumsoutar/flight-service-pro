@@ -13,6 +13,7 @@ import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useState } from "react";
 import { getStatusBadgeClasses, getStatusText } from "@/lib/membership-utils";
+import { SendInvitationButton } from "./SendInvitationButton";
 
 interface MemberProfileCardProps {
   member: User;
@@ -85,8 +86,30 @@ export default function MemberProfileCard({ member, joinDate, membershipStatus =
                   <Menu className="w-4 h-4 mr-2 text-gray-600" /> Account
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
-                  <DropdownMenuItem onClick={() => alert('Reset Password')}>Reset Password</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => alert('Change Email')}>Change Email</DropdownMenuItem>
+                  {member.has_auth_account ? (
+                    <>
+                      <SendInvitationButton 
+                        userId={member.id}
+                        userEmail={member.email}
+                        userName={`${member.first_name} ${member.last_name}`}
+                        asDropdownItem={true}
+                      />
+                      <DropdownMenuItem onClick={() => alert('Reset Password')}>Reset Password</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => alert('Change Email')}>Change Email</DropdownMenuItem>
+                    </>
+                  ) : (
+                    <>
+                      <SendInvitationButton 
+                        userId={member.id}
+                        userEmail={member.email}
+                        userName={`${member.first_name} ${member.last_name}`}
+                        asDropdownItem={true}
+                      />
+                      <DropdownMenuItem onClick={() => alert('Create Account')} className="text-green-600">
+                        Create Login Account
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
             </DropdownMenuContent>

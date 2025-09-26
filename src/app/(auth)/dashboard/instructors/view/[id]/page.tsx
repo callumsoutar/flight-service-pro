@@ -2,8 +2,13 @@ import InstructorDetailsClient from "./InstructorDetailsClient";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { ArrowLeft } from "lucide-react";
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
 
-export default async function InstructorViewPage({ params }: { params: Promise<{ id: string }> }) {
+interface InstructorViewPageProps extends ProtectedPageProps {
+  params: Promise<{ id: string }>;
+}
+
+async function InstructorViewPage({ params }: InstructorViewPageProps) {
   const { id } = await params;
   const supabase = await createClient();
 
@@ -17,12 +22,13 @@ export default async function InstructorViewPage({ params }: { params: Promise<{
   if (error || !instructor) return notFound();
 
   // Flatten user fields for client component
-  const user = Array.isArray(instructor.user) ? instructor.user[0] : instructor.user;
+  const instructorUser = Array.isArray(instructor.user) ? instructor.user[0] : instructor.user;
   const instructorWithUser = {
     ...instructor,
-    first_name: user?.first_name ?? "",
-    last_name: user?.last_name ?? "",
-    email: user?.email ?? "",
+    user_id: instructor.user_id, // Make sure user_id is included
+    first_name: instructorUser?.first_name ?? "",
+    last_name: instructorUser?.last_name ?? "",
+    email: instructorUser?.email ?? "",
     profile_image_url: "/public/file.svg", // Default placeholder since profile_image_url doesn't exist
     // Optionally, add status logic if needed
     status: instructor.status,
@@ -42,4 +48,8 @@ export default async function InstructorViewPage({ params }: { params: Promise<{
       </div>
     </main>
   );
-} 
+}
+
+// Export the protected component using the standardized HOC
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export default withRoleProtection(InstructorViewPage as any, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any; 

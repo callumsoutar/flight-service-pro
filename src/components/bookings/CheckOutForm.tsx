@@ -20,6 +20,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useFlightAuthorizationByBooking } from '@/hooks/use-flight-authorization';
 import { useCanOverrideAuthorization } from '@/hooks/use-can-override-authorization';
 import { useOverrideAuthorization } from '@/hooks/use-authorization-override';
+import { useFlightAuthorizationSetting } from '@/hooks/use-flight-authorization-setting';
 import OverrideConfirmDialog from './OverrideConfirmDialog';
 import AuthorizationErrorDialog from './AuthorizationErrorDialog';
 
@@ -122,6 +123,7 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
   const { data: canOverride = false } = useCanOverrideAuthorization();
   const { data: authorization } = useFlightAuthorizationByBooking(booking.id);
   const overrideMutation = useOverrideAuthorization();
+  const { requireFlightAuthorization } = useFlightAuthorizationSetting();
   
   // Parse eta into date and time for default values
   // Default to booking end time if no existing ETA, otherwise use existing ETA
@@ -145,7 +147,7 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
   // Proper fallback logic: checked_out_instructor_id first, then instructor_id, then empty
   const checkedOutInstructorDefault = flightLog?.checked_out_instructor_id || booking?.instructor_id || "";
   
-  const { control, handleSubmit, watch } = useForm<CheckOutFormData>({
+  const { control, handleSubmit, watch, setValue } = useForm<CheckOutFormData>({
     defaultValues: {
       start_date: booking?.start_time ? format(parseISO(booking.start_time), "yyyy-MM-dd") : "",
       start_time: booking?.start_time ? format(parseISO(booking.start_time), "HH:mm") : "",
@@ -175,6 +177,17 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
   const watchedAircraftId = watch("checked_out_aircraft_id");
   const watchedInstructorId = watch("checked_out_instructor_id");
   const watchedFuelOnBoard = watch("fuel_on_board");
+  const startDate = watch("start_date");
+  const endDate = watch("end_date");
+
+  // When start date changes, auto-set end date to be at least the same as start date
+  React.useEffect(() => {
+    if (startDate && !isReadOnly) {
+      if (!endDate || new Date(endDate).getTime() < new Date(startDate).getTime()) {
+        setValue("end_date", startDate);
+      }
+    }
+  }, [startDate, endDate, setValue, isReadOnly]);
   
   // Use optimized hooks for data fetching
   const { data: selectedAircraftMeters, isLoading: isLoadingAircraftMeters } = useAircraftMeters(watchedAircraftId);
@@ -222,7 +235,8 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
   // Check if authorization requirements are met
   const authorizationApproved = authorization?.status === 'approved';
   const authorizationOverridden = booking.authorization_override === true;
-  const authorizationRequirementsMet = !isSoloFlight || authorizationApproved || authorizationOverridden;
+  // Only require authorization for solo flights when the setting is enabled
+  const authorizationRequirementsMet = !isSoloFlight || !requireFlightAuthorization || authorizationApproved || authorizationOverridden;
 
 
 

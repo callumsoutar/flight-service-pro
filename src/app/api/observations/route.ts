@@ -22,6 +22,25 @@ export async function GET(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Role authorization check - observations are safety-critical data
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  // Only instructors and above can access observations (safety data)
+  const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+
+  if (!isPrivilegedUser) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Observations access requires instructor role or above' 
+    }, { status: 403 });
+  }
   
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
@@ -73,6 +92,24 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Role authorization check - observations creation requires instructor role or above
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+
+  if (!isPrivilegedUser) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Observation creation requires instructor role or above' 
+    }, { status: 403 });
+  }
   
   const body = await req.json();
   const parse = ObservationSchema.safeParse(body);
@@ -122,6 +159,24 @@ export async function PATCH(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Role authorization check - observations modification requires instructor role or above
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+
+  if (!isPrivilegedUser) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Observation modification requires instructor role or above' 
+    }, { status: 403 });
   }
   
   const body = await req.json();
@@ -192,6 +247,24 @@ export async function DELETE(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Role authorization check - observations deletion requires admin or owner role
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  const isPrivilegedUser = userRole && ['admin', 'owner'].includes(userRole);
+
+  if (!isPrivilegedUser) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Observation deletion requires admin or owner role' 
+    }, { status: 403 });
   }
   
   const { searchParams } = new URL(req.url);

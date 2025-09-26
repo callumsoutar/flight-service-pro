@@ -6,6 +6,28 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     
+    // Auth check
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Role authorization - tasks access requires instructor/admin/owner role
+    const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+      user_id: user.id
+    });
+
+    if (roleError) {
+      console.error('Error fetching user role:', roleError);
+      return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+    }
+
+    if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+      return NextResponse.json({ 
+        error: 'Forbidden: Tasks access requires instructor, admin, or owner role' 
+      }, { status: 403 });
+    }
+    
     // Get query parameters
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");

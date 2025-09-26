@@ -19,11 +19,19 @@ const CreateRosterRuleSchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient();
+    
+    // Auth check
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    
     const { searchParams } = new URL(req.url);
     
     const instructor_id = searchParams.get('instructor_id');
     const day_of_week = searchParams.get('day_of_week');
     const is_active = searchParams.get('is_active');
+    const date = searchParams.get('date'); // YYYY-MM-DD format for effective date filtering
 
     let query = supabase
       .from('roster_rules')
@@ -51,6 +59,13 @@ export async function GET(req: NextRequest) {
 
     if (is_active !== null) {
       query = query.eq('is_active', is_active === 'true');
+    }
+
+    // Filter by effective date range if date is provided (major performance improvement)
+    if (date) {
+      query = query
+        .lte('effective_from', date) // effective_from <= date
+        .or(`effective_until.is.null,effective_until.gte.${date}`); // effective_until IS NULL OR effective_until >= date
     }
 
     query = query.order('day_of_week').order('start_time');

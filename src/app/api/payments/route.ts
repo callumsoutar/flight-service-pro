@@ -16,6 +16,30 @@ const paymentSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
+  const supabase = await createClient();
+  
+  // Auth check
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Role authorization - payments access requires admin/owner role
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Payments access requires admin or owner role' 
+    }, { status: 403 });
+  }
+  
   const { searchParams } = new URL(req.url);
   const parseResult = querySchema.safeParse({
     invoice_id: searchParams.get('invoice_id'),
@@ -26,7 +50,6 @@ export async function GET(req: NextRequest) {
   }
 
   const { invoice_id } = parseResult.data;
-  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from('payments')
@@ -42,6 +65,30 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+  
+  // Auth check
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Role authorization - payment creation requires admin/owner role
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Payment creation requires admin or owner role' 
+    }, { status: 403 });
+  }
+  
   const body = await req.json();
   const parseResult = paymentSchema.safeParse(body);
 
@@ -50,7 +97,6 @@ export async function POST(req: NextRequest) {
   }
 
   const { invoice_id, amount, payment_method, payment_reference, notes } = parseResult.data;
-  const supabase = await createClient();
 
   // Call the process_payment function to create transaction and payment atomically
   const { data, error } = await supabase.rpc('process_payment', {

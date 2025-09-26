@@ -39,130 +39,6 @@ const fetchLessons = async (syllabusId: string): Promise<Lesson[]> => {
   return data.lessons || [];
 };
 
-// Syllabus creation component
-function CreateSyllabusModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [numExams, setNumExams] = useState<number>(0);
-  const queryClient = useQueryClient();
-
-  const createMutation = useMutation({
-    mutationFn: async (data: { name: string; description?: string; number_of_exams?: number }) => {
-      const response = await fetch("/api/syllabus", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) throw new Error("Failed to create syllabus");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["syllabi"] });
-      toast.success("Syllabus created successfully");
-      onClose();
-      setName("");
-      setDescription("");
-      setNumExams(0);
-    },
-    onError: () => {
-      toast.error("Failed to create syllabus");
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    createMutation.mutate({
-      name: name.trim(),
-      description: description.trim() || undefined,
-      number_of_exams: numExams,
-    });
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl w-full">
-        <DialogHeader className="space-y-3">
-          <DialogTitle className="text-2xl font-semibold">
-            Create New Syllabus
-          </DialogTitle>
-          <p className="text-sm text-gray-600">
-            Create a new training syllabus. You can add lessons to it after creation.
-          </p>
-        </DialogHeader>
-        
-        <form onSubmit={handleSubmit} className="space-y-6 mt-6">
-          {/* Syllabus Name */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-gray-900">
-              Syllabus Name *
-            </label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Private Pilot Licence"
-              className="text-base py-3"
-              required
-            />
-            <p className="text-xs text-gray-500">
-              Choose a clear name that describes the type of training program.
-            </p>
-          </div>
-
-          {/* Description */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-gray-900">
-              Description
-            </label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description of the syllabus, its objectives, and target audience..."
-              rows={4}
-              className="text-base resize-none"
-            />
-            <p className="text-xs text-gray-500">
-              Provide an overview of what this syllabus covers and who it&apos;s designed for.
-            </p>
-          </div>
-
-          {/* Number of Exams */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-gray-900">
-              Number of Exams
-            </label>
-            <Input
-              type="number"
-              min="0"
-              max="20"
-              value={numExams}
-              onChange={(e) => setNumExams(parseInt(e.target.value) || 0)}
-              className="text-base py-3"
-              placeholder="0"
-            />
-            <p className="text-xs text-gray-500">
-              How many formal examinations are required for this syllabus? (Optional)
-            </p>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex justify-end space-x-3 pt-6 border-t">
-            <Button type="button" variant="outline" onClick={onClose} className="px-6 py-2">
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={createMutation.isPending}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700"
-            >
-              {createMutation.isPending ? "Creating..." : "Create Syllabus"}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // Lesson creation/editing component
 function LessonModal({
@@ -376,7 +252,6 @@ function LessonModal({
 
 export default function LessonsTab() {
   const [selectedSyllabus, setSelectedSyllabus] = useState<string | null>(null);
-  const [createSyllabusOpen, setCreateSyllabusOpen] = useState(false);
   const [lessonModalOpen, setLessonModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const queryClient = useQueryClient();
@@ -514,10 +389,6 @@ export default function LessonsTab() {
                   <h3 className="text-lg font-semibold">Syllabi</h3>
                   <p className="text-sm text-gray-500">Select a syllabus to manage its lessons →</p>
                 </div>
-                <Button onClick={() => setCreateSyllabusOpen(true)} size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Syllabus
-                </Button>
               </div>
 
               <div className="space-y-3 max-h-[500px] overflow-y-auto">
@@ -556,14 +427,11 @@ export default function LessonsTab() {
                             {syllabus.description && (
                               <p className="text-sm text-gray-600 mt-1 line-clamp-2">{syllabus.description}</p>
                             )}
-                            <div className="flex items-center gap-2 mt-2">
-                              <Badge variant="secondary" className="text-xs">
-                                {syllabus.number_of_exams} exam{syllabus.number_of_exams !== 1 ? 's' : ''}
-                              </Badge>
-                              {!syllabus.is_active && (
+                            {!syllabus.is_active && (
+                              <div className="mt-2">
                                 <Badge variant="destructive" className="text-xs">Inactive</Badge>
-                              )}
-                            </div>
+                              </div>
+                            )}
                           </div>
                           <Button
                             variant="ghost"
@@ -716,11 +584,6 @@ export default function LessonsTab() {
       </Card>
 
       {/* Modals */}
-      <CreateSyllabusModal
-        isOpen={createSyllabusOpen}
-        onClose={() => setCreateSyllabusOpen(false)}
-      />
-
       {selectedSyllabus && (
         <LessonModal
           isOpen={lessonModalOpen}

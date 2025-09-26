@@ -28,14 +28,14 @@ export const authorizationStatusOptions = [
   'cancelled'
 ] as const;
 
-// Main form validation schema
+// Main form validation schema for submission (strict)
 export const flightAuthorizationFormSchema = z.object({
   purpose_of_flight: z.enum(purposeOfFlightOptions, {
     required_error: "Purpose of flight is required",
     invalid_type_error: "Please select a valid purpose of flight"
   }),
   
-  passenger_names: z.array(z.string().min(1, "Passenger name cannot be empty")).max(3, "Maximum 3 passengers allowed"),
+  passenger_names: z.array(z.string()).max(3, "Maximum 3 passengers allowed"),
   
   runway_in_use: z.string({
     required_error: "Runway information is required"
@@ -76,6 +76,22 @@ export const flightAuthorizationFormSchema = z.object({
     required_error: "Student signature is required"
   }).min(1, "Student signature is required"),
   
+  instructor_notes: z.string().optional(),
+  instructor_limitations: z.string().optional(),
+});
+
+// More lenient schema for form editing (allows incomplete data)
+export const flightAuthorizationEditSchema = z.object({
+  purpose_of_flight: z.enum(purposeOfFlightOptions).optional(),
+  passenger_names: z.array(z.string()).max(3, "Maximum 3 passengers allowed").optional(),
+  runway_in_use: z.string().max(10, "Runway information too long").optional(),
+  fuel_level_liters: z.number().min(0, "Fuel level cannot be negative").optional(),
+  oil_level_quarts: z.number().min(0, "Oil level cannot be negative").optional(),
+  notams_reviewed: z.boolean().optional(),
+  weather_briefing_complete: z.boolean().optional(),
+  payment_method: z.enum(paymentMethodOptions).optional(),
+  authorizing_instructor_id: z.string().optional(),
+  student_signature_data: z.string().optional(),
   instructor_notes: z.string().optional(),
   instructor_limitations: z.string().optional(),
 });
@@ -151,6 +167,7 @@ export const draftFlightAuthorizationSchema = z.object({
 
 // Export types derived from schemas
 export type FlightAuthorizationFormData = z.infer<typeof flightAuthorizationFormSchema>;
+export type FlightAuthorizationEditData = z.infer<typeof flightAuthorizationEditSchema>;
 export type CreateFlightAuthorizationData = z.infer<typeof createFlightAuthorizationSchema>;
 export type UpdateFlightAuthorizationData = z.infer<typeof updateFlightAuthorizationSchema>;
 export type SubmitFlightAuthorizationData = z.infer<typeof submitFlightAuthorizationSchema>;

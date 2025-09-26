@@ -1,15 +1,17 @@
 import { createClient } from "@/lib/SupabaseServerClient";
 import type { Booking } from "@/types/bookings";
 import BookingsPageClient from "./BookingsPageClient";
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
 
-export default async function BookingsPage() {
+async function BookingsPage({ user, userRole }: ProtectedPageProps) {
   const supabase = await createClient();
   let bookings: Booking[] = [];
   let members: { id: string; name: string }[] = [];
   let instructors: { id: string; name: string }[] = [];
   let aircraftList: { id: string; registration: string; type: string }[] = [];
-  
-  const { data } = await supabase
+
+  // Build query based on user role
+  let bookingsQuery = supabase
     .from("bookings")
     .select(`
       id,
@@ -26,8 +28,14 @@ export default async function BookingsPage() {
       booking_type,
       created_at,
       updated_at
-    `)
-    .order("start_time", { ascending: false });
+    `);
+
+  // If user is member or student, only show their own bookings
+  if (userRole === 'member' || userRole === 'student') {
+    bookingsQuery = bookingsQuery.eq('user_id', user.id);
+  }
+
+  const { data } = await bookingsQuery.order("start_time", { ascending: false });
   bookings = (data ?? []) as Booking[];
 
   // Fetch only members referenced by bookings (user_id in bookings)
@@ -84,4 +92,8 @@ export default async function BookingsPage() {
       aircraftList={aircraftList}
     />
   );
-} 
+}
+
+// Export protected component - all authenticated users can access bookings
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default withRoleProtection(BookingsPage, ROLE_CONFIGS.AUTHENTICATED_ONLY) as any; 

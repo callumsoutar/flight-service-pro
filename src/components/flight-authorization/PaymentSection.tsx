@@ -5,11 +5,11 @@ import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { CreditCard, Calendar } from "lucide-react";
-import { FlightAuthorizationFormData } from '@/lib/validations/flight-authorization';
+import { FlightAuthorizationEditData } from '@/lib/validations/flight-authorization';
 import { paymentMethodOptions } from '@/lib/validations/flight-authorization';
 
 interface PaymentSectionProps {
-  control: Control<FlightAuthorizationFormData>;
+  control: Control<FlightAuthorizationEditData>;
   disabled?: boolean;
   flightDate?: string;
 }
@@ -99,34 +99,6 @@ export function PaymentSection({ control, disabled = false, flightDate }: Paymen
           </div>
         </div>
 
-        {/* Payment Information Notice */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-blue-900 mb-2">
-            Payment Processing
-          </h4>
-          <div className="text-sm text-blue-800 space-y-2">
-            <p>
-              Payment will be processed after the flight is completed and logged.
-            </p>
-            <ul className="space-y-1 ml-4">
-              <li>• Charges will be calculated based on actual flight time</li>
-              <li>• Account balance payments are processed automatically</li>
-              <li>• Card payments require approval at check-in</li>
-              <li>• Cash payments must be made at the front desk</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Account Balance Info (if applicable) */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-green-900 mb-2">
-            Account Balance Payment
-          </h4>
-          <p className="text-sm text-green-800">
-            If you select &quot;Account Balance&quot;, charges will be automatically deducted from your 
-            account after the flight. Please ensure you have sufficient funds available.
-          </p>
-        </div>
       </CardContent>
     </Card>
   );

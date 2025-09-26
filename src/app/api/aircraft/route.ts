@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/SupabaseServerClient";
 
+// Helper function to filter sensitive aircraft data for restricted users
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function filterAircraftData(aircraft: any) {
+  if (!aircraft) return aircraft;
+  
+  return {
+    id: aircraft.id,
+    registration: aircraft.registration,
+    type: aircraft.type,
+    on_line: aircraft.on_line,
+    // Include aircraft type info if present
+    aircraft_type: aircraft.aircraft_type,
+    // Exclude sensitive fields: maintenance data, financial info, etc.
+  };
+}
+
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   
@@ -9,9 +25,30 @@ export async function GET(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Role authorization check
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  const isPrivilegedUser = userRole && ['instructor', 'admin', 'owner'].includes(userRole);
+  const isRestrictedUser = userRole && ['member', 'student'].includes(userRole);
+
+  // Members and students can see basic aircraft info for scheduling
+  if (!isPrivilegedUser && !isRestrictedUser) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Aircraft data access requires authentication' 
+    }, { status: 403 });
+  }
   
   const searchParams = req.nextUrl.searchParams;
   const id = searchParams.get("id");
+  const onLineOnly = searchParams.get("on_line");
 
   let query = supabase.from("aircraft").select(`
     *,
@@ -24,14 +61,28 @@ export async function GET(req: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
-    return NextResponse.json({ aircraft: data });
+    
+    // Filter sensitive data for restricted users
+    const responseData = isRestrictedUser ? filterAircraftData(data) : data;
+    return NextResponse.json({ aircraft: responseData });
+  }
+
+  // Filter for only online aircraft if requested
+  if (onLineOnly === "true") {
+    query = query.eq("on_line", true);
   }
 
   const { data, error } = await query.order("registration");
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ aircrafts: data ?? [] });
+  
+  // Filter sensitive data for restricted users
+  const responseData = isRestrictedUser 
+    ? (data || []).map(filterAircraftData)
+    : data;
+  
+  return NextResponse.json({ aircrafts: responseData });
 }
 
 export async function POST(req: NextRequest) {
@@ -41,6 +92,22 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Role authorization check - aircraft creation restricted to admin/owner only
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Aircraft creation requires admin or owner role' 
+    }, { status: 403 });
   }
   
   const body = await req.json();
@@ -63,6 +130,22 @@ export async function PATCH(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Role authorization check - aircraft updates restricted to instructor/admin/owner
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Aircraft updates require instructor, admin, or owner role' 
+    }, { status: 403 });
   }
   
   const body = await req.json();

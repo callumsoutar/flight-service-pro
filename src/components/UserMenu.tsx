@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "./ui/dropdown-menu";
+import Link from "next/link";
 
 export function UserMenu() {
   const [user, setUser] = useState<{ name: string; initials: string; email: string }>({ name: "User", initials: "U", email: "" });
@@ -95,11 +96,10 @@ export function UserMenu() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-[13rem]" style={{ minWidth: 208 }}>
-            <DropdownMenuItem onClick={() => alert('Profile page coming soon!')} className="cursor-pointer">
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => alert('Settings page coming soon!')} className="cursor-pointer">
-              My Settings
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/profile" className="cursor-pointer">
+                Profile
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">

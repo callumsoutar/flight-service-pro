@@ -1,8 +1,8 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import { Loader2, DollarSign, AlertCircle, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Check } from "lucide-react";
 import type { TaxRate } from "@/types/tax_rates";
 
 export default function TaxRateManager() {
@@ -11,11 +11,19 @@ export default function TaxRateManager() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [selectedTaxRateId, setSelectedTaxRateId] = useState<string>("");
 
   useEffect(() => {
     fetchTaxRates();
   }, []);
+
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
 
   const fetchTaxRates = async () => {
     try {
@@ -25,8 +33,6 @@ export default function TaxRateManager() {
       if (response.ok) {
         const rates = data.tax_rates || [];
         setTaxRates(rates);
-        
-        // Find and set the current default rate
         const defaultRate = rates.find((rate: TaxRate) => rate.is_default);
         if (defaultRate) {
           setSelectedTaxRateId(defaultRate.id);
@@ -41,18 +47,14 @@ export default function TaxRateManager() {
     }
   };
 
-  const handleSetDefault = async () => {
-    if (!selectedTaxRateId) {
-      setError("Please select a tax rate");
-      return;
-    }
+  const handleSaveDefault = async () => {
+    if (!selectedTaxRateId) return;
 
     try {
       setSaving(true);
       setError(null);
       setSuccess(null);
 
-      // First, unset all defaults
       for (const rate of taxRates) {
         if (rate.is_default) {
           await fetch("/api/tax_rates", {
@@ -63,7 +65,6 @@ export default function TaxRateManager() {
         }
       }
 
-      // Then set the selected one as default
       const response = await fetch("/api/tax_rates", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -71,132 +72,125 @@ export default function TaxRateManager() {
       });
 
       if (response.ok) {
-        setSuccess("Default tax rate updated successfully!");
-        fetchTaxRates(); // Refresh the list
+        setSuccess("Tax rate updated successfully");
+        await fetchTaxRates();
+        setIsEditing(false);
       } else {
         const data = await response.json();
-        setError(data.error || "Failed to update default tax rate");
+        setError(data.error || "Failed to update tax rate");
       }
     } catch {
-      setError("Failed to update default tax rate");
+      setError("Failed to update tax rate");
     } finally {
       setSaving(false);
     }
   };
 
-  const getCurrentDefault = () => {
-    return taxRates.find(rate => rate.is_default);
+  const handleCancel = () => {
+    const defaultRate = taxRates.find(rate => rate.is_default);
+    if (defaultRate) {
+      setSelectedTaxRateId(defaultRate.id);
+    }
+    setIsEditing(false);
+    setError(null);
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="w-6 h-6 animate-spin" />
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
       </div>
     );
   }
 
-  const currentDefault = getCurrentDefault();
+  if (taxRates.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <DollarSign className="w-12 h-12 text-gray-300 mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">No Tax Rates Found</h3>
+        <p className="text-sm text-gray-500 max-w-md">
+          Contact your administrator to set up tax rates.
+        </p>
+      </div>
+    );
+  }
+
+  const currentDefault = taxRates.find(rate => rate.is_default);
 
   return (
-    <div className="max-w-md">
-      {/* Success/Error Messages */}
+    <div>
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
-          {error}
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2 text-sm">
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-4 flex items-center gap-2 text-sm">
           <Check className="w-4 h-4 flex-shrink-0" />
           {success}
         </div>
       )}
 
-      {taxRates.length === 0 ? (
-        <div className="text-center text-muted-foreground py-12">
-          <div className="mb-4">
-            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
-              </svg>
+      {!isEditing && currentDefault ? (
+        <div className="border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <h3 className="text-lg font-semibold text-gray-900">{currentDefault.tax_name}</h3>
+                  <span className="text-sm text-gray-500">
+                    {currentDefault.country_code}{currentDefault.region_code && ` - ${currentDefault.region_code}`}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-500 mt-1">Applied to all new invoices</p>
+              </div>
             </div>
-            <p className="font-medium text-gray-900 mb-2">No Tax Rates Found</p>
-            <p className="text-sm text-gray-600 mb-1">Contact your administrator to set up tax rates.</p>
-            <p className="text-xs text-gray-500">Tax rates need to be configured before you can select a default.</p>
+            <div className="flex items-center gap-4">
+              <div className="text-xl font-semibold text-gray-900">
+                {(currentDefault.rate * 100).toFixed(2)}%
+              </div>
+              <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
+                Edit
+              </Button>
+            </div>
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* Current Default Display */}
-          {currentDefault && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 px-4 py-4 rounded-xl">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Check className="w-4 h-4 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-blue-900">Current Default Tax Rate</p>
-                  <p className="text-sm text-blue-700">
-                    {currentDefault.tax_name} ({currentDefault.country_code}
-                    {currentDefault.region_code && ` - ${currentDefault.region_code}`}) • {(currentDefault.rate * 100).toFixed(2)}%
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+        <div className="border border-gray-200 rounded-lg p-4 space-y-4">
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">
+              Select Default Tax Rate
+            </label>
+            <Select value={selectedTaxRateId} onValueChange={setSelectedTaxRateId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a tax rate..." />
+              </SelectTrigger>
+              <SelectContent>
+                {taxRates.map((rate) => (
+                  <SelectItem key={rate.id} value={rate.id}>
+                    {rate.tax_name} ({rate.country_code}{rate.region_code && ` - ${rate.region_code}`}) - {(rate.rate * 100).toFixed(2)}%
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-          {/* Selection Form */}
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="tax-rate-select" className="text-sm font-semibold text-gray-900 block">
-                Select Default Tax Rate
-              </label>
-              <Select value={selectedTaxRateId} onValueChange={setSelectedTaxRateId}>
-                <SelectTrigger className="h-12 text-left">
-                  <SelectValue placeholder="Choose a tax rate..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {taxRates.map((rate) => (
-                    <SelectItem key={rate.id} value={rate.id} className="py-3">
-                      <div className="flex items-center justify-between w-full">
-                        <span className="font-medium">
-                          {rate.tax_name} ({rate.country_code}
-                          {rate.region_code && ` - ${rate.region_code}`})
-                        </span>
-                        <span className="ml-3 text-sm font-semibold text-gray-600">
-                          {(rate.rate * 100).toFixed(2)}%
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Button 
-              onClick={handleSetDefault} 
-              disabled={saving || !selectedTaxRateId}
-              className="w-full h-12 text-base font-semibold"
-              size="lg"
-            >
+          <div className="flex gap-2">
+            <Button onClick={handleSaveDefault} disabled={saving || !selectedTaxRateId}>
               {saving ? (
                 <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Updating Default...
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
                 </>
               ) : (
-                "Set as Default Tax Rate"
+                "Save"
               )}
             </Button>
-
-            <div className="text-center">
-              <p className="text-xs text-gray-500 leading-relaxed">
-                This tax rate will be automatically applied to new invoices<br />
-                unless specified otherwise.
-              </p>
-            </div>
+            <Button onClick={handleCancel} variant="outline" disabled={saving}>
+              Cancel
+            </Button>
           </div>
         </div>
       )}

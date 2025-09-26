@@ -18,6 +18,10 @@ export interface User {
   next_of_kin_phone?: string;
   emergency_contact_relationship?: string;
   medical_certificate_expiry?: string; // date (YYYY-MM-DD)
+  class_1_medical_due?: string; // date (YYYY-MM-DD) - for reference/reminder purposes only
+  class_2_medical_due?: string; // date (YYYY-MM-DD) - for reference/reminder purposes only
+  DL9_due?: string; // date (YYYY-MM-DD) - for reference/reminder purposes only
+  BFR_due?: string; // date (YYYY-MM-DD) - for reference/reminder purposes only
   pilot_license_number?: string;
   pilot_license_type?: string; // Keep for backward compatibility
   pilot_license_id?: string; // Foreign key to licenses table
@@ -29,6 +33,8 @@ export interface User {
   notes?: string;
   account_balance: number; // numeric, not nullable, default 0.00
   is_active: boolean; // boolean, not nullable, default true
+  public_directory_opt_in: boolean; // boolean, not nullable, default false
+  has_auth_account?: boolean; // computed field indicating if user has auth.users record
   created_at: string; // timestamptz (ISO string)
   updated_at: string; // timestamptz (ISO string)
   // Role is now handled via user_roles junction table

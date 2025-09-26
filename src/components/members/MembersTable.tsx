@@ -24,11 +24,12 @@ interface MembersTableProps {
     limit: number;
     total: number;
   };
+  userRole?: string;
 }
 
 type ContactTab = "members" | "instructors" | "staff" | "all";
 
-export default function MembersTable({ initialData }: MembersTableProps) {
+export default function MembersTable({ initialData, userRole }: MembersTableProps) {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<ContactTab>("members");
   const [modalOpen, setModalOpen] = useState(false);
@@ -125,13 +126,16 @@ export default function MembersTable({ initialData }: MembersTableProps) {
             onChange={(e) => setSearch(e.target.value)}
             className="w-full sm:w-56"
           />
-          <Button
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-md shadow text-base flex items-center gap-2"
-            onClick={() => setModalOpen(true)}
-          >
-            <UserPlus className="h-4 w-4" />
-            New Member
-          </Button>
+          {/* Only show Add Member button for admin, owner, and instructor roles */}
+          {userRole && !['member', 'student'].includes(userRole.toLowerCase()) && (
+            <Button
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-md shadow text-base flex items-center gap-2"
+              onClick={() => setModalOpen(true)}
+            >
+              <UserPlus className="h-4 w-4" />
+              New Member
+            </Button>
+          )}
         </div>
       </div>
 

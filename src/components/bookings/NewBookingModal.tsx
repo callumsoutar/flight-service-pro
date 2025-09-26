@@ -35,6 +35,30 @@ import InstructorSelect, { InstructorResult } from "@/components/invoices/Instru
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useInstructorTypeRating } from "@/hooks/use-instructor-type-rating";
 import { TypeRatingWarning } from "@/components/bookings/TypeRatingWarning";
+import { useSettingsContext } from "@/contexts/SettingsContext";
+import { TimeSlot } from "@/types/settings";
+import { useCurrentUserRoles } from "@/hooks/use-user-roles";
+import { createClient } from "@/lib/SupabaseBrowserClient";
+
+/**
+ * NewBookingModal Component
+ * 
+ * Modal for creating new bookings with automatic end time calculation based on
+ * the configured default booking duration setting.
+ * 
+ * Features:
+ * - Automatic end time calculation: startTime + defaultDuration
+ * - Integration with booking time slots system
+ * - Support for both regular bookings and trial flights
+ * - Real-time conflict checking with existing bookings
+ * - Type rating validation for instructor/aircraft combinations
+ * 
+ * Default Duration Integration:
+ * - Fetches 'default_booking_duration_hours' from settings
+ * - Automatically calculates end time when start time is selected
+ * - Respects time boundaries (won't exceed 23:30)
+ * - Allows manual override of calculated end time
+ */
 
 // Helper to generate 30-min interval times
 const TIME_OPTIONS = Array.from({ length: ((23 - 7) * 2) + 3 }, (_, i) => {
@@ -109,6 +133,136 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
   // Type rating validation
   const { validation, isValidating, error: validationError, validateTypeRating, resetValidation } = useInstructorTypeRating();
 
+  // Settings context for default booking duration and time slots
+  const { getSettingValue } = useSettingsContext();
+  const defaultBookingDuration = getSettingValue('bookings', 'default_booking_duration_hours', 2);
+  const customTimeSlots = getSettingValue('bookings', 'custom_time_slots', []);
+
+  // RBAC: Get current user role and user information
+  const { data: userRoleData } = useCurrentUserRoles();
+  const userRole = userRoleData?.role?.toLowerCase() || '';
+  const [currentUser, setCurrentUser] = useState<{id: string; email: string; first_name: string; last_name: string} | null>(null);
+
+  // Check if user has restricted role (member or student)
+  const isRestrictedRole = userRole === 'member' || userRole === 'student';
+
+  /**
+   * Calculates end time based on start time and duration
+   * 
+   * @param startTime - Start time in HH:MM format (e.g., "10:30")
+   * @param durationHours - Duration in hours (e.g., 2 for 2 hours, 1.5 for 90 minutes)
+   * @returns End time in HH:MM format, capped at 23:30
+   * 
+   * Example: calculateEndTime("10:30", 2) returns "12:30"
+   */
+  const calculateEndTime = React.useCallback((startTime: string, durationHours: number): string => {
+    if (!startTime) return "";
+
+    const [hours, minutes] = startTime.split(":").map(Number);
+    const startMinutes = hours * 60 + minutes;
+    const endMinutes = startMinutes + (durationHours * 60);
+
+    const endHours = Math.floor(endMinutes / 60);
+    const endMins = endMinutes % 60;
+
+    // Ensure we don't go past 23:30 (last time option)
+    if (endHours >= 24 || (endHours === 23 && endMins > 30)) {
+      return "23:30";
+    }
+
+    return `${endHours.toString().padStart(2, "0")}:${endMins.toString().padStart(2, "0")}`;
+  }, []);
+
+  /**
+   * Validates if a booking time conforms to configured time slots
+   *
+   * @param date - The booking date
+   * @param startTime - Start time in HH:MM format
+   * @param endTime - End time in HH:MM format
+   * @returns Object with isValid boolean and message string
+   */
+  const validateTimeSlot = React.useCallback((date: Date | null, startTime: string, endTime: string) => {
+    // If no custom time slots are configured, any time is valid
+    if (!Array.isArray(customTimeSlots) || customTimeSlots.length === 0) {
+      return { isValid: true, message: "" };
+    }
+
+    // If any required data is missing, can't validate
+    if (!date || !startTime || !endTime) {
+      return { isValid: true, message: "" }; // Don't show error if data is incomplete
+    }
+
+    // Get the weekday name for the selected date
+    const weekdayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const weekdayName = weekdayNames[date.getDay()];
+
+    // Convert times to minutes for easier comparison
+    const timeToMinutes = (time: string) => {
+      const [hours, minutes] = time.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+
+    const bookingStartMinutes = timeToMinutes(startTime);
+    const bookingEndMinutes = timeToMinutes(endTime);
+
+    // Check if booking fits within any configured time slot
+    const fitsInAnySlot = customTimeSlots.some((slot: TimeSlot) => {
+      // Check if this slot is active on the selected day
+      if (!slot.days || !slot.days.includes(weekdayName)) {
+        return false;
+      }
+
+      const slotStartMinutes = timeToMinutes(slot.start_time);
+      const slotEndMinutes = timeToMinutes(slot.end_time);
+
+      // Check if booking is fully contained within this slot
+      return bookingStartMinutes >= slotStartMinutes && bookingEndMinutes <= slotEndMinutes;
+    });
+
+    if (!fitsInAnySlot) {
+      return {
+        isValid: false,
+        message: "This booking time doesn't conform to the configured time slots."
+      };
+    }
+
+    return { isValid: true, message: "" };
+  }, [customTimeSlots]);
+
+  // Fetch current user information
+  useEffect(() => {
+    if (!open) return;
+
+    const fetchCurrentUser = async () => {
+      try {
+        const supabase = createClient();
+        const { data: authData } = await supabase.auth.getUser();
+
+        if (authData.user) {
+          // Fetch user data from public.users table to get the internal user ID and names
+          const { data: userData } = await supabase
+            .from('users')
+            .select('id, email, first_name, last_name')
+            .eq('id', authData.user.id)
+            .single();
+
+          if (userData) {
+            setCurrentUser({
+              id: userData.id,
+              email: userData.email,
+              first_name: userData.first_name || '',
+              last_name: userData.last_name || ''
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching current user:', error);
+      }
+    };
+
+    fetchCurrentUser();
+  }, [open]);
+
   // Fetch dropdown data on open
   useEffect(() => {
     if (!open) return;
@@ -127,26 +281,48 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       .finally(() => setDropdownLoading(false));
   }, [open]);
 
-  // When start date changes, auto-set end date if blank or different
+  // When start date changes, auto-set end date to be at least the same as start date
   useEffect(() => {
-    if (startDate && (!endDate || endDate.getTime() !== startDate.getTime())) {
-      setEndDate(startDate);
+    if (startDate) {
+      if (!endDate || endDate.getTime() < startDate.getTime()) {
+        setEndDate(startDate);
+      }
     }
   }, [startDate, endDate]);
 
-  // When start time changes, auto-set end time only if end time is blank
+  // When start time changes, auto-set end time based on default booking duration
   useEffect(() => {
-    if (startTime && !endTime) {
-      setEndTime(startTime);
+    if (startTime) {
+      const calculatedEndTime = calculateEndTime(startTime, defaultBookingDuration);
+
+      // Always update end time when start time changes, unless user has manually set a different end time
+      // We'll update it if end time is empty OR if the current end time looks like a previous auto-calculation
+      if (!endTime || calculatedEndTime) {
+        setEndTime(calculatedEndTime);
+      }
     }
-  }, [startTime, endTime]);
+  }, [startTime, defaultBookingDuration, calculateEndTime, endTime]);
+
+  // Auto-select current user for members/students
+  useEffect(() => {
+    if (currentUser && isRestrictedRole && !selectedMember) {
+      // For restricted roles, automatically select the current user
+      const userResult: UserResult = {
+        id: currentUser.id,
+        email: currentUser.email,
+        first_name: currentUser.first_name,
+        last_name: currentUser.last_name,
+      };
+      setSelectedMember(userResult);
+    }
+  }, [currentUser, isRestrictedRole, selectedMember]);
 
   // Set initial values if prefilledData is provided
   useEffect(() => {
     if (prefilledData) {
       if (prefilledData.date) setStartDate(prefilledData.date);
       if (prefilledData.startTime) setStartTime(prefilledData.startTime);
-      
+
       // Handle aircraft prefilling
       if (prefilledData.aircraftId) {
         // Use the direct aircraft ID if available
@@ -157,7 +333,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
         const aircraftMatch = aircraft.find(a => a.registration === registration);
         if (aircraftMatch) setAircraftId(aircraftMatch.id);
       }
-      
+
       // Handle instructor prefilling
       if (prefilledData.instructorId && prefilledData.instructorUserId) {
         // Fetch instructor details to create proper InstructorResult object
@@ -213,6 +389,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       setCustomerName("");
       setCustomerPhone("");
       setCustomerEmail("");
+      setCurrentUser(null); // Reset current user state
       resetValidation(); // Reset type rating validation state
     }, 200);
   }
@@ -269,6 +446,11 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     return { aircraft: aircraftSet, instructors: instructorSet };
   }, [bookings, startDate, startTime, endDate, endTime]);
 
+  // Time slot validation check
+  const timeSlotValidation = React.useMemo(() => {
+    return validateTimeSlot(startDate, startTime, endTime);
+  }, [startDate, startTime, endTime, validateTimeSlot]);
+
   // Unified submit handler for both Save and Save and Confirm
   async function handleSubmit(e: React.FormEvent, statusOverride?: string) {
     e.preventDefault();
@@ -288,8 +470,18 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
         return;
       }
     } else {
-      if (!aircraftId || !startDate || !startTime || !endDate || !endTime || !purpose || !bookingType) {
-        setError("Please fill in all required fields (aircraft, start/end time, purpose, booking type).");
+      // Regular booking validation
+      const requiredFields = [aircraftId, startDate, startTime, endDate, endTime, purpose, bookingType];
+      const fieldNames = ["aircraft", "start/end time", "purpose", "booking type"];
+
+      if (requiredFields.some(field => !field)) {
+        setError(`Please fill in all required fields (${fieldNames.join(", ")}).`);
+        return;
+      }
+
+      // Additional validation for non-restricted roles
+      if (!isRestrictedRole && !selectedMember) {
+        setError("Please select a member for this booking.");
         return;
       }
     }
@@ -357,8 +549,12 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
           throw new Error('Failed to check existing users');
         }
       } else {
-        // Regular booking - use selected member if available
-        userId = selectedMember?.id || null;
+        // Regular booking - use selected member for non-restricted roles, current user for restricted roles
+        if (isRestrictedRole) {
+          userId = currentUser?.id || null;
+        } else {
+          userId = selectedMember?.id || null;
+        }
       }
       
       // Build booking payload
@@ -371,8 +567,8 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
         booking_type: activeTab === "trial" ? "flight" : bookingType,
         instructor_id: instructor?.id || null,
         remarks: remarks || null,
-        lesson_id: activeTab === "trial" ? null : (lesson || null),
-        flight_type_id: flightType || null,
+        lesson_id: activeTab === "trial" ? null : (isRestrictedRole ? null : (lesson || null)),
+        flight_type_id: isRestrictedRole ? null : (flightType || null),
         status: statusOverride || "unconfirmed",
       };
       const res = await fetch("/api/bookings", {
@@ -400,8 +596,8 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="!max-w-[760px] !w-[760px] mx-auto p-0 bg-white rounded-3xl shadow-2xl border border-muted overflow-y-auto max-h-[90vh]">
-        <div className="p-8 flex flex-col" style={{ minHeight: 0 }}>
+      <DialogContent className="!max-w-[760px] !w-[760px] mx-auto p-0 bg-white rounded-3xl shadow-2xl border border-muted max-h-[90vh] flex flex-col">
+        <div className="p-8 pb-0 flex-shrink-0">
           <DialogHeader className="mb-1">
             <DialogTitle className="text-3xl font-bold mb-1 tracking-tight flex items-center gap-2">
               <CalendarIcon className="w-7 h-7 text-indigo-600" /> New Booking
@@ -410,23 +606,28 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
               Enter details for the new booking. Required fields are marked with <span className="text-red-500">*</span>.
             </DialogDescription>
           </DialogHeader>
-          
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="regular" className="flex items-center gap-2">
-                <UserIcon className="w-4 h-4" />
-                Regular Booking
-              </TabsTrigger>
-              <TabsTrigger value="trial" className="flex items-center gap-2">
-                <Plane className="w-4 h-4" />
-                Trial Flight
-              </TabsTrigger>
-            </TabsList>
-            
-            <form className="flex flex-col" onSubmit={handleSubmit}>
-              <div className="overflow-y-auto max-h-[calc(90vh-160px)]">
-                {/* Scheduled Times - Common to both tabs */}
-                <div className="border rounded-xl p-6 bg-muted/70 mb-4">
+        </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
+          {!isRestrictedRole && (
+            <div className="px-8 pb-6 flex-shrink-0">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="regular" className="flex items-center gap-2">
+                  <UserIcon className="w-4 h-4" />
+                  Regular Booking
+                </TabsTrigger>
+                <TabsTrigger value="trial" className="flex items-center gap-2">
+                  <Plane className="w-4 h-4" />
+                  Trial Flight
+                </TabsTrigger>
+              </TabsList>
+            </div>
+          )}
+
+          <form className="flex flex-col flex-1 min-h-0" onSubmit={handleSubmit}>
+            <div className="overflow-y-auto flex-1 px-8">
+              {/* Scheduled Times - Common to both tabs */}
+              <div className="border rounded-xl p-6 bg-muted/70 mb-4">
                   <div className="font-semibold text-lg mb-4 flex items-center gap-2">
                     <CalendarIcon className="w-5 h-5" /> SCHEDULED TIMES
                   </div>
@@ -506,38 +707,28 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       </div>
                     </div>
                   </div>
+
+                  {/* Time Slot Validation Warning */}
+                  {!timeSlotValidation.isValid && (
+                    <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-md p-2 flex items-start gap-2">
+                      <div className="w-1 h-1 rounded-full bg-red-500 mt-1.5 flex-shrink-0"></div>
+                      <span>{timeSlotValidation.message}</span>
+                    </div>
+                  )}
                 </div>
                 
                 {/* Tab-specific content */}
                 <TabsContent value="regular" className="mt-0">
-                  {/* Member and Flight Type on same line */}
+                  {/* Member and Instructor on same line */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6 mb-8">
                     <div className="max-w-[340px] w-full mr-2">
-                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Member</label>
+                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Member{isRestrictedRole ? ' (You)' : ''}</label>
                       <MemberSelect
                         value={selectedMember}
-                        onSelect={setSelectedMember}
+                        onSelect={isRestrictedRole ? () => {} : setSelectedMember}
+                        disabled={isRestrictedRole}
                       />
                     </div>
-                    <div className="max-w-[340px] w-full">
-                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BadgeCheck className="w-4 h-4" /> Flight Type</label>
-                      <Select value={flightType} onValueChange={setFlightType} disabled={dropdownLoading}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={dropdownLoading ? "Loading..." : "Select flight type"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {flightTypes.map(ft => (
-                            <SelectItem key={ft.id} value={ft.id}>
-                              {ft.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  {/* Instructor and Aircraft on same line */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 mb-4">
                     <div className="max-w-[340px] w-full">
                       <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Instructor</label>
                       <InstructorSelect
@@ -562,6 +753,10 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         </div>
                       )}
                     </div>
+                  </div>
+
+                  {/* Aircraft and Flight Type/Booking Type row */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 mb-4">
                     <div className="max-w-[340px] w-full">
                       <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><Plane className="w-4 h-4" /> Aircraft</label>
                       <Select value={aircraftId} onValueChange={(selectedAircraftId) => {
@@ -586,6 +781,37 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         </SelectContent>
                       </Select>
                     </div>
+                    {isRestrictedRole ? (
+                      <div className="max-w-[340px] w-full">
+                        <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="w-4 h-4" /> Booking Type</label>
+                        <Select value={bookingType} onValueChange={setBookingType}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select booking type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {["flight", "groundwork", "maintenance", "other"].map((type) => (
+                              <SelectItem key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      <div className="max-w-[340px] w-full">
+                        <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BadgeCheck className="w-4 h-4" /> Flight Type</label>
+                        <Select value={flightType} onValueChange={setFlightType} disabled={dropdownLoading}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder={dropdownLoading ? "Loading..." : "Select flight type"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {flightTypes.map(ft => (
+                              <SelectItem key={ft.id} value={ft.id}>
+                                {ft.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
 
                   {/* Type Rating Warning - only show if there's an issue */}
@@ -599,35 +825,37 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                     </div>
                   )}
 
-                  {/* Lesson and Booking Type */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 mb-4">
-                    <div className="max-w-[340px] w-full">
-                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BookOpen className="w-4 h-4" /> Lesson</label>
-                      <Select value={lesson} onValueChange={setLesson} disabled={dropdownLoading}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={dropdownLoading ? "Loading..." : "Select lesson"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {lessons.map(l => (
-                            <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                  {/* Lesson - only for non-restricted roles */}
+                  {!isRestrictedRole && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 mb-4">
+                      <div className="max-w-[340px] w-full">
+                        <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BookOpen className="w-4 h-4" /> Lesson</label>
+                        <Select value={lesson} onValueChange={setLesson} disabled={dropdownLoading}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder={dropdownLoading ? "Loading..." : "Select lesson"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {lessons.map(l => (
+                              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="max-w-[340px] w-full">
+                        <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="w-4 h-4" /> Booking Type</label>
+                        <Select value={bookingType} onValueChange={setBookingType}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select booking type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {["flight", "groundwork", "maintenance", "other"].map((type) => (
+                              <SelectItem key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="max-w-[340px] w-full">
-                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="w-4 h-4" /> Booking Type</label>
-                      <Select value={bookingType} onValueChange={setBookingType}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select booking type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {["flight", "groundwork", "maintenance", "other"].map((type) => (
-                            <SelectItem key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+                  )}
                   
                   {/* Description & Remarks */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
@@ -662,7 +890,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       <Textarea
                         value={remarks}
                         onChange={e => setRemarks(e.target.value)}
-                        placeholder="Enter booking remarks"
+                        placeholder={isRestrictedRole ? "e.g., 'Need less than 80L fuel for weight and balance' or special requirements" : "Enter booking remarks"}
                         className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
                         rows={4}
                       />
@@ -820,29 +1048,23 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                     </div>
                   </div>
                 </TabsContent>
-              </div>
-              <DialogFooter className="sticky bottom-0 left-0 right-0 bg-white z-10 border-t pt-6 flex flex-col sm:flex-row gap-2 sm:gap-4 w-full">
+            </div>
+
+            <div className="flex-shrink-0 p-8 pt-0">
+              <DialogFooter className="border-t pt-6 flex flex-col sm:flex-row gap-2 sm:gap-4 w-full">
                 <DialogClose asChild>
                   <Button variant="outline" type="button" className="w-full sm:w-auto border border-muted hover:border-indigo-400 cursor-pointer">Cancel</Button>
                 </DialogClose>
                 <Button type="submit" className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-md cursor-pointer" disabled={loading}
                   onClick={e => handleSubmit(e)}
                 >
-                  Save
-                </Button>
-                <Button
-                  type="button"
-                  className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md cursor-pointer"
-                  disabled={loading}
-                  onClick={e => handleSubmit(e as React.FormEvent, "confirmed")}
-                >
-                  Save and Confirm
+                  {isRestrictedRole ? 'Save Booking' : 'Save'}
                 </Button>
               </DialogFooter>
               {error && <div className="text-red-600 text-sm mb-2 text-center w-full">{error}</div>}
-            </form>
-          </Tabs>
-        </div>
+            </div>
+          </form>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

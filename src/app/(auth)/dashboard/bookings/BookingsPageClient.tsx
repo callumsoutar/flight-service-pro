@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { CalendarDays, Clock, AlertCircle, Send } from 'lucide-react';
 import { NewBookingModal } from '@/components/bookings/NewBookingModal';
 import type { Booking } from '@/types/bookings';
+import { SettingsProvider } from '@/contexts/SettingsContext';
 
 interface MemberOption { id: string; name: string; }
 interface InstructorOption { id: string; name: string; }
@@ -34,7 +35,8 @@ export default function BookingsPageClient({ bookings, members, instructors, air
   const statusCounts = getStatusCounts(bookings);
 
   return (
-    <main className="flex flex-col gap-8 p-6 md:p-10">
+    <SettingsProvider>
+      <main className="flex flex-col gap-8 p-6 md:p-10">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Bookings</h1>
@@ -77,5 +79,6 @@ export default function BookingsPageClient({ bookings, members, instructors, air
         bookings={bookings}
       />
     </main>
+    </SettingsProvider>
   );
 } 

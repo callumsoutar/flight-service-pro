@@ -15,6 +15,8 @@ import { format, parseISO } from "date-fns";
 import FlightExperienceDisplay from "@/components/debrief/FlightExperienceDisplay";
 import type { FlightExperience } from "@/types/flight_experience";
 import type { ExperienceType } from "@/types/experience_types";
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps, validateBookingAccess } from "@/lib/rbac-page-wrapper";
+import { redirect } from 'next/navigation';
 
 // Define a type for the joined booking object
 interface BookingWithJoins extends Booking {
@@ -37,7 +39,11 @@ interface LessonProgressWithInstructor extends LessonProgress {
   };
 }
 
-export default async function DebriefViewPage({ params }: { params: Promise<{ id: string }> }) {
+interface DebriefViewPageProps extends ProtectedPageProps {
+  params: Promise<{ id: string }>;
+}
+
+async function DebriefViewPage({ params, user, userRole }: DebriefViewPageProps) {
   const { id: bookingId } = await params;
   const supabase = await createClient();
 
@@ -59,14 +65,19 @@ export default async function DebriefViewPage({ params }: { params: Promise<{ id
   booking = bookingData;
 
   if (!booking) {
-    return (
-      <div className="w-full min-h-screen flex flex-col items-center justify-center">
-        <div className="max-w-xl w-full p-8 text-center">
-          <h2 className="text-2xl font-bold mb-4">Debrief not found</h2>
-          <p className="text-muted-foreground">We couldn&apos;t find the debrief record. Please check the link or contact support if you believe this is an error.</p>
-        </div>
-      </div>
-    );
+    redirect('/dashboard/bookings');
+  }
+
+  // Check if user has permission to view this booking
+  // Students and members can only view their own bookings, instructors/admins/owners can view all
+  const hasAccess = await validateBookingAccess({
+    user,
+    userRole,
+    bookingUserId: booking.user_id || ''
+  });
+
+  if (!hasAccess) {
+    redirect('/dashboard/bookings');
   }
 
   // Fetch lesson_progress for this booking with instructor details
@@ -370,4 +381,16 @@ export default async function DebriefViewPage({ params }: { params: Promise<{ id
       </div>
     </div>
   );
-} 
+}
+
+// Export protected component with booking access validation
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export default withRoleProtection(DebriefViewPage as any, {
+  ...ROLE_CONFIGS.AUTHENTICATED_ONLY,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  customValidation: async ({ user: _user, userRole: _userRole, context: _context }) => {
+    // Additional validation is handled within the component
+    // since we need to fetch the booking first to get the user_id
+    return true;
+  }
+}) as any; 

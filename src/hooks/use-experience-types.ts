@@ -10,11 +10,12 @@ export function useExperienceTypes() {
     const fetchExperienceTypes = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/experience-types?is_active=true');
+        const response = await fetch('/api/experience-types');
         const data = await response.json();
         
         if (response.ok) {
-          setExperienceTypes(data.data || []);
+          const activeTypes = (data.experience_types || []).filter((type: ExperienceType) => type.is_active);
+          setExperienceTypes(activeTypes);
         } else {
           setError(data.error || 'Failed to fetch experience types');
         }

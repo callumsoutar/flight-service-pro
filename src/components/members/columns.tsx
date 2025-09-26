@@ -13,6 +13,7 @@ export type Member = {
   profile_image_url?: string;
   role: string;
   status?: string;
+  public_directory_opt_in?: boolean;
 };
 
 export const columns: ColumnDef<Member>[] = [

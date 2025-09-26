@@ -1,22 +1,10 @@
 import React from 'react';
-import { redirect } from 'next/navigation';
 import { createClient } from "@/lib/SupabaseServerClient";
 import { FlightAuthorizationsClient } from './FlightAuthorizationsClient';
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from '@/lib/rbac-page-wrapper';
 
-export default async function FlightAuthorizationsPage() {
+async function FlightAuthorizationsPage({ userRole }: ProtectedPageProps) {
   const supabase = await createClient();
-
-  // Auth check
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    redirect('/login');
-  }
-
-  // Check if user is instructor/admin/owner
-  const { data: userRole } = await supabase.rpc('get_user_role', { user_id: user.id });
-  if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
-    redirect('/dashboard');
-  }
 
   // Fetch pending authorizations
   const { data: pendingAuthorizations } = await supabase
@@ -77,3 +65,7 @@ export default async function FlightAuthorizationsPage() {
     />
   );
 }
+
+// Export protected component with role restriction for instructors and above
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default withRoleProtection(FlightAuthorizationsPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any;

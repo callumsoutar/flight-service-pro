@@ -5,10 +5,10 @@ import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Fuel } from "lucide-react";
-import { FlightAuthorizationFormData } from '@/lib/validations/flight-authorization';
+import { FlightAuthorizationEditData } from '@/lib/validations/flight-authorization';
 
 interface FuelAndOilSectionProps {
-  control: Control<FlightAuthorizationFormData>;
+  control: Control<FlightAuthorizationEditData>;
   disabled?: boolean;
 }
 
@@ -96,18 +96,6 @@ export function FuelAndOilSection({ control, disabled = false }: FuelAndOilSecti
           </div>
         </div>
 
-        {/* Fuel and Oil Guidelines */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-blue-900 mb-2">
-            Pre-flight Guidelines
-          </h4>
-          <ul className="text-sm text-blue-800 space-y-1">
-            <li>• Check fuel quantity and quality during pre-flight inspection</li>
-            <li>• Verify oil level is within operating limits</li>
-            <li>• Ensure fuel caps are secure and properly sealed</li>
-            <li>• Document any discrepancies or concerns</li>
-          </ul>
-        </div>
       </CardContent>
     </Card>
   );

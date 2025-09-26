@@ -28,6 +28,23 @@ export async function GET(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Role authorization check - lessons should be viewable by all authenticated users for education
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  // All authenticated users should be able to view lessons for educational purposes
+  if (!userRole) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Lesson access requires a valid role' 
+    }, { status: 403 });
+  }
   
   const searchParams = req.nextUrl.searchParams;
   const lessonId = searchParams.get("id");
@@ -64,6 +81,24 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Role authorization check - only admin/owner can create/modify lessons
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  const isPrivileged = userRole && ['admin', 'owner'].includes(userRole);
+
+  if (!isPrivileged) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Lesson creation requires admin or owner role' 
+    }, { status: 403 });
   }
 
   const body = await req.json();

@@ -5,10 +5,10 @@ import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { CheckCircle, CloudSun, AlertTriangle } from "lucide-react";
-import { FlightAuthorizationFormData } from '@/lib/validations/flight-authorization';
+import { FlightAuthorizationEditData } from '@/lib/validations/flight-authorization';
 
 interface PreFlightChecksSectionProps {
-  control: Control<FlightAuthorizationFormData>;
+  control: Control<FlightAuthorizationEditData>;
   disabled?: boolean;
 }
 
@@ -93,36 +93,6 @@ export function PreFlightChecksSection({ control, disabled = false }: PreFlightC
           </div>
         </div>
 
-        {/* Pre-flight Requirements Notice */}
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4" />
-            Pre-flight Requirements
-          </h4>
-          <div className="text-sm text-amber-800 space-y-2">
-            <p>
-              <strong>All items above must be completed before flight authorization.</strong>
-            </p>
-            <ul className="space-y-1 ml-4">
-              <li>• Weather briefing must include current conditions, forecasts, and alternate airports</li>
-              <li>• NOTAMs should cover departure, destination, and alternate airports</li>
-              <li>• Any questions or concerns should be discussed with your instructor</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Additional Safety Reminders */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-green-900 mb-2">
-            Safety Reminders
-          </h4>
-          <ul className="text-sm text-green-800 space-y-1">
-            <li>• Complete aircraft pre-flight inspection per checklist</li>
-            <li>• Verify all required documents are aboard the aircraft</li>
-            <li>• Ensure emergency equipment is present and functional</li>
-            <li>• Review emergency procedures and airport information</li>
-          </ul>
-        </div>
       </CardContent>
     </Card>
   );

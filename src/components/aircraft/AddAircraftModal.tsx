@@ -13,8 +13,16 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import React, { useState, useEffect } from "react";
 import type { Aircraft } from '@/types/aircraft';
-import { Plane, Settings, Calendar, Wrench } from "lucide-react";
+import type { AircraftType } from '@/types/aircraft_types';
+import { Plane, Settings, Calendar, Wrench, Plus } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface AddAircraftModalProps {
   open: boolean;
@@ -58,9 +66,18 @@ export const AddAircraftModal: React.FC<AddAircraftModalProps> = ({
   
   // Notes
   const [notes, setNotes] = useState("");
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Aircraft Type Management
+  const [aircraftTypes, setAircraftTypes] = useState<AircraftType[]>([]);
+  const [selectedAircraftTypeId, setSelectedAircraftTypeId] = useState<string | null>(null);
+  const [isAddTypeDialogOpen, setIsAddTypeDialogOpen] = useState(false);
+  const [newTypeName, setNewTypeName] = useState("");
+  const [newTypeCategory, setNewTypeCategory] = useState("");
+  const [newTypeDescription, setNewTypeDescription] = useState("");
+  const [isCreatingType, setIsCreatingType] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -85,6 +102,13 @@ export const AddAircraftModal: React.FC<AddAircraftModalProps> = ({
       setNotes("");
       setError(null);
       setLoading(false);
+      setSelectedAircraftTypeId(null);
+
+      // Fetch aircraft types
+      fetch("/api/aircraft-types")
+        .then(res => res.json())
+        .then(data => setAircraftTypes(data.aircraft_types || []))
+        .catch(() => toast.error("Failed to load aircraft types"));
     }
   }, [open]);
 
@@ -125,6 +149,7 @@ export const AddAircraftModal: React.FC<AddAircraftModalProps> = ({
       prioritise_scheduling: prioritiseScheduling,
       status: "active",
       notes: notes.trim() || null,
+      aircraft_type_id: selectedAircraftTypeId || null,
     };
 
     try {
@@ -172,6 +197,42 @@ export const AddAircraftModal: React.FC<AddAircraftModalProps> = ({
     { value: "tacho less 10%", label: "Tacho less 10%" },
   ];
 
+  const handleCreateAircraftType = async () => {
+    if (!newTypeName.trim()) {
+      toast.error("Aircraft type name is required");
+      return;
+    }
+
+    setIsCreatingType(true);
+    try {
+      const res = await fetch("/api/aircraft-types", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newTypeName.trim(),
+          category: newTypeCategory.trim() || null,
+          description: newTypeDescription.trim() || null,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok || result.error) {
+        toast.error(result.error || "Failed to create aircraft type");
+      } else {
+        toast.success("Aircraft type created!");
+        setAircraftTypes([...aircraftTypes, result.aircraft_type]);
+        setSelectedAircraftTypeId(result.aircraft_type.id);
+        setIsAddTypeDialogOpen(false);
+        setNewTypeName("");
+        setNewTypeCategory("");
+        setNewTypeDescription("");
+      }
+    } catch {
+      toast.error("Failed to create aircraft type");
+    } finally {
+      setIsCreatingType(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="w-[700px] max-w-[98vw] mx-auto p-0 bg-white rounded-2xl shadow-xl border border-muted overflow-y-auto max-h-[90vh]">
@@ -210,12 +271,44 @@ export const AddAircraftModal: React.FC<AddAircraftModalProps> = ({
                   <label className="block font-medium mb-1">
                     Aircraft Type <span className="text-red-500">*</span>
                   </label>
-                  <Input 
-                    value={type} 
-                    onChange={e => setType(e.target.value)} 
-                    placeholder="e.g., Cessna 172" 
+                  <Input
+                    value={type}
+                    onChange={e => setType(e.target.value)}
+                    placeholder="e.g., Cessna 172"
                     required
                   />
+                </div>
+                <div>
+                  <label className="block font-medium mb-1">Aircraft Type Category</label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={selectedAircraftTypeId || undefined}
+                      onValueChange={v => setSelectedAircraftTypeId(v || null)}
+                    >
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Select aircraft type..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {aircraftTypes.map(type => (
+                          <SelectItem key={type.id} value={type.id}>
+                            {type.name}
+                          </SelectItem>
+                        ))}
+                        <div className="border-t mt-1 pt-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                            onClick={() => setIsAddTypeDialogOpen(true)}
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Aircraft Type
+                          </Button>
+                        </div>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div>
                   <label className="block font-medium mb-1">Manufacturer</label>
@@ -288,17 +381,21 @@ export const AddAircraftModal: React.FC<AddAircraftModalProps> = ({
                 </div>
                 <div>
                   <label className="block font-medium mb-1">Total Time Method</label>
-                  <select 
-                    value={totalTimeMethod} 
-                    onChange={e => setTotalTimeMethod(e.target.value)}
-                    className="w-full border rounded p-2 h-10 bg-white"
+                  <Select
+                    value={totalTimeMethod || undefined}
+                    onValueChange={v => setTotalTimeMethod(v || "")}
                   >
-                    {totalTimeMethodOptions.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select method..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {totalTimeMethodOptions.filter(opt => opt.value).map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>
@@ -451,6 +548,61 @@ export const AddAircraftModal: React.FC<AddAircraftModalProps> = ({
           </form>
         </div>
       </DialogContent>
+
+      {/* Add Aircraft Type Dialog */}
+      <Dialog open={isAddTypeDialogOpen} onOpenChange={setIsAddTypeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Aircraft Type</DialogTitle>
+            <DialogDescription>
+              Create a new aircraft type to categorize your aircraft fleet.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Name *</label>
+              <Input
+                value={newTypeName}
+                onChange={(e) => setNewTypeName(e.target.value)}
+                placeholder="e.g., Cessna 172"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Category</label>
+              <Input
+                value={newTypeCategory}
+                onChange={(e) => setNewTypeCategory(e.target.value)}
+                placeholder="e.g., Single Engine"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Description</label>
+              <Input
+                value={newTypeDescription}
+                onChange={(e) => setNewTypeDescription(e.target.value)}
+                placeholder="e.g., Four-seat, single-engine aircraft"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsAddTypeDialogOpen(false)}
+              disabled={isCreatingType}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCreateAircraftType}
+              disabled={isCreatingType || !newTypeName.trim()}
+            >
+              {isCreatingType ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };

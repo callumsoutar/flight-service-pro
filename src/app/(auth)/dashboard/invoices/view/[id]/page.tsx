@@ -6,6 +6,7 @@ import { InvoiceItem } from '@/types/invoice_items';
 import * as React from 'react';
 import InvoiceViewHeader from '@/components/invoices/InvoiceViewHeader';
 import InvoiceViewActions from '@/components/invoices/InvoiceViewActions';
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from '@/lib/rbac-page-wrapper';
 
 async function getInvoiceAndItems(id: string) {
   const supabase = await createClient();
@@ -27,7 +28,11 @@ async function getInvoiceAndItems(id: string) {
   return { invoice, items: items || [] };
 }
 
-export default async function InvoiceViewPage({ params }: { params: Promise<{ id: string }> }) {
+interface InvoiceViewPageProps extends ProtectedPageProps {
+  params: Promise<{ id: string }>;
+}
+
+async function InvoiceViewPage({ params }: InvoiceViewPageProps) {
   const { id } = await params;
   const { invoice, items } = await getInvoiceAndItems(id);
 
@@ -147,4 +152,8 @@ export default async function InvoiceViewPage({ params }: { params: Promise<{ id
       <PaymentHistory invoiceId={invoice.id} />
     </div>
   );
-} 
+}
+
+// Export protected component with role restriction for admin/owner only
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export default withRoleProtection(InvoiceViewPage as any, ROLE_CONFIGS.ADMIN_ONLY) as any; 

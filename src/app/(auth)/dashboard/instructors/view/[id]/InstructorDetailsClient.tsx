@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import * as Tabs from "@radix-ui/react-tabs";
-import { User, Mail, Award, Activity, FileText, Upload, Clock, CalendarCheck2, ActivitySquare, Stethoscope, Settings, Briefcase, Calendar as CalendarIcon } from "lucide-react";
+import { User, Mail, Award, Activity, FileText, Upload, Clock, CalendarCheck2, ActivitySquare, Stethoscope, Settings, Briefcase, Calendar as CalendarIcon, UserCog, Shield, Info } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,7 +15,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { useEffect } from "react";
 import type { InstructorCategory } from "@/types/instructor_categories";
-import RatingsTab from "@/components/aircraft/RatingsTab";
+import AircraftTypeRatingsTab from "@/components/instructors/AircraftTypeRatingsTab";
 import { Dropzone, DropzoneContent, DropzoneEmptyState } from '@/components/dropzone';
 import { useSupabaseUpload } from '@/hooks/use-supabase-upload';
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -24,6 +24,9 @@ import { Controller } from "react-hook-form";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
+import { useUserRoles, useAssignRole, useRemoveRole } from '@/hooks/use-user-roles';
+import { useCanManageRoles } from '@/hooks/use-can-manage-roles';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 const InstructorFlightTypeRatesTable = dynamic(() => import("@/components/InstructorFlightTypeRatesTable"), { ssr: false });
 
 const tabItems = [
@@ -43,12 +46,18 @@ const licenseSchema = z.object({
   class_1_medical_due_date: z.string().min(1, "Required"),
   employment_type: z.enum(["full_time", "part_time", "casual", "contractor"]),
   is_actively_instructing: z.boolean(),
-  endorsements: z.array(z.string()),
   notes: z.string().optional(),
+  // Endorsement columns
+  night_removal: z.boolean(),
+  aerobatics_removal: z.boolean(),
+  multi_removal: z.boolean(),
+  tawa_removal: z.boolean(),
+  ifr_removal: z.boolean(),
 });
 
 interface InstructorWithUser {
   id: string;
+  user_id: string;
   first_name: string;
   last_name: string;
   rating: string | null;
@@ -59,8 +68,13 @@ interface InstructorWithUser {
   class_1_medical_due_date?: string;
   employment_type?: "full_time" | "part_time" | "casual" | "contractor";
   is_actively_instructing: boolean;
-  endorsements?: { name: string }[];
   notes?: string;
+  // Endorsement columns
+  night_removal?: boolean;
+  aerobatics_removal?: boolean;
+  multi_removal?: boolean;
+  tawa_removal?: boolean;
+  ifr_removal?: boolean;
 }
 
 type LicenseFormValues = z.infer<typeof licenseSchema>;
@@ -68,6 +82,54 @@ type LicenseFormValues = z.infer<typeof licenseSchema>;
 export default function InstructorDetailsClient({ instructor }: { instructor: InstructorWithUser }) {
   const [selectedTab, setSelectedTab] = useState("license");
   const [status, setStatus] = useState<string>(instructor.status);
+
+  // Role management hooks
+  const { data: canManageRoles } = useCanManageRoles();
+  const { data: userRoles, isLoading: rolesLoading } = useUserRoles(instructor.user_id);
+  const assignRoleMutation = useAssignRole();
+  const removeRoleMutation = useRemoveRole();
+
+  // Available roles for assignment
+  const availableRoles = [
+    { value: "instructor", label: "Instructor", description: "Can manage bookings, lessons, and student progress" },
+    { value: "admin", label: "Admin", description: "Administrative access to manage users and settings" },
+    { value: "owner", label: "Owner", description: "Full system access and control" },
+  ];
+
+  // Get current user's primary role
+  const currentRole = userRoles?.roles?.[0]?.roles?.name || null;
+
+  // Handle role assignment
+  const handleRoleChange = async (newRole: string) => {
+    if (!canManageRoles) {
+      toast.error('You do not have permission to change roles');
+      return;
+    }
+
+    if (currentRole === newRole) {
+      return; // No change needed
+    }
+
+    try {
+      // Remove existing role if any
+      if (currentRole && userRoles?.roles?.[0]) {
+        await removeRoleMutation.mutateAsync({
+          userId: instructor.user_id,
+          roleId: userRoles.roles[0].roles.id,
+        });
+      }
+
+      // Assign new role
+      if (newRole !== 'none') {
+        await assignRoleMutation.mutateAsync({
+          userId: instructor.user_id,
+          roleName: newRole,
+        });
+      }
+    } catch (error) {
+      console.error('Error changing role:', error);
+    }
+  };
 
   const employmentTypes = [
     { value: "full_time", label: "Full Time" },
@@ -102,8 +164,13 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
       class_1_medical_due_date: instructor.class_1_medical_due_date,
       employment_type: instructor.employment_type || "full_time",
       is_actively_instructing: instructor.is_actively_instructing,
-      endorsements: instructor.endorsements?.map((e) => e.name) || [],
       notes: instructor.notes || "",
+      // Endorsement columns
+      night_removal: instructor.night_removal || false,
+      aerobatics_removal: instructor.aerobatics_removal || false,
+      multi_removal: instructor.multi_removal || false,
+      tawa_removal: instructor.tawa_removal || false,
+      ifr_removal: instructor.ifr_removal || false,
     },
   });
 
@@ -147,6 +214,12 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
           employment_type: data.employment_type,
           is_actively_instructing: data.is_actively_instructing,
           notes: data.notes,
+          // Endorsement columns
+          night_removal: data.night_removal,
+          aerobatics_removal: data.aerobatics_removal,
+          multi_removal: data.multi_removal,
+          tawa_removal: data.tawa_removal,
+          ifr_removal: data.ifr_removal,
         }),
       });
       if (!res.ok) {
@@ -426,10 +499,65 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
               <div className="space-y-4">
                 <h3 className="text-base font-medium text-gray-900 border-b border-gray-200 pb-2 flex items-center gap-2">
                   <Award className="w-5 h-5 text-indigo-500" />
-                  Endorsements & Ratings
+                  Endorsements
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <Switch 
+                        checked={watch("night_removal")}
+                        onCheckedChange={val => setValue("night_removal", val, { shouldDirty: true })}
+                      />
+                      Night Removal
+                    </label>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <Switch 
+                        checked={watch("aerobatics_removal")}
+                        onCheckedChange={val => setValue("aerobatics_removal", val, { shouldDirty: true })}
+                      />
+                      Aerobatics Removal
+                    </label>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <Switch 
+                        checked={watch("multi_removal")}
+                        onCheckedChange={val => setValue("multi_removal", val, { shouldDirty: true })}
+                      />
+                      Multi Removal
+                    </label>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <Switch 
+                        checked={watch("tawa_removal")}
+                        onCheckedChange={val => setValue("tawa_removal", val, { shouldDirty: true })}
+                      />
+                      TAWA Removal
+                    </label>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <Switch 
+                        checked={watch("ifr_removal")}
+                        onCheckedChange={val => setValue("ifr_removal", val, { shouldDirty: true })}
+                      />
+                      IFR Removal
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Aircraft Type Ratings Section */}
+              <div className="space-y-4">
+                <h3 className="text-base font-medium text-gray-900 border-b border-gray-200 pb-2 flex items-center gap-2">
+                  <ActivitySquare className="w-5 h-5 text-blue-500" />
+                  Aircraft Type Ratings
                 </h3>
                 <div className="bg-gray-50 rounded-lg p-4">
-                  <RatingsTab instructorId={instructor.id} />
+                  <AircraftTypeRatingsTab instructorId={instructor.id} />
                 </div>
               </div>
             </form>
@@ -535,6 +663,77 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
             </div>
 
             <form onSubmit={handleSubmit(onSave)} className="space-y-8">
+              {/* Role Management Section */}
+              <div className="space-y-4">
+                <h3 className="text-base font-medium text-gray-900 border-b border-gray-200 pb-2 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-indigo-500" />
+                  Role & Permissions
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                            <UserCog className="w-4 h-4 text-indigo-500" />
+                            System Role
+                            <Info className="w-3 h-3 text-gray-400" />
+                          </label>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Controls what actions this user can perform in the system</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    
+                    {rolesLoading ? (
+                      <div className="h-10 bg-gray-100 rounded animate-pulse"></div>
+                    ) : (
+                      <div className="space-y-3">
+                        <Select
+                          value={currentRole || 'none'}
+                          onValueChange={handleRoleChange}
+                          disabled={!canManageRoles || assignRoleMutation.isPending || removeRoleMutation.isPending}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select a role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none" className="py-2">
+                              <span className="font-medium text-gray-700">No role assigned</span>
+                            </SelectItem>
+                            {availableRoles.map((role) => (
+                              <SelectItem key={role.value} value={role.value} className="py-2">
+                                <span className="font-medium">{role.label}</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        
+                        {currentRole && currentRole !== 'none' && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="text-xs">
+                                Current: {availableRoles.find(r => r.value === currentRole)?.label || currentRole}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-gray-600">
+                              {availableRoles.find(r => r.value === currentRole)?.description}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {!canManageRoles && (
+                          <p className="text-xs text-gray-500">
+                            You need admin or owner permissions to change roles
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Instructor Status Section */}
               <div className="space-y-4">
                 <h3 className="text-base font-medium text-gray-900 border-b border-gray-200 pb-2">Status & Employment</h3>

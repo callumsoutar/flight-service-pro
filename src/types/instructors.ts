@@ -6,6 +6,12 @@ export interface Instructor {
   rating: string | null; // Foreign key to instructor_categories table
   created_at: string;
   updated_at: string;
+  // Endorsement columns
+  night_removal: boolean;
+  aerobatics_removal: boolean;
+  multi_removal: boolean;
+  tawa_removal: boolean;
+  ifr_removal: boolean;
   // Optionally joined objects from Supabase
   user?: import("./users").User;
   instructor_category?: import("./instructor_categories").InstructorCategory; // Joined instructor category data

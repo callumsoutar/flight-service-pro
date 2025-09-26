@@ -42,6 +42,13 @@ const CreateShiftOverrideSchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient();
+    
+    // Auth check
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    
     const { searchParams } = new URL(req.url);
     
     const instructor_id = searchParams.get('instructor_id');
@@ -106,6 +113,13 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient();
+    
+    // Auth check
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    
     const body = await req.json();
 
     const validatedData = CreateShiftOverrideSchema.parse(body);

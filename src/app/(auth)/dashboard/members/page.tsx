@@ -1,35 +1,64 @@
 import { createClient } from "@/lib/SupabaseServerClient";
 import MembersTable from "@/components/members/MembersTable";
 import type { Member } from "@/components/members/columns";
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
 
 // Force dynamic rendering since this page requires authentication
 export const dynamic = 'force-dynamic';
 
-export default async function MembersPage() {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function MembersPage({ user: _user, userRole }: ProtectedPageProps) {
+  const supabase = await createClient();
+
+  // Check if current user is a privileged user (admin/owner/instructor)
+  const isPrivileged = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+
   let formattedMembers: Member[] = [];
   
   try {
-    const supabase = await createClient();
 
-    // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    // Fetch users with their roles - specify the exact relationship
-    const { data: usersWithRoles, error } = await supabase
-      .from("users")
-      .select(`
-        id, 
-        email, 
-        first_name, 
-        last_name,
-        user_roles!user_roles_user_id_fkey (
-          roles (
-            name
+    let query;
+    
+    if (isPrivileged) {
+      // Privileged users can see all users
+      query = supabase
+        .from("users")
+        .select(`
+          id, 
+          email, 
+          first_name, 
+          last_name,
+          public_directory_opt_in,
+          user_roles!user_roles_user_id_fkey (
+            roles (
+              name
+            )
           )
-        )
-      `)
-      .order("last_name", { ascending: true });
+        `)
+        .eq("is_active", true)
+        .order("last_name", { ascending: true });
+    } else {
+      // Regular members/students can only see users who opted into public directory
+      query = supabase
+        .from("users")
+        .select(`
+          id, 
+          email, 
+          first_name, 
+          last_name,
+          public_directory_opt_in,
+          user_roles!user_roles_user_id_fkey (
+            roles (
+              name
+            )
+          )
+        `)
+        .eq("is_active", true)
+        .eq("public_directory_opt_in", true)
+        .order("last_name", { ascending: true });
+    }
+
+    const { data: usersWithRoles, error } = await query;
 
     if (error) {
       console.error('Error fetching users:', error);
@@ -49,6 +78,7 @@ export default async function MembersPage() {
           profile_image_url: undefined,
           role: primaryRole,
           status: "active",
+          public_directory_opt_in: user.public_directory_opt_in || false,
         };
       });
     }
@@ -76,8 +106,12 @@ export default async function MembersPage() {
         </div>
         
         {/* Members Table */}
-        <MembersTable initialData={initialData} />
+        <MembersTable initialData={initialData} userRole={userRole} />
       </div>
     </div>
   );
-} 
+}
+
+// Export protected component with role restriction for instructors and above
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default withRoleProtection(MembersPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any; 

@@ -16,6 +16,7 @@ import { useBookingUpdate, useMemberValue, useInstructorValue } from "@/hooks/us
 import { useRouter } from "next/navigation";
 import type { User } from "@/types/users";
 import { PLACEHOLDER_VALUES } from "@/constants/placeholders";
+import { useIsRestrictedUser } from "@/hooks/use-role-protection";
 
 // Types to match what the hooks expect
 type MemberForHook = {
@@ -113,6 +114,9 @@ export default function BookingDetails({ booking, members, instructors, aircraft
   // Check if booking is read-only (completed bookings cannot be edited)
   const isReadOnly = booking.status === 'complete';
   const router = useRouter();
+
+  // Check if user has restricted access (member/student)
+  const { isRestricted: isRestrictedUser, isLoading: isRoleLoading } = useIsRestrictedUser();
   
   const { control, handleSubmit, reset, formState, watch, setValue } = useForm<BookingDetailsFormData>({
     defaultValues: {
@@ -143,6 +147,15 @@ export default function BookingDetails({ booking, members, instructors, aircraft
   const startTime = watch("start_time");
   const endDate = watch("end_date");
   const endTime = watch("end_time");
+
+  // When start date changes, auto-set end date to be at least the same as start date
+  React.useEffect(() => {
+    if (startDate && !isReadOnly) {
+      if (!endDate || new Date(endDate).getTime() < new Date(startDate).getTime()) {
+        setValue("end_date", startDate);
+      }
+    }
+  }, [startDate, endDate, setValue, isReadOnly]);
   
   // Determine if selected flight type is solo
   const isSoloFlightType = React.useMemo(() => {
@@ -537,7 +550,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                 </Select>
               )} />
             </div>
-            <div>
+            <div className={isRoleLoading || isRestrictedUser ? 'hidden' : 'block'}>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BadgeCheck className="w-4 h-4" /> Flight Type</label>
               <Controller name="flight_type" control={control} render={({ field }) => (
                 <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
@@ -556,7 +569,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BookOpen className="w-4 h-4" /> Lesson</label>
               <Controller name="lesson" control={control} render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
+                <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly || (isRoleLoading ? false : isRestrictedUser)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select lesson" />
                   </SelectTrigger>

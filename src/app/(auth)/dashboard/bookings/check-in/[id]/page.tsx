@@ -1,17 +1,19 @@
+import React from "react";
 import { BookingStages, BOOKING_STAGES } from "@/components/bookings/BookingStages";
 import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
 import { createClient } from "@/lib/SupabaseServerClient";
 import BookingCheckInClient from "./BookingCheckInClient";
-import BookingActions from "@/components/bookings/BookingActions";
+import BookingActions from "@/components/bookings/BookingActionsClient";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 import { StatusBadge } from "@/components/bookings/StatusBadge";
 import { notFound } from "next/navigation";
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
 
-interface BookingCheckInPageProps {
+interface BookingCheckInPageProps extends ProtectedPageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function BookingCheckInPage({ params }: BookingCheckInPageProps) {
+async function BookingCheckInPage({ params }: BookingCheckInPageProps) {
   const { id: bookingId } = await params;
   const supabase = await createClient();
 
@@ -51,6 +53,9 @@ export default async function BookingCheckInPage({ params }: BookingCheckInPageP
   if (bookingError || !booking) {
     notFound();
   }
+
+  // Note: Authentication and role checking is handled by withRoleProtection HOC
+  // Only instructors and above can access check-in pages
 
   // Fetch instructor comments count and instructors in parallel
   const [instructorCommentsResult, instructorsResult] = await Promise.all([
@@ -122,4 +127,8 @@ export default async function BookingCheckInPage({ params }: BookingCheckInPageP
       </div>
     </div>
   );
-} 
+}
+
+// Export protected component with role restriction for instructors and above
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export default withRoleProtection(BookingCheckInPage as any, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any; 

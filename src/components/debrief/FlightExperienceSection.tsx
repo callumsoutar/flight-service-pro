@@ -209,42 +209,46 @@ const FlightExperienceSection: React.FC<FlightExperienceSectionProps> = ({
             {currentExperiences.length > 0 && (
               <div className="space-y-3">
                 {currentExperiences.map((experience, index) => (
-                  <div key={lessonProgressId ? (experience as FlightExperience).id : index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-sm">
-                          {getExperienceTypeName(experience.experience_type_id)}
-                        </span>
-                        <Badge variant="outline" className="text-xs">
-                          {experience.duration_hours}h
-                        </Badge>
-                        {experience.conditions && (
-                          <Badge variant="secondary" className="text-xs">
-                            {experience.conditions}
+                  <div key={lessonProgressId ? (experience as FlightExperience).id : index} className="group p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-3">
+                          <span className="font-semibold text-gray-900">
+                            {getExperienceTypeName(experience.experience_type_id)}
+                          </span>
+                          <Badge variant="outline" className="text-sm font-medium px-2 py-1">
+                            {experience.duration_hours}h
                           </Badge>
+                          {experience.conditions && (
+                            <Badge variant="secondary" className="text-sm">
+                              {experience.conditions}
+                            </Badge>
+                          )}
+                        </div>
+                        {experience.notes && (
+                          <p className="text-sm text-gray-600 leading-relaxed">{experience.notes}</p>
                         )}
                       </div>
-                      {experience.notes && (
-                        <p className="text-xs text-muted-foreground">{experience.notes}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(experience, index)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Edit2 className="w-3 h-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(lessonProgressId ? (experience as FlightExperience).id : index)}
-                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(experience, index)}
+                          className="h-8 w-8 p-0 hover:bg-blue-100 hover:text-blue-700"
+                          title="Edit experience"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(lessonProgressId ? (experience as FlightExperience).id : index)}
+                          className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-700"
+                          title="Delete experience"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -253,86 +257,96 @@ const FlightExperienceSection: React.FC<FlightExperienceSectionProps> = ({
 
             {/* Add/Edit Form */}
             {(isAddingNew || editingId || editingIndex !== null) && (
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-gray-700 mb-1 block">
-                        Experience Type
-                      </label>
-                      <Select
-                        value={formData.experience_type_id}
-                        onValueChange={(value) => setFormData(prev => ({ ...prev, experience_type_id: value }))}
-                      >
-                        <SelectTrigger className="h-8">
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {experienceTypes.map((type) => (
-                            <SelectItem key={type.id} value={type.id}>
-                              {type.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-700 mb-1 block">
-                        Duration (hours)
-                      </label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="999"
-                        value={formData.duration_hours}
-                        onChange={(e) => setFormData(prev => ({ ...prev, duration_hours: e.target.value }))}
-                        placeholder="1.5"
-                        className="h-8"
-                      />
-                    </div>
+              <div className="p-6 bg-blue-50 rounded-lg border border-blue-200 space-y-4">
+                <div className="text-sm font-medium text-blue-900 mb-4">
+                  {(editingId || editingIndex !== null) ? 'Edit Flight Experience' : 'Add New Flight Experience'}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">
+                      Experience Type <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      value={formData.experience_type_id}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, experience_type_id: value }))}
+                    >
+                      <SelectTrigger className="h-10 bg-white">
+                        <SelectValue placeholder="Select experience type" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {experienceTypes.map((type) => (
+                          <SelectItem key={type.id} value={type.id}>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{type.name}</span>
+                              {type.description && (
+                                <span className="text-xs text-muted-foreground">{type.description}</span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-700 mb-1 block">
-                      Conditions (optional)
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">
+                      Duration (hours) <span className="text-red-500">*</span>
                     </label>
                     <Input
-                      value={formData.conditions}
-                      onChange={(e) => setFormData(prev => ({ ...prev, conditions: e.target.value }))}
-                      placeholder="VFR, IFR, simulated, etc."
-                      className="h-8"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="999"
+                      value={formData.duration_hours}
+                      onChange={(e) => setFormData(prev => ({ ...prev, duration_hours: e.target.value }))}
+                      placeholder="1.5"
+                      className="h-10 bg-white"
                     />
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-700 mb-1 block">
-                      Notes (optional)
-                    </label>
-                    <Textarea
-                      value={formData.notes}
-                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                      placeholder="Additional notes about this experience..."
-                      className="min-h-[60px] text-sm"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 pt-2">
-                    <Button
-                      size="sm"
-                      onClick={handleSave}
-                      className="h-8 px-3"
-                    >
-                      <Save className="w-3 h-3 mr-1" />
-                      {(editingId || editingIndex !== null) ? 'Update' : 'Add'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={resetForm}
-                      className="h-8 px-3"
-                    >
-                      <X className="w-3 h-3 mr-1" />
-                      Cancel
-                    </Button>
-                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Conditions (optional)
+                  </label>
+                  <Input
+                    value={formData.conditions}
+                    onChange={(e) => setFormData(prev => ({ ...prev, conditions: e.target.value }))}
+                    placeholder="VFR, IFR, simulated, night, cross-country, etc."
+                    className="h-10 bg-white"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Notes (optional)
+                  </label>
+                  <Textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Additional notes about this flight experience..."
+                    className="min-h-[80px] bg-white resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 pt-2 border-t border-blue-200">
+                  <Button
+                    onClick={handleSave}
+                    className="h-10 px-4 bg-blue-600 hover:bg-blue-700"
+                    disabled={!formData.experience_type_id || !formData.duration_hours}
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {(editingId || editingIndex !== null) ? 'Update Experience' : 'Add Experience'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={resetForm}
+                    className="h-10 px-4 border-blue-300 text-blue-700 hover:bg-blue-100"
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel
+                  </Button>
                 </div>
               </div>
             )}
@@ -341,11 +355,10 @@ const FlightExperienceSection: React.FC<FlightExperienceSectionProps> = ({
             {!isAddingNew && !editingId && editingIndex === null && (
               <Button
                 variant="outline"
-                size="sm"
                 onClick={() => setIsAddingNew(true)}
-                className="w-full h-8 text-sm"
+                className="w-full h-12 text-sm font-medium border-2 border-dashed border-blue-300 text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-all"
               >
-                <Plus className="w-3 h-3 mr-1" />
+                <Plus className="w-4 h-4 mr-2" />
                 Add Flight Experience
               </Button>
             )}

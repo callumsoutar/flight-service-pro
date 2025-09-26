@@ -42,12 +42,13 @@ export async function POST(
       .eq('user_id', user.id)
       .eq('is_active', true);
 
-    const isAdmin = userRoles?.some(ur => (ur.roles as unknown as { name: string })?.name === 'admin' || (ur.roles as unknown as { name: string })?.name === 'owner');
+    const isAdmin = userRoles?.some(ur => (ur.roles as unknown as { name: string })?.name === 'admin');
+    const isOwner = userRoles?.some(ur => (ur.roles as unknown as { name: string })?.name === 'owner');
     const isInstructor = userRoles?.some(ur => (ur.roles as unknown as { name: string })?.name === 'instructor');
-    const isOwner = booking.user_id === user.id;
+    const isBookingOwner = booking.user_id === user.id;
     const isAssignedInstructor = booking.instructor?.user?.id === user.id;
-
-    if (!isAdmin && !isOwner && !(isInstructor && isAssignedInstructor)) {
+    
+    if (!isAdmin && !isOwner && !isBookingOwner && !(isInstructor && isAssignedInstructor)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 

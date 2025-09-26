@@ -1,14 +1,16 @@
 import { createClient } from "@/lib/SupabaseServerClient";
+import { redirect } from 'next/navigation';
 import React from "react";
 import type { Booking } from "@/types/bookings";
 import DebriefClientShell from "./DebriefClientShell";
 import { BOOKING_STAGES, BookingStages } from "@/components/bookings/BookingStages";
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
 
-interface BookingDebriefPageProps {
+interface BookingDebriefPageProps extends ProtectedPageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function BookingDebriefPage({ params }: BookingDebriefPageProps) {
+async function BookingDebriefPage({ params, user, userRole }: BookingDebriefPageProps) {
   const { id: bookingId } = await params;
   const supabase = await createClient();
 
@@ -32,16 +34,17 @@ export default async function BookingDebriefPage({ params }: BookingDebriefPageP
     .single();
   booking = bookingData;
 
-  // If booking or booking.user is missing, show a user-friendly message and do not render debrief content
+  // If booking or booking.user is missing, redirect to bookings list
   if (!booking || !booking.user) {
-    return (
-      <div className="w-full min-h-screen flex flex-col items-center justify-center">
-        <div className="max-w-xl w-full p-8 text-center">
-          <h2 className="text-2xl font-bold mb-4">{!booking ? "Booking not found" : "Member not found"}</h2>
-          <p className="text-muted-foreground">We couldn&apos;t find the necessary information to display this debrief. Please check the booking details or contact support if you believe this is an error.</p>
-        </div>
-      </div>
-    );
+    redirect('/dashboard/bookings');
+  }
+
+  // Check if user has permission to view this booking
+  // Students can only view their own bookings, instructors/admins/owners can view all
+  if (booking.user_id !== user.id) {
+    if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+      redirect('/dashboard/bookings');
+    }
   }
 
   const status = booking.status ?? "unconfirmed";
@@ -60,4 +63,8 @@ export default async function BookingDebriefPage({ params }: BookingDebriefPageP
       </div>
     </div>
   );
-} 
+}
+
+// Export protected component with role restriction for instructors and above
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export default withRoleProtection(BookingDebriefPage as any, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any; 

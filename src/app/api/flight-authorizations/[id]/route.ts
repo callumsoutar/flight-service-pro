@@ -98,6 +98,8 @@ export async function PATCH(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, ...updateData } = validationResult.data;
 
+    console.log('Updating flight authorization:', authorizationId, 'with data:', updateData);
+
     // Check if authorization exists and user has permission
     const { data: existingAuth, error: fetchError } = await supabase
       .from("flight_authorizations")

@@ -1,62 +1,148 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { createClient } from "@/lib/SupabaseServerClient";
-
-const insertSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().nullable().optional(),
-  is_active: z.boolean().optional(),
-});
-
-const updateSchema = insertSchema.partial();
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-  const is_active = searchParams.get("is_active");
+  // Auth check
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const searchParams = req.nextUrl.searchParams;
+  const experienceTypeId = searchParams.get("id");
 
   let query = supabase.from("experience_types").select("*");
-  if (id) query = query.eq("id", id);
-  if (is_active !== null) query = query.eq("is_active", is_active === "true");
-
-  const { data, error } = await query.order("name");
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data });
+  if (experienceTypeId) {
+    query = query.eq("id", experienceTypeId).is("voided_at", null);
+    const { data, error } = await query.single();
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+    return NextResponse.json({ experience_type: data });
+  }
+  const { data, error } = await query
+    .is("voided_at", null)
+    .order("created_at", { ascending: false });
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ experience_types: data ?? [] });
 }
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
-  const body = await req.json();
-  const parse = insertSchema.safeParse(body);
-  if (!parse.success) {
-    return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
+  // Auth check
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { data, error } = await supabase.from("experience_types").insert([parse.data]).select().single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data });
+
+  try {
+    const body = await req.json();
+    const { name, description, is_active } = body;
+
+    if (!name) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+
+    const { data, error } = await supabase
+      .from("experience_types")
+      .insert([{
+        name,
+        description: description || null,
+        is_active: is_active ?? true
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ experience_type: data }, { status: 201 });
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
 }
 
-export async function PATCH(req: NextRequest) {
+export async function PUT(req: NextRequest) {
   const supabase = await createClient();
-  const body = await req.json();
-  const { id, ...rest } = body;
-  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
-  const parse = updateSchema.safeParse(rest);
-  if (!parse.success) {
-    return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
+  // Auth check
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { data, error } = await supabase.from("experience_types").update(parse.data).eq("id", id).select().single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data });
+
+  try {
+    const body = await req.json();
+    const { id, name, description, is_active } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "ID is required" }, { status: 400 });
+    }
+
+    if (!name) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+
+    const { data, error } = await supabase
+      .from("experience_types")
+      .update({
+        name,
+        description: description || null,
+        is_active: is_active ?? true
+      })
+      .eq("id", id)
+      .select();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (!data || data.length === 0) {
+      return NextResponse.json({ error: "Experience type not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ experience_type: data[0] });
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
 }
 
 export async function DELETE(req: NextRequest) {
   const supabase = await createClient();
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
-  const { error } = await supabase.from("experience_types").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ success: true });
+  // Auth check
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const searchParams = req.nextUrl.searchParams;
+  const experienceTypeId = searchParams.get("id");
+
+  if (!experienceTypeId) {
+    return NextResponse.json({ error: "ID is required" }, { status: 400 });
+  }
+
+  // Soft delete for experience types
+  const { data, error } = await supabase
+    .from("experience_types")
+    .update({ 
+      voided_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", experienceTypeId)
+    .is("voided_at", null) // Only update if not already voided
+    .select();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (!data || data.length === 0) {
+    return NextResponse.json({ error: "Experience type not found or already deleted" }, { status: 404 });
+  }
+
+  return NextResponse.json({ experience_type: data[0] });
 }

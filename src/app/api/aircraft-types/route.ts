@@ -12,6 +12,25 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Role authorization check - aircraft types are operational data
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  // Instructors and above can view aircraft types for operational purposes
+  const isPrivilegedUser = userRole && ['instructor', 'admin', 'owner'].includes(userRole);
+
+  if (!isPrivilegedUser) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Aircraft types access requires instructor role or above' 
+    }, { status: 403 });
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const includeStats = searchParams.get("include_stats") === "true";
@@ -85,6 +104,24 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Role authorization check - only admin/owner can create aircraft types
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  const isPrivileged = userRole && ['admin', 'owner'].includes(userRole);
+
+  if (!isPrivileged) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Aircraft type creation requires admin or owner role' 
+    }, { status: 403 });
   }
 
   try {

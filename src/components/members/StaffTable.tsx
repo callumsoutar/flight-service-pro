@@ -95,12 +95,21 @@ export default function StaffTable({ initialData }: StaffTableProps) {
                 <th className="text-left py-3 pr-4 font-medium text-gray-900">Email</th>
                 <th className="text-left py-3 pr-4 font-medium text-gray-900">Role</th>
                 <th className="text-left py-3 pr-4 font-medium text-gray-900">Status</th>
-                <th className="text-left py-3 font-medium text-gray-900">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredMembers.map((member) => (
-                <tr key={member.id} className="border-b border-gray-100 hover:bg-gray-50">
+                <tr
+                  key={member.id}
+                  className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                  onClick={() => {
+                    if (member.instructor_id) {
+                      window.location.href = `/dashboard/instructors/view/${member.instructor_id}`;
+                    } else {
+                      window.location.href = `/dashboard/members/view/${member.id}`;
+                    }
+                  }}
+                >
                   <td className="py-3 pr-4">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
@@ -111,7 +120,7 @@ export default function StaffTable({ initialData }: StaffTableProps) {
                       </Avatar>
                       <div>
                         <div className="font-medium text-gray-900">
-                          {member.first_name || member.last_name 
+                          {member.first_name || member.last_name
                             ? `${member.first_name || ""} ${member.last_name || ""}`.trim()
                             : member.email
                           }
@@ -134,29 +143,12 @@ export default function StaffTable({ initialData }: StaffTableProps) {
                     </Badge>
                   </td>
                   <td className="py-3 pr-4">
-                    <Badge 
+                    <Badge
                       variant={member.status === "active" ? "default" : "destructive"}
                       className="capitalize"
                     >
                       {member.status || "active"}
                     </Badge>
-                  </td>
-                  <td className="py-3">
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          if (member.instructor_id) {
-                            window.location.href = `/dashboard/instructors/view/${member.instructor_id}`;
-                          } else {
-                            window.location.href = `/dashboard/members/view/${member.id}`;
-                          }
-                        }}
-                      >
-                        View
-                      </Button>
-                    </div>
                   </td>
                 </tr>
               ))}

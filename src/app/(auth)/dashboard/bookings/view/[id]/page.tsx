@@ -3,31 +3,32 @@ import BookingResources from "../BookingResources";
 import { BookingStages, BOOKING_STAGES, STATUS_TO_STAGE_IDX } from "@/components/bookings/BookingStages";
 import { Booking } from "@/types/bookings";
 import React from "react";
+import { redirect } from 'next/navigation';
 import { createClient } from "@/lib/SupabaseServerClient";
 import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
 import BookingHistoryCollapse from "../BookingHistoryCollapse";
 import { User } from "@/types/users";
 import { Aircraft } from "@/types/aircraft";
-import BookingActions from "@/components/bookings/BookingActions";
+import BookingActions from "@/components/bookings/BookingActionsClient";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 import BookingConfirmActionClient from "@/components/bookings/BookingConfirmActionClient";
 import { StatusBadge } from "@/components/bookings/StatusBadge";
 import { JoinedInstructor } from "../BookingResources";
+import {
+  withRoleProtection,
+  ProtectedPageProps,
+  validateBookingAccess
+} from "@/lib/rbac-page-wrapper";
 
-interface BookingViewPageProps {
-  params: Promise<{ id: string }>;
-}
-
-export default async function BookingViewPage({ params }: BookingViewPageProps) {
+async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ id: string }> }) {
+  const { params, user, userRole, isRestrictedUser } = props;
   const { id: bookingId } = await params;
   const supabase = await createClient();
 
   let booking: Booking | null = null;
   let member: User | null = null;
   let instructor: JoinedInstructor | null = null;
-  const lesson: Record<string, unknown> | null = null;
   let aircraft: Aircraft | null = null;
-  const flightType: Record<string, unknown> | null = null;
   let members: { id: string; name: string }[] = [];
   let instructors: { id: string; name: string }[] = [];
   let aircraftList: { id: string; registration: string; type: string }[] = [];
@@ -40,7 +41,29 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
     .select(`*, user:user_id(*), instructor:instructor_id(*, users:users!instructors_user_id_fkey(*)), aircraft:aircraft_id(*), flight_type:flight_type_id(*), lesson_id, authorization_override, authorization_override_by, authorization_override_at, authorization_override_reason`)
     .eq("id", bookingId)
     .single();
+
+  // Fetch instructor comments count
+  const { count: instructorCommentsCount } = await supabase
+    .from("instructor_comments")
+    .select("id", { count: "exact", head: true })
+    .eq("booking_id", bookingId);
   booking = bookingData;
+
+  // Redirect if booking not found
+  if (!booking) {
+    redirect('/dashboard/bookings');
+  }
+
+  // Check if user has permission to view this specific booking
+  const canAccessBooking = await validateBookingAccess({
+    user,
+    userRole,
+    bookingUserId: booking.user_id || ''
+  });
+
+  if (!canAccessBooking) {
+    redirect('/dashboard/bookings');
+  }
 
   // Fetch all members (users) with their roles
   const { data: memberRows } = await supabase
@@ -88,7 +111,6 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
       name,
     };
   });
-  console.log("INSTRUCTORS FOR DEBUG:", instructors);
 
   // Fetch all aircraft
   const { data: aircraftRows } = await supabase
@@ -146,6 +168,7 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
         email: "", 
         account_balance: 0,
         is_active: true,
+        public_directory_opt_in: false,
         created_at: "", 
         updated_at: "" 
       } : null;
@@ -185,18 +208,6 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
     aircraft = booking.aircraft ?? fallbackAircraft(aircraftList.find((a) => a.id === booking.aircraft_id));
   }
 
-  const debugData = {
-    booking,
-    member,
-    instructor,
-    lesson,
-    aircraft,
-    flightType,
-  };
-
-  // Log to terminal for debugging
-  console.log("DEBUG BOOKING DATA:", debugData);
-
   const status = booking?.status ?? "unconfirmed";
   const currentStage = STATUS_TO_STAGE_IDX[status] ?? 0;
 
@@ -217,15 +228,19 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
           </div>
           <StatusBadge status={status} className="text-lg px-4 py-2 font-semibold" />
           <div className="flex-none flex items-center justify-end gap-3">
-            {/* Render Confirm button if booking is unconfirmed (client component wrapper) */}
-            {booking && booking.id && (
+            {/* Render Confirm button if booking is unconfirmed and user is not restricted */}
+            {booking && booking.id && !isRestrictedUser && (
               <BookingConfirmActionClient bookingId={booking.id} status={booking.status} />
             )}
             {booking && booking.id && (
               <BookingActions booking={booking} status={status} bookingId={booking.id} />
             )}
             {booking && booking.id && (
-              <BookingStagesOptions bookingId={booking.id} bookingStatus={booking.status} />
+              <BookingStagesOptions
+                bookingId={booking.id}
+                bookingStatus={booking.status}
+                instructorCommentsCount={instructorCommentsCount || 0}
+              />
             )}
           </div>
         </div>
@@ -262,4 +277,12 @@ export default async function BookingViewPage({ params }: BookingViewPageProps) 
       <BookingHistoryCollapse bookingId={bookingId || ""} lessons={lessons} />
     </div>
   );
-} 
+}
+
+// Export the protected component with custom validation
+export default withRoleProtection(BookingViewPage, {
+  allowedRoles: ['student', 'member', 'instructor', 'admin', 'owner'],
+  fallbackUrl: '/dashboard/bookings',
+  // Note: The booking-specific access validation is handled inside the component
+  // after fetching the booking data, since we need the booking's user_id
+}); 

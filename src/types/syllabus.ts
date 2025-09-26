@@ -8,6 +8,7 @@ export type Syllabus = {
   updated_at: string;
   number_of_exams: number;
   is_active: boolean;
+  voided_at?: string | null;
 };
 
 export type SyllabusInsert = {

@@ -9,13 +9,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, X, MessageCircle, Send, Plane } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 // import Link from "next/link";
 import InstructorCommentsModal from "@/components/bookings/InstructorCommentsModal";
 import { CancelBookingModal } from "@/components/bookings/CancelBookingModal";
 import { UncancelBookingWrapper } from "@/components/bookings/UncancelBookingWrapper";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { CancellationCategory, BookingStatus } from "@/types/bookings";
+import { BookingStatus } from "@/types/bookings";
+import { useIsRestrictedUser } from "@/hooks/use-role-protection";
+import { useCancellationCategories } from "@/hooks/use-cancellation-categories";
 
 interface BookingStagesOptionsProps {
   bookingId: string;
@@ -26,28 +29,17 @@ interface BookingStagesOptionsProps {
 export default function BookingStagesOptions({ bookingId, bookingStatus, instructorCommentsCount = 0 }: BookingStagesOptionsProps) {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [cancellationCategories, setCancellationCategories] = useState<CancellationCategory[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [sendingConfirmation, setSendingConfirmation] = useState(false);
   const [navigatingAircraft, setNavigatingAircraft] = useState(false);
   const router = useRouter();
-  
 
-  React.useEffect(() => {
-    if (!cancelOpen) return;
-    setLoadingCategories(true);
-    fetch(`/api/cancellation_categories`)
-      .then((res) => res.json())
-      .then((data) => {
-        setCancellationCategories(Array.isArray(data.categories) ? data.categories : []);
-        setLoadingCategories(false);
-      })
-      .catch(() => {
-        setCancellationCategories([]);
-        setLoadingCategories(false);
-      });
-  }, [cancelOpen]);
+  // Check if user has restricted access (member/student)
+  const { isRestricted: isRestrictedUser } = useIsRestrictedUser();
+  
+  // Use the hook for cancellation categories
+  const { data: categoriesData, isLoading: loadingCategories, error: categoriesError } = useCancellationCategories();
+  const cancellationCategories = categoriesData?.categories || [];
 
   const handleCancelSubmit = async (data: { reason: string; notes?: string; cancellation_category_id?: string }) => {
     setCancelling(true);
@@ -114,36 +106,66 @@ export default function BookingStagesOptions({ bookingId, bookingStatus, instruc
     }
   };
 
+  // Helper function to render instructor comments indicator badge
+  const renderCommentsIndicator = () => {
+    // Only show indicator if there are comments and user is not restricted
+    if (instructorCommentsCount === 0 || isRestrictedUser) return null;
+
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="absolute -top-1 -right-1 flex items-center justify-center w-5 h-5 rounded-full bg-white border-2 border-white cursor-help">
+              <div className="w-3 h-3 rounded-full bg-blue-500 flex items-center justify-center">
+                <MessageCircle className="w-2 h-2 text-white" strokeWidth={3} />
+              </div>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{instructorCommentsCount} Instructor Comment{instructorCommentsCount !== 1 ? 's' : ''}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  };
+
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="h-10 px-6 text-base font-bold rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-gray-300">
-            Options <ChevronDown className="w-4 h-4" />
-          </Button>
+          <div className="relative">
+            <Button variant="outline" className="h-10 px-6 text-base font-bold rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-gray-300">
+              Options <ChevronDown className="w-4 h-4" />
+            </Button>
+            {renderCommentsIndicator()}
+          </div>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" sideOffset={8} className="w-56">
-          <DropdownMenuItem onClick={() => setCommentsOpen(true)}>
-            <MessageCircle className="w-4 h-4 mr-2" />
-            Instructor Comments
-            {instructorCommentsCount > 0 && (
-              <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                {instructorCommentsCount}
-              </span>
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleSendConfirmation}>
-            <Send className="w-4 h-4 mr-2" />
-            Send Confirmation
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleViewAircraft}>
-            <Plane className="w-4 h-4 mr-2" />
-            View Aircraft
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          {!isRestrictedUser && (
+            <>
+              <DropdownMenuItem onClick={() => setCommentsOpen(true)}>
+                <MessageCircle className="w-4 h-4 mr-2" />
+                Instructor Comments
+                {instructorCommentsCount > 0 && (
+                  <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                    {instructorCommentsCount}
+                  </span>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSendConfirmation}>
+                <Send className="w-4 h-4 mr-2" />
+                Send Confirmation
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleViewAircraft}>
+                <Plane className="w-4 h-4 mr-2" />
+                View Aircraft
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           {bookingStatus === 'cancelled' ? (
             <DropdownMenuItem asChild>
-              <UncancelBookingWrapper 
+              <UncancelBookingWrapper
                 bookingId={bookingId}
                 variant="ghost"
                 size="sm"
@@ -170,6 +192,7 @@ export default function BookingStagesOptions({ bookingId, bookingStatus, instruc
         onSubmit={handleCancelSubmit}
         categories={cancellationCategories}
         loading={loadingCategories || cancelling}
+        error={categoriesError ? "Failed to load cancellation categories" : undefined}
       />
     </>
   );

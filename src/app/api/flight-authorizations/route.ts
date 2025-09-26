@@ -15,6 +15,39 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Role authorization check - flight authorizations are safety-critical
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  // Flight authorization access control based on RLS policies
+  const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+  const isStudent = userRole && userRole === 'student';
+
+  if (!isPrivilegedUser && !isStudent) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Flight authorization access requires student role or above' 
+    }, { status: 403 });
+  }
+
+  // Students can only view their own authorization requests
+  if (isStudent) {
+    const { searchParams } = new URL(req.url);
+    const student_id = searchParams.get("student_id");
+    
+    // Force student_id to be the current user for students
+    if (!student_id || student_id !== user.id) {
+      return NextResponse.json({ 
+        error: 'Forbidden: You can only view your own authorization requests' 
+      }, { status: 403 });
+    }
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
@@ -71,8 +104,13 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Filter sensitive data for students
+    const responseData = isStudent 
+      ? (authorizations || []).map(filterAuthorizationData)
+      : (authorizations || []);
+
     return NextResponse.json({
-      authorizations: authorizations || [],
+      authorizations: responseData,
       count: count || 0,
       success: true
     });
@@ -94,6 +132,25 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Role authorization check - students can create their own, instructors+ can create any
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+  const isStudent = userRole && userRole === 'student';
+
+  if (!isPrivilegedUser && !isStudent) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Flight authorization creation requires student role or above' 
+    }, { status: 403 });
   }
 
   try {
@@ -129,14 +186,21 @@ export async function POST(req: NextRequest) {
 
     // Verify user can create authorization for this booking
     if (booking.user_id !== user.id) {
-      // Check if user is admin/instructor who can create on behalf of student
-      const { data: userRole } = await supabase.rpc('get_user_role', { user_id: user.id });
-      if (!userRole || !['admin', 'owner', 'instructor'].includes(userRole)) {
+      // Only privileged users can create authorizations on behalf of others
+      if (!isPrivilegedUser) {
         return NextResponse.json(
           { error: "You can only create authorizations for your own bookings" },
           { status: 403 }
         );
       }
+    }
+    
+    // Students can only create authorizations for their own bookings
+    if (isStudent && booking.user_id !== user.id) {
+      return NextResponse.json(
+        { error: "Students can only create authorizations for their own bookings" },
+        { status: 403 }
+      );
     }
 
     // Check if authorization already exists for this booking
@@ -213,4 +277,40 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// Filter sensitive flight authorization data for restricted users (students)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function filterAuthorizationData(authorization: any) {
+  // Students can see basic authorization info but not instructor notes/limitations
+  const filtered = { ...authorization };
+  
+  // Remove sensitive instructor data
+  delete filtered.instructor_notes;
+  delete filtered.instructor_limitations;
+  delete filtered.authorizing_instructor_signature_data;
+  delete filtered.approving_instructor_signature_data;
+  
+  // Keep only basic instructor identification
+  if (filtered.authorizing_instructor) {
+    filtered.authorizing_instructor = {
+      id: filtered.authorizing_instructor.id,
+      users: filtered.authorizing_instructor.users ? {
+        first_name: filtered.authorizing_instructor.users.first_name,
+        last_name: filtered.authorizing_instructor.users.last_name
+      } : null
+    };
+  }
+  
+  if (filtered.approving_instructor) {
+    filtered.approving_instructor = {
+      id: filtered.approving_instructor.id,
+      users: filtered.approving_instructor.users ? {
+        first_name: filtered.approving_instructor.users.first_name,
+        last_name: filtered.approving_instructor.users.last_name
+      } : null
+    };
+  }
+  
+  return filtered;
 }

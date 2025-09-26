@@ -10,30 +10,12 @@ interface TypeRatingWarningProps {
   className?: string;
 }
 
-export function TypeRatingWarning({
-  validation,
-  isValidating,
-  error,
-  className = '',
-}: TypeRatingWarningProps) {
-  // Don't render anything if no validation data
-  if (!validation && !isValidating && !error) {
-    return null;
-  }
+export function TypeRatingWarning(props: TypeRatingWarningProps) {
+  const { validation, error, className = '' } = props;
+  // Only render if there's an actual error or validation failure
+  // Don't show loading states or successful validations
 
-  // Show loading state
-  if (isValidating) {
-    return (
-      <div className={`p-3 rounded-lg border bg-gray-50 border-gray-200 text-gray-600 text-sm ${className}`}>
-        <div className="flex items-center gap-2">
-          <div className="animate-spin w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full"></div>
-          <span>Checking type rating...</span>
-        </div>
-      </div>
-    );
-  }
-
-  // Show error state
+  // Show error state only
   if (error) {
     return (
       <div className={`p-3 rounded-lg border bg-red-50 border-red-200 text-red-700 text-sm ${className}`}>
@@ -45,7 +27,7 @@ export function TypeRatingWarning({
     );
   }
 
-  // Show validation result - only render for errors, not success
+  // Show validation result - only render for actual conflicts/errors, not success or loading
   if (validation && !validation.valid) {
     const severity = getValidationSeverity(validation);
     if (!severity) return null;

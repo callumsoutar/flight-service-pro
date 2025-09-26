@@ -20,6 +20,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Role authorization check - endorsements are certification data
+    const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+      user_id: user.id
+    });
+
+    if (roleError) {
+      console.error('Error fetching user role:', roleError);
+      return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+    }
+
+    // Instructors and above can view all endorsements, students/members can view their own
+    const isPrivilegedUser = userRole && ['instructor', 'admin', 'owner'].includes(userRole);
+    const isStudent = userRole && ['student', 'member'].includes(userRole);
+
+    if (!isPrivilegedUser && !isStudent) {
+      return NextResponse.json({ 
+        error: 'Forbidden: Endorsements access requires a valid role' 
+      }, { status: 403 });
+    }
+
     // Parse and validate query parameters
     const { searchParams } = new URL(request.url);
     const queryParams: QueryUsersEndorsements = {};
@@ -37,6 +57,13 @@ export async function GET(request: NextRequest) {
     // Validate query parameters
     const validatedQuery = queryUsersEndorsementsSchema.parse(queryParams);
 
+    // Students/members can only access their own endorsements
+    if (isStudent && validatedQuery.user_id && validatedQuery.user_id !== user.id) {
+      return NextResponse.json({ 
+        error: 'Forbidden: You can only view your own endorsements' 
+      }, { status: 403 });
+    }
+
     // Build the query
     let query = supabase
       .from("users_endorsements")
@@ -49,6 +76,9 @@ export async function GET(request: NextRequest) {
     // Apply filters
     if (validatedQuery.user_id) {
       query = query.eq("user_id", validatedQuery.user_id);
+    } else if (isStudent) {
+      // If no user_id specified and user is a student, only show their own endorsements
+      query = query.eq("user_id", user.id);
     }
     if (validatedQuery.endorsement_id) {
       query = query.eq("endorsement_id", validatedQuery.endorsement_id);

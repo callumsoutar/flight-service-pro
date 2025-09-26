@@ -1,4 +1,7 @@
-export default function DashboardPage() {
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function DashboardPage({ user: _user, userRole: _userRole }: ProtectedPageProps) {
   return (
     <div className="flex flex-col gap-8">
       {/* Heading */}
@@ -64,4 +67,8 @@ export default function DashboardPage() {
       </div>
     </div>
   );
-} 
+}
+
+// Export protected component - all authenticated users can access dashboard
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default withRoleProtection(DashboardPage, ROLE_CONFIGS.AUTHENTICATED_ONLY) as any; 

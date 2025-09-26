@@ -4,13 +4,15 @@ import { Badge } from "@/components/ui/badge";
 import { User } from "@/types/users";
 import { Aircraft } from "@/types/aircraft";
 import { Observation } from "@/types/observations";
-import { Users, User as UserIcon, UserCheck, Plane, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { Users, User as UserIcon, UserCheck, Plane, AlertTriangle, ChevronDown, ChevronUp, Info } from "lucide-react";
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { ViewObservationModal } from "@/components/aircraft/ViewObservationModal";
+import { ContactDetailsModal } from "@/components/bookings/ContactDetailsModal";
+import { useIsRestrictedUser } from "@/hooks/use-role-protection";
 
 // Define a type for the instructor with direct name fields
 export type JoinedInstructor = {
@@ -30,6 +32,11 @@ interface BookingResourcesProps {
 export default function BookingResources({ member, instructor, aircraft }: BookingResourcesProps) {
   const [observationsOpen, setObservationsOpen] = useState(false);
   const [selectedObservationId, setSelectedObservationId] = useState<string | null>(null);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+
+  // Check if user has restricted access (member/student)
+  const { isRestricted: isRestrictedUser } = useIsRestrictedUser();
 
   // Fetch observations for the aircraft
   const { data: observations } = useQuery<Observation[]>({
@@ -59,6 +66,11 @@ export default function BookingResources({ member, instructor, aircraft }: Booki
     high: 'bg-red-100 text-red-800',
   };
 
+  const handleContactDetailsClick = (userId: string) => {
+    setSelectedUserId(userId);
+    setContactModalOpen(true);
+  };
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -77,6 +89,17 @@ export default function BookingResources({ member, instructor, aircraft }: Booki
               <div className="mt-1">{member ? `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.email : "-"}</div>
               <div className="text-gray-500 text-sm">{member?.email || "-"}</div>
             </div>
+            {member?.id && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleContactDetailsClick(member.id)}
+                className="h-8 w-8 p-0 hover:bg-blue-100"
+                title="View contact details"
+              >
+                <Info className="w-4 h-4 text-blue-600" />
+              </Button>
+            )}
           </div>
 {instructor ? (
             <div className="bg-muted/50 rounded-xl p-4 flex items-center gap-3">
@@ -86,7 +109,9 @@ export default function BookingResources({ member, instructor, aircraft }: Booki
                 <div className="mt-1">
                   {`${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.users?.email || "-"}
                 </div>
-                <div className="text-gray-500 text-sm">{instructor.users?.email || "-"}</div>
+                {!isRestrictedUser && (
+                  <div className="text-gray-500 text-sm">{instructor.users?.email || "-"}</div>
+                )}
               </div>
             </div>
           ) : (
@@ -175,6 +200,13 @@ export default function BookingResources({ member, instructor, aircraft }: Booki
           observationId={selectedObservationId}
         />
       )}
+
+      {/* Contact Details Modal */}
+      <ContactDetailsModal
+        open={contactModalOpen}
+        onOpenChange={setContactModalOpen}
+        userId={selectedUserId}
+      />
     </Card>
   );
 } 

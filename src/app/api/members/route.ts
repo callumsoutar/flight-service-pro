@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
         last_name, 
         email, 
         profile_image_url,
+        public_directory_opt_in,
         user_roles!user_roles_user_id_fkey (
           roles (
             name
@@ -75,6 +76,7 @@ export async function GET(req: NextRequest) {
       last_name, 
       email, 
       profile_image_url,
+      public_directory_opt_in,
       user_roles!user_roles_user_id_fkey (
         roles (
           name
@@ -180,8 +182,11 @@ export async function PATCH(req: NextRequest) {
     "pilot_license_type",
     "pilot_license_id",
     "pilot_license_expiry",
-
     "medical_certificate_expiry",
+    "class_1_medical_due",
+    "class_2_medical_due",
+    "DL9_due",
+    "BFR_due",
     "role"
   ];
   
@@ -205,6 +210,10 @@ export async function PATCH(req: NextRequest) {
     pilot_license_expiry?: string | null;
 
     medical_certificate_expiry?: string | null;
+    class_1_medical_due?: string | null;
+    class_2_medical_due?: string | null;
+    DL9_due?: string | null;
+    BFR_due?: string | null;
     role?: string;
   }
   
@@ -214,7 +223,8 @@ export async function PATCH(req: NextRequest) {
       const value = body[field];
       
       // Handle date fields - convert empty strings to null
-      if (field === 'date_of_birth' || field === 'pilot_license_expiry' || field === 'medical_certificate_expiry') {
+      if (field === 'date_of_birth' || field === 'pilot_license_expiry' || field === 'medical_certificate_expiry' || 
+          field === 'class_1_medical_due' || field === 'class_2_medical_due' || field === 'DL9_due' || field === 'BFR_due') {
         updates[field as keyof UpdateUserFields] = value === '' ? null : value;
       }
       // Handle UUID fields - convert empty strings to null

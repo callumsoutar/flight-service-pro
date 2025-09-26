@@ -6,12 +6,12 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plane, Navigation } from "lucide-react";
-import { FlightAuthorizationFormData } from '@/lib/validations/flight-authorization';
+import { FlightAuthorizationEditData } from '@/lib/validations/flight-authorization';
 import { purposeOfFlightOptions } from '@/lib/validations/flight-authorization';
 import { PassengerNamesInput } from './PassengerNamesInput';
 
 interface FlightDetailsSectionProps {
-  control: Control<FlightAuthorizationFormData>;
+  control: Control<FlightAuthorizationEditData>;
   disabled?: boolean;
 }
 
