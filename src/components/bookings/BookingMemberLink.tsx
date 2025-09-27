@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useCurrentUserRoles } from "@/hooks/use-user-roles";
 
@@ -13,15 +13,21 @@ interface BookingMemberLinkProps {
 
 export default function BookingMemberLink({ userId, firstName, lastName, roleLabel = "Member" }: BookingMemberLinkProps) {
   const { data: currentUserData, isLoading } = useCurrentUserRoles();
+  const [mounted, setMounted] = useState(false);
   const name = [firstName, lastName].filter(Boolean).join(" ") || userId;
+
+  // Ensure component is mounted to prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Check if current user has permission to view member details
   const isPrivileged = currentUserData?.role && ['admin', 'owner', 'instructor'].includes(currentUserData.role);
 
   // Only link to member view if user is privileged (admin, owner, instructor)
   // Members and students cannot access member view pages, even their own
-  // During loading, default to no link to prevent hydration mismatch
-  const canViewMember = !isLoading && isPrivileged;
+  // Wait for component to be mounted and data to load to prevent hydration mismatch
+  const canViewMember = mounted && !isLoading && isPrivileged;
 
   return (
     <div className="mt-2 mb-4 flex items-center gap-2">

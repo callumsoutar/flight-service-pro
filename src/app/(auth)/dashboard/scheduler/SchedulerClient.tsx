@@ -208,8 +208,6 @@ const FlightScheduler = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [currentUser, setCurrentUser] = useState<any>(null);
   
-  // Log role loading state for debugging
-  console.log('Role loading state:', { roleLoading, roleError, isRestricted });
 
   // Get current user
   useEffect(() => {
@@ -219,7 +217,7 @@ const FlightScheduler = () => {
         const { data: { user } } = await supabase.auth.getUser();
         setCurrentUser(user);
       } catch (error) {
-        console.error('Error getting current user:', error);
+        // Error getting current user - silently handle
       }
     };
     getCurrentUser();
@@ -292,7 +290,10 @@ const FlightScheduler = () => {
     }
 
     try {
-      const dateStr = format(selectedDate, 'yyyy-MM-dd');
+      // Use local date string for the selected date
+      const dateStr = selectedDate.getFullYear() + '-' +
+        String(selectedDate.getMonth() + 1).padStart(2, '0') + '-' +
+        String(selectedDate.getDate()).padStart(2, '0');
       const dayOfWeek = selectedDate.getDay();
 
       // Fetch everything in parallel
@@ -313,7 +314,6 @@ const FlightScheduler = () => {
       if (!bookingsRes.ok) failures.push(`Bookings: ${bookingsRes.status} ${bookingsRes.statusText}`);
       
       if (failures.length > 0) {
-        console.error("API fetch failures:", failures);
         throw new Error(`Failed to fetch data: ${failures.join(', ')}`);
       }
 
@@ -395,27 +395,23 @@ const FlightScheduler = () => {
       const bookingsByResource: Record<string, Booking[]> = {};
       const convertedBookings: Booking[] = [];
       
-      // Debug logging for booking processing
-      console.log(`Processing ${bookingsData.bookings?.length || 0} bookings for date ${dateStr}`);
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (bookingsData.bookings || []).forEach((booking: any) => {
         try {
           if (!booking.start_time || !booking.end_time) {
-            console.log('Skipping booking - missing start/end time:', booking.id);
             return;
           }
           const bookingDate = new Date(booking.start_time);
           if (isNaN(bookingDate.getTime())) {
-            console.log('Skipping booking - invalid date:', booking.id, booking.start_time);
             return;
           }
-          const bookingDateStr = format(bookingDate, 'yyyy-MM-dd');
-
-          console.log(`Booking ${booking.id}: date=${bookingDateStr}, targetDate=${dateStr}, status=${booking.status}`);
+          // Extract UTC date from booking start time for comparison
+          const bookingUTCDate = new Date(booking.start_time);
+          const bookingDateStr = bookingUTCDate.getUTCFullYear() + '-' +
+            String(bookingUTCDate.getUTCMonth() + 1).padStart(2, '0') + '-' +
+            String(bookingUTCDate.getUTCDate()).padStart(2, '0');
 
           if (bookingDateStr === dateStr && ['confirmed', 'flying', 'complete', 'unconfirmed'].includes(booking.status || '')) {
-            console.log(`Processing booking ${booking.id} - matches date and status criteria`);
             const startTime = bookingDate.getHours() + (bookingDate.getMinutes() / 60);
         const endTime = new Date(booking.end_time);
             if (isNaN(endTime.getTime())) return;
@@ -449,7 +445,6 @@ const FlightScheduler = () => {
             };
 
             convertedBookings.push(schedulerBooking);
-            console.log(`Added booking ${booking.id} to convertedBookings:`, schedulerBooking);
 
             // Group by instructor - show booking even if instructor not currently scheduled
             if (booking.instructor_id) {
@@ -493,7 +488,9 @@ const FlightScheduler = () => {
               );
               const aircraftDisplay = aircraftMatch
                 ? (aircraftMatch.type ? `${aircraftMatch.registration} (${aircraftMatch.type})` : aircraftMatch.registration)
-                : (booking.aircraft?.type ? `${booking.aircraft.registration} (${booking.aircraft.type})` : booking.aircraft?.registration || 'Unknown Aircraft');
+                : (booking.aircraft?.registration
+                    ? (booking.aircraft.type ? `${booking.aircraft.registration} (${booking.aircraft.type})` : booking.aircraft.registration)
+                    : `Aircraft ${booking.aircraft_id.substring(0, 8)} (Unknown)`);
 
               if (!bookingsByResource[aircraftDisplay]) {
                 bookingsByResource[aircraftDisplay] = [];
@@ -501,11 +498,11 @@ const FlightScheduler = () => {
               bookingsByResource[aircraftDisplay].push({ ...schedulerBooking, instructor: schedulerBooking.instructor || 'No Instructor' });
 
               // Add aircraft to list if not already there (for display purposes)
-              if (!aircraftMatch && booking.aircraft) {
+              if (!aircraftMatch && booking.aircraft_id) {
                 const tempAircraft: Aircraft = {
                   id: booking.aircraft_id,
-                  registration: booking.aircraft.registration,
-                  type: booking.aircraft.type || '',
+                  registration: booking.aircraft?.registration || `Aircraft ${booking.aircraft_id.substring(0, 8)}`,
+                  type: booking.aircraft?.type || 'Unknown',
                   status: 'active'
                 };
                 setAircraft(prev => {
@@ -543,7 +540,6 @@ const FlightScheduler = () => {
 
     } catch (err) {
       setError("Failed to load scheduler data");
-      console.error("Error fetching scheduler data:", err);
       setAircraft([]);
       setAvailableInstructors([]);
       setBookings([]);
@@ -560,13 +556,11 @@ const FlightScheduler = () => {
 
   // Initial load when component mounts
   useEffect(() => {
-    console.log('Initial load triggered');
     fetchAllData(true);
   }, [fetchAllData]);
 
   // Refresh data when selected date or business hours changes
   useEffect(() => {
-    console.log('Data refresh triggered for date/business hours change');
     if (loading) return; // Skip if initial load is still happening
     fetchAllData(false, true); // Mark as date change
   }, [selectedDate, businessHours, fetchAllData, loading]);
@@ -963,7 +957,6 @@ const FlightScheduler = () => {
     
     // Don't handle click if a resize operation just occurred
     if (hasResized) {
-      console.log('Click prevented due to recent resize operation');
       return;
     }
     
@@ -985,7 +978,6 @@ const FlightScheduler = () => {
 
   // Handle booking double click
   const handleBookingDoubleClick = (booking: Booking, event: React.MouseEvent) => {
-    console.log('Double click detected on booking:', booking.name);
     event.preventDefault();
     event.stopPropagation();
     
@@ -1014,13 +1006,10 @@ const FlightScheduler = () => {
       y: position.y,
       transform: position.transform
     });
-
-    console.log('Context menu set:', { x: position.x, y: position.y, transform: position.transform });
   };
 
   // Handle booking right click
   const handleBookingRightClick = (booking: Booking, event: React.MouseEvent) => {
-    console.log('Right click detected on booking:', booking.name);
     event.preventDefault();
     event.stopPropagation();
     
@@ -1043,8 +1032,6 @@ const FlightScheduler = () => {
       y: position.y,
       transform: position.transform
     });
-
-    console.log('Context menu set from right click:', { x: position.x, y: position.y, transform: position.transform });
   };
 
   // Handle context menu actions
@@ -1217,7 +1204,6 @@ const FlightScheduler = () => {
 
   // Handle resize mouse down
   const handleResizeMouseDown = (event: React.MouseEvent, booking: Booking, resource: string, resizeType: 'start' | 'end') => {
-    console.log('Resize mouse down triggered:', { bookingName: booking.name, resizeType });
     event.preventDefault();
     event.stopPropagation();
     
@@ -1235,9 +1221,9 @@ const FlightScheduler = () => {
       console.error('Container element not found');
       return;
     }
-    
+
     const containerRect = containerElement.getBoundingClientRect();
-    
+
     setResizeData({
       booking,
       resource,
@@ -1248,17 +1234,13 @@ const FlightScheduler = () => {
       containerRect
     });
     
-    console.log('Resize data set:', { resizeType, originalStart: booking.start, originalDuration: booking.duration });
-    
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
 
   const handleResizeMouseMove = (event: MouseEvent) => {
     if (!resizeData) return;
-    
-    console.log('Resize mouse move triggered');
-    
+
     // Mark that a resize operation has occurred
     setHasResized(true);
     
@@ -1268,13 +1250,10 @@ const FlightScheduler = () => {
     const visibleSlots = getVisibleTimeSlots();
     const timelineSpan = visibleSlots.length * 0.5; // Each slot is 30 minutes
     const timeChange = (deltaX / timelineWidth) * timelineSpan;
-    
-    console.log('Resize calculation:', { deltaX, timeChange, resizeType: resizeData.resizeType });
-    
+
     // Find the booking element
     const bookingElement = document.querySelector(`[data-booking-id="${resizeData.booking.id}"]`) as HTMLElement;
     if (!bookingElement) {
-      console.error('Booking element not found for resize');
       return;
     }
     
@@ -1292,9 +1271,7 @@ const FlightScheduler = () => {
       const newDurationValue = snapToQuarterHour(resizeData.originalDuration + timeChange);
       newDuration = Math.max(0.25, newDurationValue); // Minimum 15 minutes
     }
-    
-    console.log('New dimensions:', { newStart, newDuration });
-    
+
     // Apply visual changes to the booking element
     const rowHeight = 42; // Same as used in renderResourceRow
     const tempBooking = { ...resizeData.booking, start: newStart, duration: newDuration };
@@ -1344,7 +1321,6 @@ const FlightScheduler = () => {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to update booking times';
       toast.error(errorMessage);
-      console.error('Error updating booking times:', error);
     }
   };
 
@@ -1401,7 +1377,6 @@ const FlightScheduler = () => {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to confirm booking';
       toast.error(errorMessage);
-      console.error('Error confirming booking:', error);
     }
   };
 
@@ -1439,7 +1414,6 @@ const FlightScheduler = () => {
       // Error handling is done by the mutation
       const errorMessage = error instanceof Error ? error.message : 'Failed to cancel booking';
       toast.error(errorMessage);
-      console.error('Error cancelling booking:', error);
     }
   };
 
@@ -1585,10 +1559,14 @@ const FlightScheduler = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const addBookingOptimistically = (newBookingData: any) => {
     try {
-      // Check if booking is on the current selected date
+      // Check if booking is on the current selected date - use local dates for consistency
       const bookingDate = new Date(newBookingData.start_time);
-      const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-      const bookingDateStr = format(bookingDate, 'yyyy-MM-dd');
+      const selectedDateStr = selectedDate.getFullYear() + '-' +
+        String(selectedDate.getMonth() + 1).padStart(2, '0') + '-' +
+        String(selectedDate.getDate()).padStart(2, '0');
+      const bookingDateStr = bookingDate.getFullYear() + '-' +
+        String(bookingDate.getMonth() + 1).padStart(2, '0') + '-' +
+        String(bookingDate.getDate()).padStart(2, '0');
       
       if (bookingDateStr !== selectedDateStr) {
         // If booking is not for current date, don't add to current view
@@ -1665,7 +1643,6 @@ const FlightScheduler = () => {
         return newBookings;
       });
     } catch (error) {
-      console.error("Error adding booking optimistically:", error);
       // If optimistic update fails, don't crash - user can refresh to see the booking
     }
   };
@@ -1975,7 +1952,6 @@ const FlightScheduler = () => {
               } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Failed to change aircraft';
                 toast.error(errorMessage);
-                console.error('Error changing aircraft:', error);
               }
             }}
           />

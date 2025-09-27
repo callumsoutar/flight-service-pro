@@ -5,7 +5,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { CalendarIcon, UserIcon, CheckIcon, Loader2, Plane, BadgeCheck, BookOpen, ClipboardList, AlignLeft, AlertTriangle } from "lucide-react";
 import { useForm, Controller } from "react-hook-form";
 import { format, parseISO } from "date-fns";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
@@ -71,9 +71,10 @@ function getUtcIsoString(dateStr: string, timeStr: string): string | null {
   if (!dateStr || !timeStr) return null;
   const [year, month, day] = dateStr.split('-').map(Number);
   const [hours, minutes] = timeStr.split(':').map(Number);
-  // JS Date months are 0-based
-  const local = new Date(year, month - 1, day, hours, minutes, 0, 0);
-  return local.toISOString();
+  // Create a local date and convert to UTC for storage
+  // The user selects local time, we need to store it as UTC
+  const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+  return localDate.toISOString();
 }
 
 // Helper to extract date from UTC timestamp converted to local time
@@ -132,6 +133,13 @@ export default function BookingDetails({ booking, members, instructors, aircraft
 
   // Check if user has restricted access (member/student)
   const { isRestricted: isRestrictedUser, isLoading: isRoleLoading } = useIsRestrictedUser();
+
+  // Prevent hydration mismatch by ensuring component is mounted
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   
   const { control, handleSubmit, reset, formState, watch, setValue } = useForm<BookingDetailsFormData>({
     defaultValues: {
@@ -565,7 +573,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                 </Select>
               )} />
             </div>
-            <div className={isRoleLoading || isRestrictedUser ? 'hidden' : 'block'}>
+            <div className={!mounted || isRoleLoading || isRestrictedUser ? 'hidden' : 'block'}>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BadgeCheck className="w-4 h-4" /> Flight Type</label>
               <Controller name="flight_type" control={control} render={({ field }) => (
                 <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
@@ -584,7 +592,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BookOpen className="w-4 h-4" /> Lesson</label>
               <Controller name="lesson" control={control} render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly || (isRoleLoading ? false : isRestrictedUser)}>
+                <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly || (!mounted ? false : isRoleLoading ? false : isRestrictedUser)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select lesson" />
                   </SelectTrigger>

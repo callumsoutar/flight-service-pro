@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
     if (date) {
       const startOfDay = `${date}T00:00:00.000Z`;
       const endOfDay = `${date}T23:59:59.999Z`;
-      query = query.gte("start_time", startOfDay).lt("start_time", endOfDay);
+      query = query.gte("start_time", startOfDay).lte("start_time", endOfDay);
     }
 
     // For restricted users (members/students), only show their own bookings unless it's for scheduler
