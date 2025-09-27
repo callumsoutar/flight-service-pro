@@ -16,6 +16,8 @@ interface BookingActionsClientProps {
   // Legacy props for backward compatibility
   status?: string;
   bookingId?: string;
+  // Current user ID for ownership validation
+  currentUserId?: string;
 }
 
 export default function BookingActionsClient(props: BookingActionsClientProps) {

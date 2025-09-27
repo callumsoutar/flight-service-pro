@@ -67,9 +67,6 @@ export default function MemberProfileCard({ member, joinDate, membershipStatus =
               <DropdownMenuItem>
                 <FileText className="w-4 h-4 mr-2" /> New Invoice
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <AlertTriangle className="w-4 h-4 mr-2 text-red-600" /> New Occurrence
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
@@ -99,15 +96,12 @@ export default function MemberProfileCard({ member, joinDate, membershipStatus =
                     </>
                   ) : (
                     <>
-                      <SendInvitationButton 
+                      <SendInvitationButton
                         userId={member.id}
                         userEmail={member.email}
                         userName={`${member.first_name} ${member.last_name}`}
                         asDropdownItem={true}
                       />
-                      <DropdownMenuItem onClick={() => alert('Create Account')} className="text-green-600">
-                        Create Login Account
-                      </DropdownMenuItem>
                     </>
                   )}
                 </DropdownMenuSubContent>

@@ -25,15 +25,18 @@ interface BookingActionsProps {
   // Legacy props for backward compatibility
   status?: string;
   bookingId?: string;
+  // Current user ID for ownership validation
+  currentUserId?: string;
 }
 
-export default function BookingActions({ 
+export default function BookingActions({
   booking,
-  hideCheckOutButton = false, 
+  hideCheckOutButton = false,
   mode,
   // Legacy props - extract from booking if not provided
   status,
-  bookingId
+  bookingId,
+  currentUserId
 }: BookingActionsProps) {
   // Support legacy usage
   const actualStatus = status || booking?.status;
@@ -53,6 +56,13 @@ export default function BookingActions({
   if (!booking) {
     return null;
   }
+
+  // Check if current user owns this booking (for restricted users)
+  const isBookingOwner = Boolean(currentUserId && booking.user_id === currentUserId);
+
+  // Determine if user can see flight authorization options
+  // Show if: not restricted user OR (restricted user AND owns the booking)
+  const canSeeAuthorization = !isRestrictedUser || isBookingOwner;
   
   // Only check for solo flights if we have complete flight type data
   // If flight_type is not joined to the booking data, we won't show authorization buttons
@@ -199,8 +209,8 @@ export default function BookingActions({
       {actualStatus === "confirmed" && !hideCheckOutButton && (!mode || mode === 'check-out') && !isRestrictedUser && (
         <>
           {isSoloFlight ? (
-            // Solo flight: show dropdown if flight authorization is required OR authorization exists OR is overridden, otherwise simple button
-            (requireFlightAuthorization || authorization || booking.authorization_override) ? (
+            // Solo flight: show dropdown if flight authorization is required OR authorization exists OR is overridden, AND user can see authorization, otherwise simple button
+            (requireFlightAuthorization || authorization || booking.authorization_override) && canSeeAuthorization ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <div className="relative">
@@ -220,8 +230,8 @@ export default function BookingActions({
                         Check Flight Out
                       </Link>
                     </DropdownMenuItem>
-                    {/* Show flight authorization for solo flights when setting is enabled, any flight that has an authorization, or when overridden */}
-                    {((isSoloFlight && requireFlightAuthorization) || authorization || booking.authorization_override) && (
+                    {/* Show flight authorization for solo flights when setting is enabled, any flight that has an authorization, or when overridden, AND user can see authorization */}
+                    {((isSoloFlight && requireFlightAuthorization) || authorization || booking.authorization_override) && canSeeAuthorization && (
                       <DropdownMenuItem onClick={handleAuthorizationNavigation} className="flex items-center">
                         {React.createElement(getAuthorizationStatusIcon(), { className: "w-4 h-4 mr-2" })}
                         <span className="flex-1">{getAuthorizationStatusText()}</span>
@@ -244,8 +254,8 @@ export default function BookingActions({
               </div>
             )
           ) : (
-            // Non-solo flight: show dropdown if authorization exists or is overridden, otherwise simple button
-            (authorization || booking.authorization_override) ? (
+            // Non-solo flight: show dropdown if authorization exists or is overridden, AND user can see authorization, otherwise simple button
+            (authorization || booking.authorization_override) && canSeeAuthorization ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <div className="relative">
@@ -265,11 +275,13 @@ export default function BookingActions({
                         Check Flight Out
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleAuthorizationNavigation} className="flex items-center">
-                      {React.createElement(getAuthorizationStatusIcon(), { className: "w-4 h-4 mr-2" })}
-                      <span className="flex-1">{getAuthorizationStatusText()}</span>
-                      {getAuthorizationStatusBadge()}
-                    </DropdownMenuItem>
+                    {canSeeAuthorization && (
+                      <DropdownMenuItem onClick={handleAuthorizationNavigation} className="flex items-center">
+                        {React.createElement(getAuthorizationStatusIcon(), { className: "w-4 h-4 mr-2" })}
+                        <span className="flex-1">{getAuthorizationStatusText()}</span>
+                        {getAuthorizationStatusBadge()}
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>

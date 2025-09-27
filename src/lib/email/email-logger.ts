@@ -3,7 +3,7 @@ import { createClient } from '@/lib/SupabaseServerClient';
 export interface EmailLogData {
   booking_id?: string;
   user_id: string;
-  email_type: 'booking-confirmation' | 'booking-update' | 'booking-cancellation' | 'booking-reminder';
+  email_type: 'booking-confirmation' | 'booking-update' | 'booking-cancellation' | 'booking-reminder' | 'debrief-report';
   recipient_email: string;
   subject: string;
   message_id?: string;

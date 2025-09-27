@@ -18,14 +18,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { format, isBefore, addDays } from "date-fns";
-import { Plane, Heart, AlertTriangle, CalendarIcon, CheckCircle, XCircle, Award, Plus, X, Trash2 } from "lucide-react";
+import { Plane, Heart, AlertTriangle, CalendarIcon, CheckCircle, XCircle, Award, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { License } from "@/types/licenses";
 
@@ -467,194 +461,162 @@ export default function MemberPilotDetailsTab({ memberId }: PilotDetailsTabProps
 
       {/* User Endorsements Section */}
       <div className="mb-8 bg-gray-50 border border-gray-200 rounded-lg shadow-sm">
-        <div className="p-4 border-b border-gray-200">
+        <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
           <h4 className="flex items-center gap-2 text-base font-semibold text-gray-900 tracking-tight">
             <Award className="w-5 h-5 text-indigo-500" />
             Endorsements & Ratings
           </h4>
+          {!showAddEndorsement && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddEndorsement(true)}
+              className="h-8 px-3"
+            >
+              <Plus className="w-3 h-3 mr-1" />
+              Add
+            </Button>
+          )}
         </div>
-        
-        {userEndorsements.length === 0 && !showAddEndorsement ? (
-          /* Compact empty state */
-          <div className="p-6">
-            <div className="text-center py-6 text-gray-500">
-              <Award className="w-8 h-8 mx-auto mb-3 text-gray-300" />
-              <p className="text-sm mb-4">No endorsements yet</p>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowAddEndorsement(true)}
-                className="w-full justify-center py-3 border-dashed border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50"
-              >
-                <Plus className="w-4 h-4 mr-2 text-gray-500" />
-                <span className="text-gray-600 font-medium">Add New Endorsement</span>
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="p-4">
-            {/* Add New Endorsement - Collapsible */}
-            <div className="mb-4">
-              {!showAddEndorsement ? (
+
+        <div className="p-4">
+          {/* Add New Endorsement - Inline Form */}
+          {showAddEndorsement && (
+            <div className="mb-4 p-3 bg-white rounded-lg border border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-gray-700">Add New Endorsement</span>
                 <Button
                   type="button"
-                  variant="outline"
-                  onClick={() => setShowAddEndorsement(true)}
-                  className="w-full justify-center py-2 border-dashed border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50"
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetAddEndorsementForm}
+                  className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600"
                 >
-                  <Plus className="w-4 h-4 mr-2 text-gray-500" />
-                  <span className="text-gray-600 font-medium">Add New Endorsement</span>
+                  <X className="w-4 h-4" />
                 </Button>
-              ) : (
-                <div className="p-4 bg-white rounded-lg border border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h5 className="text-sm font-medium text-gray-700">Add New Endorsement</h5>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <div className="md:col-span-2">
+                  <Select value={selectedEndorsement} onValueChange={setSelectedEndorsement}>
+                    <SelectTrigger className="h-8">
+                      <SelectValue placeholder="Select endorsement" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableEndorsements
+                        .filter(e => e.is_active && !userEndorsements.some(ue => ue.endorsement_id === e.id))
+                        .map((endorsement) => (
+                          <SelectItem key={endorsement.id} value={endorsement.id}>
+                            {endorsement.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full h-8 text-xs justify-start">
+                        <CalendarIcon className="mr-1 h-3 w-3" />
+                        {endorsementExpiryDate ? format(endorsementExpiryDate, 'MMM dd') : 'Expiry'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={endorsementExpiryDate}
+                        onSelect={setEndorsementExpiryDate}
+                        autoFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div>
+                  <Input
+                    value={endorsementNotes}
+                    onChange={(e) => setEndorsementNotes(e.target.value)}
+                    placeholder="Notes..."
+                    className="h-8 text-xs"
+                  />
+                </div>
+
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    onClick={addEndorsement}
+                    disabled={!selectedEndorsement || endorsementsLoading}
+                    size="sm"
+                    className="h-8 px-3"
+                  >
+                    {endorsementsLoading ? "..." : "Add"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={resetAddEndorsementForm}
+                    className="h-8 px-2"
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Current Endorsements */}
+          {userEndorsements.length > 0 ? (
+            <div className="space-y-2">
+              {userEndorsements.map((userEndorsement) => {
+                const expiryStatus = getExpiryStatus(userEndorsement.expiry_date);
+                const Icon = expiryStatus.icon;
+
+                return (
+                  <div key={userEndorsement.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-900 text-sm">{userEndorsement.endorsement.name}</span>
+                        <Badge className={`${expiryStatus.color} flex items-center gap-1 px-2 py-0.5 text-xs`}>
+                          <Icon className="w-3 h-3" />
+                          {expiryStatus.status === 'expired' ? 'Expired' :
+                           expiryStatus.status === 'expiring' ? 'Soon' : 'Valid'}
+                        </Badge>
+                      </div>
+
+                      <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                        <span>{format(new Date(userEndorsement.issued_date), 'MMM dd, yyyy')}</span>
+                        {userEndorsement.expiry_date && (
+                          <span>→ {format(new Date(userEndorsement.expiry_date), 'MMM dd, yyyy')}</span>
+                        )}
+                        {userEndorsement.notes && (
+                          <span className="truncate">{userEndorsement.notes}</span>
+                        )}
+                      </div>
+                    </div>
+
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={resetAddEndorsementForm}
-                      className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600"
+                      onClick={() => showDeleteConfirmationDialog(userEndorsement.id, userEndorsement.endorsement.name)}
+                      className="h-7 w-7 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 ml-2"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-3 h-3" />
                     </Button>
                   </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                    <div>
-                      <label className="block text-xs font-medium mb-1 text-gray-600">Endorsement</label>
-                      <Select value={selectedEndorsement} onValueChange={setSelectedEndorsement}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select endorsement" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableEndorsements
-                            .filter(e => e.is_active && !userEndorsements.some(ue => ue.endorsement_id === e.id))
-                            .map((endorsement) => (
-                              <SelectItem key={endorsement.id} value={endorsement.id}>
-                                {endorsement.name}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium mb-1 text-gray-600">Expiry Date (Optional)</label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" className="w-full justify-start text-left font-normal text-xs h-9">
-                            <CalendarIcon className="mr-2 h-3 w-3" />
-                            {endorsementExpiryDate ? format(endorsementExpiryDate, 'MMM dd') : 'No expiry'}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={endorsementExpiryDate}
-                            onSelect={setEndorsementExpiryDate}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium mb-1 text-gray-600">Notes (Optional)</label>
-                      <Input
-                        value={endorsementNotes}
-                        onChange={(e) => setEndorsementNotes(e.target.value)}
-                        placeholder="Add notes..."
-                        className="h-9 text-xs"
-                      />
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        onClick={addEndorsement}
-                        disabled={!selectedEndorsement || endorsementsLoading}
-                        size="sm"
-                        className="flex-1 h-9"
-                      >
-                        {endorsementsLoading ? "Adding..." : <><Plus className="w-3 h-3 mr-1" />Add</>}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={resetAddEndorsementForm}
-                        className="h-9 px-3"
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
+                );
+              })}
             </div>
-
-            {/* Current Endorsements */}
-            {userEndorsements.length > 0 && (
-              <div>
-                <h5 className="text-sm font-medium text-gray-700 mb-3">Current Endorsements</h5>
-                <div className="space-y-3">
-                  {userEndorsements.map((userEndorsement) => {
-                    const expiryStatus = getExpiryStatus(userEndorsement.expiry_date);
-                    const Icon = expiryStatus.icon;
-                    
-                    return (
-                      <div key={userEndorsement.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3">
-                            <h6 className="font-medium text-gray-900">{userEndorsement.endorsement.name}</h6>
-                            <Badge className={`${expiryStatus.color} flex items-center gap-1 px-2 py-1 text-xs`}>
-                              <Icon className="w-3 h-3" />
-                              {expiryStatus.status === 'expired' ? 'Expired' : 
-                               expiryStatus.status === 'expiring' ? 'Expiring Soon' : 'Valid'}
-                            </Badge>
-                          </div>
-                          
-                          <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-                            <span>Issued: {format(new Date(userEndorsement.issued_date), 'MMM dd, yyyy')}</span>
-                            {userEndorsement.expiry_date && (
-                              <span>Expires: {format(new Date(userEndorsement.expiry_date), 'MMM dd, yyyy')}</span>
-                            )}
-                            {userEndorsement.notes && (
-                              <span>Notes: {userEndorsement.notes}</span>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => showDeleteConfirmationDialog(userEndorsement.id, userEndorsement.endorsement.name)}
-                                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <X className="w-4 h-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <div className="flex items-center gap-1">
-                                <Trash2 className="w-3 h-3" />
-                                Remove endorsement
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+          ) : !showAddEndorsement ? (
+            <div className="text-center py-4 text-gray-500">
+              <Award className="w-6 h-6 mx-auto mb-2 text-gray-300" />
+              <p className="text-sm">No endorsements yet</p>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {error && <p className="text-xs text-red-500 mt-2">{error}</p>}

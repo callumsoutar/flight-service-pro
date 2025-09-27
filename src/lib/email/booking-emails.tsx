@@ -3,6 +3,7 @@ import { render } from '@react-email/render';
 import { resend, EMAIL_CONFIG, type EmailSendResult } from './resend-client';
 import { logEmail } from './email-logger';
 import BookingConfirmation from '@/email-templates/BookingConfirmation';
+import DebriefReport from '@/email-templates/DebriefReport';
 import { Booking } from '@/types/bookings';
 import { User } from '@/types/users';
 import { Aircraft } from '@/types/aircraft';
@@ -264,6 +265,132 @@ export async function sendBookingCancellation({
     };
   } catch (error) {
     console.error('Error sending booking cancellation email:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+    };
+  }
+}
+
+// Define types for debrief email data
+interface DebriefEmailData {
+  booking: Booking;
+  member: User;
+  lessonProgress: {
+    id: string;
+    date?: string;
+    status?: string;
+    instructor_comments?: string;
+    lesson_highlights?: string;
+    airmanship?: string;
+    focus_next_lesson?: string;
+    areas_for_improvement?: string;
+    weather_conditions?: string;
+    safety_concerns?: string;
+    instructor?: {
+      user?: {
+        first_name?: string;
+        last_name?: string;
+        email?: string;
+      };
+    };
+  };
+  lesson?: { name: string } | null;
+  flightExperiences?: Array<{
+    experience_type: string;
+    duration: number;
+    notes?: string;
+  }>;
+  to?: string; // Override recipient email if needed
+}
+
+export async function sendDebriefReport({
+  booking,
+  member,
+  lessonProgress,
+  lesson,
+  flightExperiences = [],
+  to,
+}: DebriefEmailData): Promise<EmailSendResult> {
+  try {
+    // Check if email service is available
+    if (!resend) {
+      console.warn('Email service not available - RESEND_API_KEY not configured');
+      return {
+        success: false,
+        error: 'Email service not configured',
+      };
+    }
+
+    const recipientEmail = to || member.email;
+
+    if (!recipientEmail) {
+      return {
+        success: false,
+        error: 'No recipient email address provided',
+      };
+    }
+
+    // Render the email template
+    const emailHtml = await render(
+      <DebriefReport
+        booking={booking}
+        lessonProgress={lessonProgress}
+        lesson={lesson}
+        flightExperiences={flightExperiences}
+        dashboardUrl={process.env.NEXT_PUBLIC_APP_URL}
+      />
+    );
+
+    const subject = `Flight Debrief Report - ${new Date(booking.start_time).toLocaleDateString()}`;
+
+    // Send the email
+    const { data, error } = await resend.emails.send({
+      from: EMAIL_CONFIG.FROM_EMAIL,
+      to: recipientEmail,
+      subject,
+      html: emailHtml,
+      replyTo: EMAIL_CONFIG.REPLY_TO,
+      headers: {
+        'X-Booking-ID': booking.id,
+        'X-Member-ID': member.id,
+        'X-Lesson-Progress-ID': lessonProgress.id,
+        'X-Email-Type': 'debrief-report',
+      },
+    });
+
+    if (error) {
+      console.error('Failed to send debrief report email:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to send email',
+      };
+    }
+
+    console.log('Debrief report email sent:', {
+      messageId: data?.id,
+      to: recipientEmail,
+      bookingId: booking.id,
+      lessonProgressId: lessonProgress.id,
+    });
+
+    // Log the email
+    await logEmail({
+      booking_id: booking.id,
+      user_id: member.id,
+      email_type: 'debrief-report',
+      recipient_email: recipientEmail,
+      subject,
+      message_id: data?.id,
+      status: 'sent',
+    });
+
+    return {
+      success: true,
+      messageId: data?.id,
+    };
+  } catch (error) {
+    console.error('Error sending debrief report email:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred',

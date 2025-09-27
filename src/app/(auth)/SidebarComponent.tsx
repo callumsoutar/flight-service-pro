@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import {
@@ -57,44 +57,56 @@ export function SidebarComponent() {
   // Get user's role name
   const userRole = userRoleData?.role?.toLowerCase() || '';
 
-  // Debug logging
-  console.log('SidebarComponent Debug:', {
-    userRoleData,
-    userRole,
-    rolesLoading,
-    rolesError
-  });
-
-  // Track role changes
-  useEffect(() => {
-    console.log('Role data changed:', { userRole, rolesLoading });
-  }, [userRole, rolesLoading]);
+  // Debug logging (only show errors or during development)
+  if (rolesError) {
+    console.error('SidebarComponent Role Error:', rolesError);
+  }
 
   // Define restricted items for member and student roles
   const restrictedTabs = ['aircraft', 'invoices', 'staff', 'training', 'equipment', 'tasks'];
 
   // Filter navigation items based on user role
   const filteredNavOptions = mainNavOptions.filter(item => {
-    // If roles are still loading, be conservative and hide restricted items
-    if (rolesLoading) {
-      console.log(`Filtering during loading - hiding ${item.tab}: ${restrictedTabs.includes(item.tab)}`);
+    // If user is member or student, hide restricted items
+    if (userRole === 'member' || userRole === 'student') {
       return !restrictedTabs.includes(item.tab);
     }
 
-    // If user is member or student, hide restricted items
-    if (userRole === 'member' || userRole === 'student') {
-      const shouldHide = restrictedTabs.includes(item.tab);
-      console.log(`Member/Student filtering - ${item.tab}: hiding=${shouldHide}, userRole=${userRole}`);
-      return !shouldHide;
-    }
-
     // For all other roles (owner, admin, instructor), show all items
-    console.log(`Higher role access - showing ${item.tab} for role: ${userRole}`);
     return true;
   });
 
-  // Debug filtered results
-  console.log('Filtered nav options:', filteredNavOptions.map(item => item.tab));
+  // Render skeleton loading state while role data is loading
+  if (rolesLoading) {
+    return (
+      <aside className="fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-[#7c3aed] via-[#6d28d9] to-[#3b82f6] text-white flex flex-col z-30 overflow-visible">
+        <div className="flex items-center h-16 px-6 font-extrabold text-2xl tracking-tight border-b border-white/10">
+          Flight Desk Pro
+        </div>
+        <nav className="flex-1 overflow-y-auto overflow-x-visible py-6 px-2 gap-1 flex flex-col">
+          {/* Skeleton loading for navigation items */}
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="px-3 py-2 rounded-lg mb-1">
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 bg-white/20 rounded animate-pulse" />
+                <div className="h-5 bg-white/20 rounded animate-pulse flex-1 max-w-32" />
+              </div>
+            </div>
+          ))}
+        </nav>
+        <div className="mt-auto mb-4 px-4">
+          <div className="w-full h-px mb-3" style={{ background: 'rgba(255,255,255,0.10)' }} />
+          {/* Settings skeleton */}
+          <div className="px-3 py-2 rounded-lg mb-2">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 bg-white/20 rounded animate-pulse" />
+              <div className="h-5 bg-white/20 rounded animate-pulse w-20" />
+            </div>
+          </div>
+        </div>
+      </aside>
+    );
+  }
 
   return (
     <aside className="fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-[#7c3aed] via-[#6d28d9] to-[#3b82f6] text-white flex flex-col z-30 overflow-visible">
@@ -115,9 +127,9 @@ export function SidebarComponent() {
           }
 
           return (
-            <div 
-              key={item.label} 
-              className="relative"
+            <div
+              key={item.label}
+              className="relative group"
               onMouseEnter={(e) => {
                 if (item.hasSubmenu) {
                   if (hideTimeout) {
@@ -155,7 +167,7 @@ export function SidebarComponent() {
                   </span>
                 </div>
                 {item.hasSubmenu && (
-                  <LucideChevronRight className="w-4 h-4 text-white/70" />
+                  <LucideChevronRight className="w-4 h-4 text-white/70 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                 )}
               </Link>
               

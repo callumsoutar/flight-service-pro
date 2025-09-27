@@ -34,6 +34,7 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
   let aircraftList: { id: string; registration: string; type: string }[] = [];
   let lessons: { id: string; name: string }[] = [];
   let flightTypes: { id: string; name: string }[] = [];
+  let hasLessonProgress = false;
 
   // Fetch booking with full user, instructor, aircraft, and flight_type objects
   const { data: bookingData } = await supabase
@@ -47,6 +48,15 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
     .from("instructor_comments")
     .select("id", { count: "exact", head: true })
     .eq("booking_id", bookingId);
+
+  // Check if lesson_progress exists for this booking
+  const { data: lessonProgressData } = await supabase
+    .from("lesson_progress")
+    .select("id")
+    .eq("booking_id", bookingId)
+    .limit(1);
+  hasLessonProgress = !!(lessonProgressData && lessonProgressData.length > 0);
+
   booking = bookingData;
 
   // Redirect if booking not found
@@ -233,13 +243,14 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
               <BookingConfirmActionClient bookingId={booking.id} status={booking.status} />
             )}
             {booking && booking.id && (
-              <BookingActions booking={booking} status={status} bookingId={booking.id} />
+              <BookingActions booking={booking} status={status} bookingId={booking.id} currentUserId={user.id} />
             )}
             {booking && booking.id && (
               <BookingStagesOptions
                 bookingId={booking.id}
                 bookingStatus={booking.status}
                 instructorCommentsCount={instructorCommentsCount || 0}
+                hasLessonProgress={hasLessonProgress}
               />
             )}
           </div>
@@ -265,10 +276,11 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
             )}
           </div>
           <div className="flex-[1]">
-            <BookingResources 
+            <BookingResources
               member={member}
               instructor={instructor}
               aircraft={aircraft}
+              bookingStatus={status}
             />
           </div>
         </div>

@@ -1,329 +1,227 @@
+"use client";
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Plane, User, Clock, BarChart2, CalendarDays } from "lucide-react";
-import { format, subDays, startOfDay, endOfDay, isWithinInterval } from "date-fns";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import * as Tabs from "@radix-ui/react-tabs";
+import { Calendar, Plane } from "lucide-react";
 import type { FlightHistoryEntry } from "@/types/flight_history";
+import type { Booking } from "@/types/bookings";
+
+// Import the new tab components
+import UpcomingBookingsTab from "./UpcomingBookingsTab";
+import FlightHistoryTab from "./FlightHistoryTab";
 
 interface MemberFlightHistoryTabProps {
   memberId: string;
 }
 
 export default function MemberFlightHistoryTab({ memberId }: MemberFlightHistoryTabProps) {
+  // State for all data
   const [allFlights, setAllFlights] = useState<FlightHistoryEntry[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Date range state - default to last 30 days
-  const [dateFrom, setDateFrom] = useState<Date>(startOfDay(subDays(new Date(), 30)));
-  const [dateTo, setDateTo] = useState<Date>(endOfDay(new Date()));
-  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-  
+  const [instructorNameById, setInstructorNameById] = useState<Record<string, { first_name?: string; last_name?: string }>>({});
+
+  // UI state for tabs
+  const [selectedTab, setSelectedTab] = useState("bookings");
+
   useEffect(() => {
-    const loadFlightHistory = async () => {
+    const loadData = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        const response = await fetch(`/api/flight-history?user_id=${memberId}`);
-        const data = await response.json();
+        const [flightHistoryResponse, bookingsResponse] = await Promise.all([
+          fetch(`/api/flight-history?user_id=${memberId}`),
+          fetch(`/api/bookings`)
+        ]);
 
-        if (response.ok) {
-          setAllFlights(data.flight_history || []);
+        // Handle flight history
+        const flightData = await flightHistoryResponse.json();
+        if (flightHistoryResponse.ok) {
+          setAllFlights(flightData.flight_history || []);
         } else {
-          setError(data.error || "Failed to load flight history");
+          throw new Error(flightData.error || "Failed to load flight history");
+        }
+
+        // Handle bookings
+        const bookingData = await bookingsResponse.json();
+        if (bookingsResponse.ok) {
+          // Filter bookings for this member, only future bookings, and sort by start_time (soonest first)
+          const today = new Date();
+          today.setHours(0, 0, 0, 0); // Set to start of today
+
+          const memberBookings = (bookingData.bookings || [])
+            .filter((booking: Booking) => {
+              const bookingDate = new Date(booking.start_time);
+              return (
+                booking.user_id === memberId &&
+                booking.status === 'confirmed' &&
+                bookingDate >= today
+              );
+            })
+            .sort((a: Booking, b: Booking) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+
+          setBookings(memberBookings);
+
+          // Resolve instructor names: instructor_id -> instructors -> users
+          const uniqueInstructorIds = Array.from(new Set(
+            memberBookings
+              .map((b: Booking) => b.instructor_id)
+              .filter((v: string | null): v is string => Boolean(v))
+          ));
+
+          if (uniqueInstructorIds.length > 0) {
+            try {
+              const instructorResults = await Promise.all(
+                uniqueInstructorIds.map(async (id) => {
+                  const res = await fetch(`/api/instructors?id=${id}`);
+                  const json = await res.json();
+                  return { id, data: json?.instructor } as { id: string; data?: { user_id?: string } };
+                })
+              );
+
+              const instructorIdToUserId: Record<string, string> = {};
+              const userIds: string[] = [];
+              for (const r of instructorResults) {
+                const userId = r.data?.user_id;
+                if (r.id && userId) {
+                  instructorIdToUserId[r.id] = userId;
+                  userIds.push(userId);
+                }
+              }
+
+              if (userIds.length > 0) {
+                const usersRes = await fetch(`/api/users?ids=${userIds.join(',')}`);
+                const usersJson = await usersRes.json();
+                const usersArr = Array.isArray(usersJson.users) ? usersJson.users : [];
+                const userMap: Record<string, { first_name?: string; last_name?: string }> = {};
+                for (const u of usersArr) {
+                  if (u?.id) {
+                    userMap[u.id] = { first_name: u.first_name, last_name: u.last_name };
+                  }
+                }
+
+                const nameMap: Record<string, { first_name?: string; last_name?: string }> = {};
+                for (const [instructorId, userId] of Object.entries(instructorIdToUserId)) {
+                  if (userMap[userId]) {
+                    nameMap[instructorId] = userMap[userId];
+                  }
+                }
+                setInstructorNameById(nameMap);
+              }
+            } catch (e) {
+              console.error('Failed to resolve instructor names:', e);
+              setInstructorNameById({});
+            }
+          } else {
+            setInstructorNameById({});
+          }
+        } else {
+          throw new Error(bookingData.error || "Failed to load bookings");
         }
       } catch (err) {
-        setError("Failed to load flight history");
-        console.error("Error loading member flight history:", err);
+        setError(err instanceof Error ? err.message : "Failed to load flight data");
+        console.error("Error loading flight data:", err);
       } finally {
         setLoading(false);
       }
     };
 
-    void loadFlightHistory();
+    void loadData();
   }, [memberId]);
 
-  // Filter flights by date range
-  const flights = allFlights.filter((flight) => {
-    const flightDate = new Date(flight.actual_end || flight.booking_end_time || '');
-    return isWithinInterval(flightDate, { start: dateFrom, end: dateTo });
-  });
 
-  // Date range presets
-  const datePresets = [
-    { label: "Last 7 days", days: 7 },
-    { label: "Last 30 days", days: 30 },
-    { label: "Last 90 days", days: 90 },
-    { label: "Last year", days: 365 },
+  const tabs = [
+    { id: "bookings", label: "Upcoming Bookings", icon: Calendar },
+    { id: "history", label: "Flight History", icon: Plane },
   ];
-
-  const handlePresetClick = (days: number) => {
-    setDateFrom(startOfDay(subDays(new Date(), days)));
-    setDateTo(endOfDay(new Date()));
-    setIsDatePickerOpen(false);
-  };
-
-  const getFlightHours = (flight: FlightHistoryEntry): number => {
-    const flightTime = flight.flight_time;
-    if (flightTime == null) return 0;
-    const hours = typeof flightTime === 'string' ? Number(flightTime) : flightTime;
-    return isFinite(hours) ? hours : 0;
-  };
-
-  const getFlightHoursDisplay = (flight: FlightHistoryEntry): string => {
-    const flightTime = flight.flight_time;
-    if (flightTime == null) return "-";
-    
-    const hoursStr = String(flightTime);
-    // If already has a decimal point, keep as-is; otherwise add .0 (e.g., "1" -> "1.0")
-    return hoursStr.includes('.') ? hoursStr : `${hoursStr}.0`;
-  };
-
-  const totalFlightHours = flights.reduce((total, f) => total + getFlightHours(f), 0);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-muted-foreground">Loading flight history...</div>
+      <div className="w-full space-y-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading flight data...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-red-500">{error}</div>
+      <div className="w-full space-y-6">
+        <div className="text-center py-12">
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
+            Retry
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h3 className="text-lg font-semibold">Flight History</h3>
-        
-        {/* Date Range Picker */}
-        <div className="flex items-center gap-2">
-          <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-auto justify-start text-left font-normal",
-                  !dateFrom && "text-muted-foreground"
-                )}
-              >
-                <CalendarDays className="mr-2 h-4 w-4" />
-                {dateFrom && dateTo ? (
-                  `${format(dateFrom, "MMM dd, yyyy")} - ${format(dateTo, "MMM dd, yyyy")}`
-                ) : (
-                  "Select date range"
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <div className="p-3 border-b">
-                <div className="grid grid-cols-2 gap-2">
-                  {datePresets.map((preset) => (
-                    <Button
-                      key={preset.days}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePresetClick(preset.days)}
-                      className="text-xs h-8"
-                    >
-                      {preset.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <div className="p-3">
-                <div className="flex gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-gray-600">From</label>
-                    <CalendarComponent
-                      mode="single"
-                      selected={dateFrom}
-                      onSelect={(date) => date && setDateFrom(startOfDay(date))}
-                      disabled={(date) => date > new Date()}
-                      className="scale-90 origin-top-left"
-                      classNames={{
-                        months: "space-y-0",
-                        month: "space-y-2",
-                        caption: "flex justify-center pt-1 relative items-center text-sm",
-                        caption_label: "text-sm font-medium",
-                        nav: "space-x-1 flex items-center",
-                        nav_button: "h-6 w-6 bg-transparent p-0 opacity-50 hover:opacity-100",
-                        table: "w-full border-collapse space-y-1",
-                        head_row: "flex",
-                        head_cell: "text-gray-500 rounded-md w-8 font-normal text-xs",
-                        row: "flex w-full mt-1",
-                        cell: "text-center text-sm relative p-0 focus-within:relative focus-within:z-20",
-                        day: "h-8 w-8 p-0 font-normal text-sm hover:bg-gray-100 rounded-md",
-                        day_selected: "bg-indigo-600 text-white hover:bg-indigo-600",
-                        day_disabled: "text-gray-300",
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-gray-600">To</label>
-                    <CalendarComponent
-                      mode="single"
-                      selected={dateTo}
-                      onSelect={(date) => date && setDateTo(endOfDay(date))}
-                      disabled={(date) => date > new Date() || date < dateFrom}
-                      className="scale-90 origin-top-left"
-                      classNames={{
-                        months: "space-y-0",
-                        month: "space-y-2",
-                        caption: "flex justify-center pt-1 relative items-center text-sm",
-                        caption_label: "text-sm font-medium",
-                        nav: "space-x-1 flex items-center",
-                        nav_button: "h-6 w-6 bg-transparent p-0 opacity-50 hover:opacity-100",
-                        table: "w-full border-collapse space-y-1",
-                        head_row: "flex",
-                        head_cell: "text-gray-500 rounded-md w-8 font-normal text-xs",
-                        row: "flex w-full mt-1",
-                        cell: "text-center text-sm relative p-0 focus-within:relative focus-within:z-20",
-                        day: "h-8 w-8 p-0 font-normal text-sm hover:bg-gray-100 rounded-md",
-                        day_selected: "bg-indigo-600 text-white hover:bg-indigo-600",
-                        day_disabled: "text-gray-300",
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-gray-200">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsDatePickerOpen(false)}
-                    className="h-8 px-3 text-xs"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => setIsDatePickerOpen(false)}
-                    className="h-8 px-3 text-xs"
-                  >
-                    Apply
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-      </div>
-
-      {/* Stats bar styled like MemberAccountTab */}
-      <div className="flex flex-col md:flex-row items-stretch gap-4 bg-gray-50 rounded-lg p-4 mb-6 border border-gray-100">
-        <div className="flex-1 flex flex-col items-center justify-center">
-          <Plane className="w-6 h-6 mb-1 text-indigo-500" />
-          <div className="text-xs text-muted-foreground">Total Flights</div>
-          <div className="text-3xl font-bold text-gray-800 mt-1">{flights.length}</div>
-        </div>
-        <div className="hidden md:block w-px bg-gray-200 mx-2" />
-        <div className="flex-1 flex flex-col items-center justify-center">
-          <Clock className="w-6 h-6 mb-1 text-blue-500" />
-          <div className="text-xs text-muted-foreground">Total Hours</div>
-          <div className="text-3xl font-bold text-gray-800 mt-1">{totalFlightHours.toFixed(1)}h</div>
-        </div>
-        <div className="hidden md:block w-px bg-gray-200 mx-2" />
-        <div className="flex-1 flex flex-col items-center justify-center">
-          <BarChart2 className="w-6 h-6 mb-1 text-emerald-500" />
-          <div className="text-xs text-muted-foreground">Avg Hours / Flight</div>
-          <div className="text-3xl font-bold text-gray-800 mt-1">{flights.length ? (totalFlightHours / flights.length).toFixed(1) : '0.0'}h</div>
-        </div>
-      </div>
-
-      {flights.length === 0 ? (
-        <Card className="rounded-md">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <div className="text-muted-foreground mb-4">No completed flights found</div>
-            <Button 
-              onClick={() => window.location.href = '/dashboard/bookings'}
-              variant="outline"
+    <div className="w-full space-y-6">
+      {/* Tabs */}
+      <div className="w-full">
+        <Tabs.Root
+          value={selectedTab}
+          onValueChange={setSelectedTab}
+          className="w-full"
+        >
+          <div className="w-full border-b border-gray-200 bg-white rounded-t-md">
+            <Tabs.List
+              className="flex flex-row gap-1 px-2 pt-2 min-h-[48px]"
+              aria-label="Flight tabs"
             >
-              <Calendar className="w-4 h-4 mr-2" />
-              Schedule First Flight
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="rounded-md">
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Date</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Aircraft</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Instructor</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Description</th>
-                    <th className="text-left py-3 font-medium text-gray-900">Flight Time</th>
-                    <th className="text-left py-3 font-medium text-gray-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {flights.map((flight) => (
-                    <tr key={flight.flight_log_id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 pr-4 text-sm">
-                        <span className="font-medium">
-                          {format(new Date(flight.actual_end || flight.booking_end_time || ''), 'MMM dd, yyyy')}
-                        </span>
-                      </td>
-                      <td className="py-3 pr-4 font-medium text-gray-900">
-                        <div className="flex items-center gap-2">
-                          <Plane className="w-4 h-4 text-gray-500" />
-                          {flight.aircraft_registration || `Aircraft ${flight.aircraft_id?.substring(0, 8) || 'N/A'}`}
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4 text-sm">
-                        {flight.instructor_id ? (
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-gray-500" />
-                            <span>
-                              {flight.instructor_first_name || flight.instructor_last_name 
-                                ? `${flight.instructor_first_name || ""} ${flight.instructor_last_name || ""}`.trim()
-                                : 'Instructor'
-                              }
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">Solo</span>
-                        )}
-                      </td>
-                      <td className="py-3 pr-4 text-sm text-gray-600 max-w-xs">
-                        <span className="truncate block" title={flight.lesson_name || flight.booking_purpose || ''}>
-                          {flight.lesson_name || flight.booking_purpose || 'Flight'}
-                        </span>
-                      </td>
-                      <td className="py-3 pr-4 text-sm">
-                        {getFlightHoursDisplay(flight)}
-                      </td>
-                      <td className="py-3">
-                        <div className="flex gap-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => window.location.href = `/dashboard/bookings/view/${flight.booking_id}`}
-                          >
-                            View
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <Tabs.Trigger
+                    key={tab.id}
+                    value={tab.id}
+                    className={`inline-flex items-center gap-2 px-4 py-2 pb-1 text-base font-medium border-b-2 border-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400
+                      data-[state=active]:border-indigo-700 data-[state=active]:text-indigo-800
+                      data-[state=inactive]:text-muted-foreground hover:text-indigo-600 whitespace-nowrap`}
+                    style={{ background: "none", boxShadow: "none", borderRadius: 0 }}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span>{tab.label}</span>
+                  </Tabs.Trigger>
+                );
+              })}
+            </Tabs.List>
+          </div>
+
+          <div className="w-full">
+            <Tabs.Content value="bookings" className="h-full w-full">
+              {selectedTab === "bookings" && (
+                <UpcomingBookingsTab
+                  memberId={memberId}
+                  bookings={bookings}
+                  setBookings={setBookings}
+                  loading={false}
+                  error={null}
+                  instructorNameById={instructorNameById}
+                />
+              )}
+            </Tabs.Content>
+
+            <Tabs.Content value="history" className="h-full w-full">
+              {selectedTab === "history" && (
+                <FlightHistoryTab
+                  memberId={memberId}
+                  allFlights={allFlights}
+                  loading={false}
+                  error={null}
+                />
+              )}
+            </Tabs.Content>
+          </div>
+        </Tabs.Root>
+      </div>
     </div>
   );
-} 
+}

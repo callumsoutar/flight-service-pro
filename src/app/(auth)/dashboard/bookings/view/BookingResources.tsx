@@ -25,9 +25,10 @@ interface BookingResourcesProps {
   member?: User | null;
   instructor?: JoinedInstructor | null;
   aircraft?: Aircraft | null;
+  bookingStatus?: string;
 }
 
-export default function BookingResources({ member, instructor, aircraft }: BookingResourcesProps) {
+export default function BookingResources({ member, instructor, aircraft, bookingStatus }: BookingResourcesProps) {
   const [selectedObservationId, setSelectedObservationId] = useState<string | null>(null);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -127,7 +128,7 @@ export default function BookingResources({ member, instructor, aircraft }: Booki
           </div>
 
           {/* Aircraft Observations */}
-          {aircraft?.id && activeObservations.length > 0 && (
+          {aircraft?.id && activeObservations.length > 0 && bookingStatus !== 'complete' && (
             <div className="mt-3">
               <div className="flex items-center gap-2 mb-2 text-sm text-orange-700">
                 <AlertTriangle className="w-4 h-4" />

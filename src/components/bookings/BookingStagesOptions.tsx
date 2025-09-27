@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, X, MessageCircle, Send, Plane } from "lucide-react";
+import { ChevronDown, X, MessageCircle, Send, Plane, FileText } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 // import Link from "next/link";
 import InstructorCommentsModal from "@/components/bookings/InstructorCommentsModal";
@@ -24,9 +24,10 @@ interface BookingStagesOptionsProps {
   bookingId: string;
   bookingStatus?: BookingStatus;
   instructorCommentsCount?: number;
+  hasLessonProgress?: boolean;
 }
 
-export default function BookingStagesOptions({ bookingId, bookingStatus, instructorCommentsCount = 0 }: BookingStagesOptionsProps) {
+export default function BookingStagesOptions({ bookingId, bookingStatus, instructorCommentsCount = 0, hasLessonProgress = false }: BookingStagesOptionsProps) {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -106,6 +107,10 @@ export default function BookingStagesOptions({ bookingId, bookingStatus, instruc
     }
   };
 
+  const handleViewDebrief = () => {
+    router.push(`/dashboard/bookings/debrief/view/${bookingId}`);
+  };
+
   // Helper function to render instructor comments indicator badge
   const renderCommentsIndicator = () => {
     // Only show indicator if there are comments and user is not restricted
@@ -152,14 +157,24 @@ export default function BookingStagesOptions({ bookingId, bookingStatus, instruc
                   </span>
                 )}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleSendConfirmation}>
-                <Send className="w-4 h-4 mr-2" />
-                Send Confirmation
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleViewAircraft}>
-                <Plane className="w-4 h-4 mr-2" />
-                View Aircraft
-              </DropdownMenuItem>
+              {bookingStatus !== 'complete' && (
+                <DropdownMenuItem onClick={handleSendConfirmation}>
+                  <Send className="w-4 h-4 mr-2" />
+                  Send Confirmation
+                </DropdownMenuItem>
+              )}
+              {bookingStatus !== 'complete' && (
+                <DropdownMenuItem onClick={handleViewAircraft}>
+                  <Plane className="w-4 h-4 mr-2" />
+                  View Aircraft
+                </DropdownMenuItem>
+              )}
+              {hasLessonProgress && (
+                <DropdownMenuItem onClick={handleViewDebrief}>
+                  <FileText className="w-4 h-4 mr-2" />
+                  View Debrief
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
             </>
           )}

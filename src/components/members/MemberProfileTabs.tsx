@@ -9,9 +9,9 @@ import { Clock } from "lucide-react";
 const PilotDetailsTab = lazy(() => import("./tabs/MemberPilotDetailsTab"));
 const MembershipsTab = lazy(() => import("./tabs/MemberMembershipsTab"));
 const AccountTab = lazy(() => import("./tabs/MemberAccountTab"));
-const FlightHistoryTab = lazy(() => import("./tabs/MemberFlightHistoryTab"));
-const BookingsTab = lazy(() => import("./tabs/MemberBookingsTab"));
-const TrainingTab = lazy(() => import("./tabs/MemberTrainingTab"));
+const FlightManagementTab = lazy(() => import("./tabs/MemberFlightHistoryTab"));
+const TrainingHistoryTab = lazy(() => import("./tabs/MemberTrainingHistoryTab"));
+const FlightHistoryTab = lazy(() => import("./tabs/FlightHistoryTab"));
 
 interface MemberProfileTabsProps {
   member: User;
@@ -70,14 +70,14 @@ export default function MemberProfileTabs({ member }: MemberProfileTabsProps) {
       <TabsContent value="bookings">
         {tab === "bookings" && (
           <Suspense fallback={<div>Loading...</div>}>
-            <BookingsTab memberId={member.id} />
+            <FlightManagementTab memberId={member.id} />
           </Suspense>
         )}
       </TabsContent>
       <TabsContent value="training">
         {tab === "training" && (
           <Suspense fallback={<div>Loading...</div>}>
-            <TrainingTab memberId={member.id} />
+            <TrainingHistoryTab memberId={member.id} />
           </Suspense>
         )}
       </TabsContent>

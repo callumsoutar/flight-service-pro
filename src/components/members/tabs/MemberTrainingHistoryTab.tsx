@@ -1,48 +1,100 @@
 "use client";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import Progress from "@/components/ui/progress";
-import type { LessonProgress, LessonOutcome } from "@/types/lesson_progress";
+import * as Tabs from "@radix-ui/react-tabs";
+import { toast } from "sonner";
+import type { LessonProgress } from "@/types/lesson_progress";
 import type { Lesson } from "@/types/lessons";
 import type { User } from "@/types/users";
 import type { Instructor } from "@/types/instructors";
 import type { Syllabus } from "@/types/syllabus";
+import type { StudentSyllabusEnrollment } from "@/types/student_syllabus_enrollment";
 
-import { useRouter } from "next/navigation";
-import { 
-  Calendar, 
-  BookOpen, 
-  User as UserIcon,
-  Eye,
-  Target
+import {
+  Target,
+  Edit3,
+  X,
+  BookOpen,
+  GraduationCap
 } from "lucide-react";
-import { format, isToday, isYesterday, isThisWeek } from "date-fns";
+import { format, subDays, startOfDay, endOfDay } from "date-fns";
+
+// Import the new tab components
+import LessonProgressTab from "./LessonProgressTab";
+import ExamHistoryTab from "./ExamHistoryTab";
 
 interface MemberTrainingHistoryTabProps {
   memberId: string;
 }
 
-
+// Type for exam result with joined exam and syllabus
+interface ExamResultWithExamSyllabus {
+  id: string;
+  exam_id: string;
+  user_id: string;
+  score?: number | null;
+  result: 'PASS' | 'FAIL';
+  exam_date?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  exam?: {
+    id: string;
+    name: string;
+    syllabus_id: string;
+    syllabus?: {
+      id: string;
+      name: string;
+    };
+  };
+}
 
 export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHistoryTabProps) {
-  const router = useRouter();
+  // State for all data
   const [records, setRecords] = useState<LessonProgress[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
   const [enrolledSyllabi, setEnrolledSyllabi] = useState<Syllabus[]>([]);
+  const [enrollments, setEnrollments] = useState<StudentSyllabusEnrollment[]>([]);
   const [selectedSyllabusId, setSelectedSyllabusId] = useState<string>("");
   const [instructors, setInstructors] = useState<Record<string, User>>({});
+  const [allInstructors, setAllInstructors] = useState<Instructor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingInstructor, setEditingInstructor] = useState(false);
+  const [updatingInstructor, setUpdatingInstructor] = useState(false);
+
+  // Exam results state
+  const [examResults, setExamResults] = useState<ExamResultWithExamSyllabus[]>([]);
+  const [examExpanded, setExamExpanded] = useState<Record<string, boolean>>({});
+
+  // Date range state - default to last 30 days
+  const [dateRange, setDateRange] = useState<{from: Date; to: Date}>({
+    from: startOfDay(subDays(new Date(), 30)),
+    to: endOfDay(new Date())
+  });
+
+  // UI state for tabs and expanded rows
+  const [selectedTab, setSelectedTab] = useState("lessons");
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  const toggleRowExpansion = (recordId: string) => {
+    const newExpandedRows = new Set(expandedRows);
+    if (newExpandedRows.has(recordId)) {
+      newExpandedRows.delete(recordId);
+    } else {
+      newExpandedRows.add(recordId);
+    }
+    setExpandedRows(newExpandedRows);
+  };
 
   useEffect(() => {
     if (!memberId) return;
     setLoading(true);
     setError(null);
-    
+
     Promise.all([
       fetch(`/api/lesson_progress?user_id=${memberId}`)
         .then(res => res.json())
@@ -51,53 +103,64 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
       fetch(`/api/syllabus`).then(res => res.json()).then(data => Array.isArray(data.syllabi) ? data.syllabi : []),
       fetch(`/api/student_syllabus_enrollment?user_id=${memberId}`).then(res => res.json()).then(data => Array.isArray(data.data) ? data.data : []),
       fetch(`/api/instructors`).then(res => res.json()).then(data => Array.isArray(data.instructors) ? data.instructors : []),
+      fetch(`/api/exam_results?user_id=${memberId}`).then(res => res.json()).then(data => Array.isArray(data.exam_results) ? data.exam_results : []),
+      fetch(`/api/exams`).then(res => res.json()).then(data => Array.isArray(data.exams) ? data.exams : []),
     ])
-      .then(async ([progressData, lessonsData, syllabiData, enrollmentData, instructorsData]) => {
+      .then(async ([progressData, lessonsData, syllabiData, enrollmentData, instructorsData, examResultsData]) => {
         // Sort records by date, most recent first
-        const sortedRecords = progressData.sort((a: LessonProgress, b: LessonProgress) => 
+        const sortedRecords = progressData.sort((a: LessonProgress, b: LessonProgress) =>
           new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime()
         );
-        
+
         setRecords(sortedRecords);
         setLessons(lessonsData);
         setSyllabi(syllabiData);
-        
+        setEnrollments(enrollmentData);
+        setExamResults(examResultsData);
+
         // Filter syllabi to only show enrolled ones
         const enrolledSyllabusIds = enrollmentData.map((enrollment: { syllabus_id: string }) => enrollment.syllabus_id);
-        const userEnrolledSyllabi = syllabiData.filter((syllabus: Syllabus) => 
+        const userEnrolledSyllabi = syllabiData.filter((syllabus: Syllabus) =>
           enrolledSyllabusIds.includes(syllabus.id)
         );
         setEnrolledSyllabi(userEnrolledSyllabi);
-        
+
         // Set first enrolled syllabus as default selection if available
         if (userEnrolledSyllabi.length > 0 && !selectedSyllabusId) {
           setSelectedSyllabusId(userEnrolledSyllabi[0].id);
         }
-        
+
+        // Store all instructors for dropdown
+        setAllInstructors(instructorsData);
+
         // Create instructor map
         const instructorMap: Record<string, Instructor> = {};
         instructorsData.forEach((instructor: Instructor) => {
           instructorMap[instructor.id] = instructor;
         });
-        
+
         // Get user details for instructors
         const instructorIds = Array.from(new Set(progressData.map((r: LessonProgress) => r.instructor_id).filter(Boolean))) as string[];
         const userIds = instructorIds
           .map(id => instructorMap[id]?.user_id)
           .filter(Boolean);
-        
+
         const userMap: Record<string, User> = {};
         if (userIds.length > 0) {
-          const usersRes = await fetch(`/api/users?ids=${userIds.join(",")}`);
-          const usersData = await usersRes.json();
-          if (Array.isArray(usersData.users)) {
-            usersData.users.forEach((u: User) => { userMap[u.id] = u; });
+          const usersResponse = await fetch(`/api/users?ids=${userIds.join(',')}`);
+          if (usersResponse.ok) {
+            const usersData = await usersResponse.json();
+            if (Array.isArray(usersData.users)) {
+              usersData.users.forEach((user: User) => {
+                userMap[user.id] = user;
+              });
+            }
           }
         }
-        
-        // Create final instructor map
+
+        // Map instructor IDs to user details
         const finalInstructorMap: Record<string, User> = {};
-        instructorIds.forEach((instructorId: string) => {
+        instructorIds.forEach(instructorId => {
           const instructor = instructorMap[instructorId];
           if (instructor && instructor.user_id) {
             const user = userMap[instructor.user_id];
@@ -106,103 +169,84 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
             }
           }
         });
-        
+
         setInstructors(finalInstructorMap);
       })
       .catch((e) => setError(e.message || "Failed to load training history"))
       .finally(() => setLoading(false));
   }, [memberId, selectedSyllabusId]);
 
-
-
   // Helper functions
-  const lessonNameMap = lessons.reduce<Record<string, string>>((acc, lesson) => {
-    acc[lesson.id] = lesson.name;
-    return acc;
-  }, {});
-
-  function getInstructorName(id?: string | null) {
-    if (!id) return "Not assigned";
-    const u = instructors[id];
-    if (!u) return `Unknown Instructor`;
-    return [u.first_name, u.last_name].filter(Boolean).join(" ") || u.email || `Unknown Instructor`;
-  }
-
-  // Calculate progress for selected syllabus
-  function calculateSyllabusProgress() {
+  const getProgressStats = () => {
     if (!selectedSyllabusId) return { passed: 0, total: 0, percentage: 0 };
-    
+
     const selectedSyllabus = syllabi.find(s => s.id === selectedSyllabusId);
     if (!selectedSyllabus) return { passed: 0, total: 0, percentage: 0 };
-    
-    // Get lessons for this syllabus
+
+    // Get all lessons for this syllabus
     const syllabusLessons = lessons.filter(lesson => lesson.syllabus_id === selectedSyllabusId);
-    const totalLessons = syllabusLessons.length;
-    
-    // Count passed lessons for this syllabus
-    const passedLessons = records.filter(record => {
-      if (record.status !== 'pass') return false;
+
+    // Get progress records for this syllabus
+    const syllabusProgress = records.filter(record => {
       const lesson = lessons.find(l => l.id === record.lesson_id);
       return lesson && lesson.syllabus_id === selectedSyllabusId;
-    }).length;
-    
-    const percentage = totalLessons > 0 ? Math.round((passedLessons / totalLessons) * 100) : 0;
-    
-    return { passed: passedLessons, total: totalLessons, percentage };
-  }
+    });
 
-  const progressData = calculateSyllabusProgress();
+    // Count passed lessons (lessons with at least one "pass" status)
+    const passedLessons = syllabusLessons.filter(lesson => {
+      return syllabusProgress.some(progress =>
+        progress.lesson_id === lesson.id && progress.status === "pass"
+      );
+    });
 
+    const passed = passedLessons.length;
+    const total = syllabusLessons.length;
+    const percentage = total > 0 ? Math.round((passed / total) * 100) : 0;
 
+    return { passed, total, percentage };
+  };
 
-  function formatRelativeDate(dateString: string): string {
-    const date = new Date(dateString);
-    if (isToday(date)) return "Today";
-    if (isYesterday(date)) return "Yesterday";
-    if (isThisWeek(date)) return format(date, "EEEE"); // Day name
-    return format(date, "MMM d, yyyy");
-  }
+  const currentEnrollment = enrollments.find(e => e.syllabus_id === selectedSyllabusId);
 
-  function formatAttemptNumber(attempt: number | null | undefined): string {
-    if (!attempt || attempt < 1) return "1st";
-    
-    const lastDigit = attempt % 10;
-    const lastTwoDigits = attempt % 100;
-    
-    // Handle special cases for 11th, 12th, 13th
-    if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
-      return `${attempt}th`;
+  // Handle instructor change
+  const handleInstructorChange = async (instructorId: string) => {
+    if (!currentEnrollment) return;
+
+    setUpdatingInstructor(true);
+    try {
+      const res = await fetch("/api/student_syllabus_enrollment", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: currentEnrollment.id,
+          primary_instructor_id: instructorId,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update instructor");
+
+      // Update local state
+      setEnrollments(prev => prev.map(e =>
+        e.id === currentEnrollment.id
+          ? { ...e, primary_instructor_id: instructorId }
+          : e
+      ));
+
+      setEditingInstructor(false);
+      toast.success("Primary instructor updated successfully!");
+    } catch (error) {
+      toast.error("Failed to update instructor");
+    } finally {
+      setUpdatingInstructor(false);
     }
-    
-    // Handle other cases based on last digit
-    switch (lastDigit) {
-      case 1:
-        return `${attempt}st`;
-      case 2:
-        return `${attempt}nd`;
-      case 3:
-        return `${attempt}rd`;
-      default:
-        return `${attempt}th`;
-    }
-  }
+  };
 
+  const progressStats = getProgressStats();
 
-
-  function StatusBadge({ status }: { status?: LessonOutcome | null }) {
-    if (!status) return <Badge variant="secondary">Pending</Badge>;
-    
-    switch (status) {
-      case "pass":
-        return <Badge className="bg-green-100 text-green-800 border-green-200">Pass</Badge>;
-      case "not yet competent":
-        return <Badge className="bg-red-100 text-red-800 border-red-200">Not Yet Competent</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
-  }
-
-
+  const tabs = [
+    { id: "lessons", label: "Lesson Progress", icon: BookOpen },
+    { id: "exams", label: "Exam History", icon: GraduationCap },
+  ];
 
   if (loading) {
     return (
@@ -220,159 +264,200 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
       <div className="w-full space-y-6">
         <div className="text-center py-12">
           <p className="text-red-600 mb-4">{error}</p>
-          <Button onClick={() => window.location.reload()}>Try Again</Button>
+          <Button onClick={() => window.location.reload()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
+            Retry
+          </Button>
         </div>
-      </div>
-    );
-  }
-
-  // If no enrolled syllabi, show empty state
-  if (enrolledSyllabi.length === 0) {
-    return (
-      <div className="w-full space-y-6">
-        <Card className="rounded-md">
-          <CardContent className="text-center py-12">
-            <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Syllabus Enrollments</h3>
-            <p className="text-gray-600 mb-4">This member is not enrolled in any training syllabi yet.</p>
-          </CardContent>
-        </Card>
       </div>
     );
   }
 
   return (
     <div className="w-full space-y-6">
-      {/* Syllabus Progress */}
-      <Card className="rounded-md">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Target className="w-5 h-5" />
-              Training Progress
-            </CardTitle>
-            <Badge variant="outline" className="text-base px-3 py-1.5 font-semibold">
-              {progressData.percentage}% Complete
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Syllabus Selector */}
-          <div className="flex items-center gap-3">
-            <label className="text-sm font-medium text-gray-700 min-w-[80px]">Syllabus:</label>
-            <Select value={selectedSyllabusId} onValueChange={setSelectedSyllabusId}>
-              <SelectTrigger className="w-[300px]">
-                <SelectValue placeholder="Select a syllabus" />
-              </SelectTrigger>
-              <SelectContent>
-                {enrolledSyllabi.map((syllabus) => (
-                  <SelectItem key={syllabus.id} value={syllabus.id}>
-                    {syllabus.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          {/* Progress Bar */}
-          {selectedSyllabusId && (
-            <div className="space-y-3">
-              <Progress value={progressData.percentage} className="h-3" />
-              <div className="flex justify-between text-sm text-gray-600">
-                <span className="font-medium">{progressData.passed} lessons passed</span>
-                <span className="font-medium">{progressData.total - progressData.passed} remaining</span>
+      {/* Progress Summary */}
+      {selectedSyllabusId && (
+        <Card className="rounded-md">
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <CardTitle className="flex items-center gap-2">
+                <Target className="w-5 h-5" />
+                {enrolledSyllabi.length > 1 ? 'Training Progress' : enrolledSyllabi.find(s => s.id === selectedSyllabusId)?.name}
+              </CardTitle>
+
+              {enrolledSyllabi.length > 1 && (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-gray-700">Syllabus:</span>
+                  <Select value={selectedSyllabusId} onValueChange={setSelectedSyllabusId}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Select syllabus" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {enrolledSyllabi.map((syllabus) => (
+                        <SelectItem key={syllabus.id} value={syllabus.id}>
+                          {syllabus.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {/* Progress Bar Section */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-600">Lesson Completion</span>
+                  <span className="text-sm font-semibold text-gray-900">{progressStats.passed}/{progressStats.total} lessons</span>
+                </div>
+                <div className="text-center mb-3">
+                  <span className="text-sm font-medium text-indigo-600">{progressStats.percentage}% Complete</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className="bg-indigo-600 h-3 rounded-full transition-all duration-300"
+                    style={{ width: `${progressStats.percentage}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Enrollment Details Section */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-gray-100">
+                <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-600">Enrolled:</span>
+                    <span className="text-sm text-gray-900">
+                      {currentEnrollment?.enrolled_at ?
+                        format(new Date(currentEnrollment.enrolled_at), 'MMM d, yyyy') :
+                        'Unknown'
+                      }
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600">Primary Instructor:</span>
+                  {editingInstructor ? (
+                    <div className="flex items-center gap-2">
+                      <Select
+                        defaultValue={currentEnrollment?.primary_instructor_id || ""}
+                        onValueChange={handleInstructorChange}
+                        disabled={updatingInstructor}
+                      >
+                        <SelectTrigger className="w-[160px] h-8">
+                          <SelectValue placeholder="Select instructor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allInstructors.map(instructor => (
+                            <SelectItem key={instructor.id} value={instructor.id}>
+                              {instructor.first_name} {instructor.last_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingInstructor(false)}
+                        disabled={updatingInstructor}
+                        className="h-8 w-8 p-0"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-900">
+                        {currentEnrollment?.primary_instructor_id ?
+                          (() => {
+                            const instructor = allInstructors.find(i => i.id === currentEnrollment.primary_instructor_id);
+                            return instructor ? `${instructor.first_name} ${instructor.last_name}` : 'Unknown';
+                          })() :
+                          'Not assigned'
+                        }
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingInstructor(true)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Training Timeline */}
-      <Card className="rounded-md">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5" />
-            Training Timeline
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {records.length === 0 ? (
-            <div className="text-center py-12">
-              <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg font-medium text-gray-900 mb-2">No training history found</p>
-              <p className="text-gray-600">Completed lessons will appear here</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Status</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Lesson</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Date</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Instructor</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Attempt</th>
-                    <th className="text-left py-3 font-medium text-gray-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {records.map((record) => {
-                    const isClickable = !!record.booking_id;
-                    const lessonName = record.lesson_id ? lessonNameMap[record.lesson_id] || 'Unknown Lesson' : 'Unknown Lesson';
-                    const instructorName = getInstructorName(record.instructor_id);
-                    const dateDisplay = formatRelativeDate(record.date || record.created_at);
+      {/* Tabs */}
+      <div className="w-full">
+        <Tabs.Root
+          value={selectedTab}
+          onValueChange={setSelectedTab}
+          className="w-full"
+        >
+          <div className="w-full border-b border-gray-200 bg-white rounded-t-md">
+            <Tabs.List
+              className="flex flex-row gap-1 px-2 pt-2 min-h-[48px]"
+              aria-label="Training tabs"
+            >
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <Tabs.Trigger
+                    key={tab.id}
+                    value={tab.id}
+                    className={`inline-flex items-center gap-2 px-4 py-2 pb-1 text-base font-medium border-b-2 border-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400
+                      data-[state=active]:border-indigo-700 data-[state=active]:text-indigo-800
+                      data-[state=inactive]:text-muted-foreground hover:text-indigo-600 whitespace-nowrap`}
+                    style={{ background: "none", boxShadow: "none", borderRadius: 0 }}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span>{tab.label}</span>
+                  </Tabs.Trigger>
+                );
+              })}
+            </Tabs.List>
+          </div>
 
-                    return (
-                      <tr 
-                        key={record.id} 
-                        className={`border-b border-gray-100 hover:bg-gray-50 ${isClickable ? 'cursor-pointer' : ''}`}
-                        onClick={isClickable ? () => router.push(`/dashboard/bookings/debrief/view/${record.booking_id}`) : undefined}
-                      >
-                        <td className="py-3 pr-4">
-                          <StatusBadge status={record.status} />
-                        </td>
-                        <td className="py-3 pr-4 font-medium text-gray-900">
-                          <div className="flex items-center gap-2">
-                            <BookOpen className="w-4 h-4 text-gray-500" />
-                            <span className="truncate">{lessonName}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 pr-4 text-sm">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-gray-500" />
-                            <span className="font-medium">{dateDisplay}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 pr-4 text-sm">
-                          <div className="flex items-center gap-2">
-                            <UserIcon className="w-4 h-4 text-gray-500" />
-                            <span className="max-w-[120px] truncate">{instructorName}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 pr-4 text-sm">
-                          <span className="text-gray-600 font-medium">
-                            {formatAttemptNumber(record.attempt)}
-                          </span>
-                        </td>
-                        <td className="py-3">
-                          {isClickable ? (
-                            <Button variant="outline" size="sm">
-                              <Eye className="w-4 h-4 mr-2" />
-                              View
-                            </Button>
-                          ) : (
-                            <span className="text-gray-400 text-sm">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <div className="w-full">
+            <Tabs.Content value="lessons" className="h-full w-full">
+              {selectedTab === "lessons" && (
+                <LessonProgressTab
+                  memberId={memberId}
+                  records={records}
+                  lessons={lessons}
+                  instructors={instructors}
+                  loading={false}
+                  error={null}
+                  dateRange={dateRange}
+                  setDateRange={setDateRange}
+                  expandedRows={expandedRows}
+                  toggleRowExpansion={toggleRowExpansion}
+                />
+              )}
+            </Tabs.Content>
+
+            <Tabs.Content value="exams" className="h-full w-full">
+              {selectedTab === "exams" && (
+                <ExamHistoryTab
+                  memberId={memberId}
+                  syllabi={syllabi}
+                  examResults={examResults}
+                  setExamResults={setExamResults}
+                  examExpanded={examExpanded}
+                  setExamExpanded={setExamExpanded}
+                />
+              )}
+            </Tabs.Content>
+          </div>
+        </Tabs.Root>
+      </div>
     </div>
   );
-} 
+}
