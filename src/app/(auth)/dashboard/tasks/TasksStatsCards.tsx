@@ -11,7 +11,7 @@ export default function TasksStatsCards({ tasks }: TasksStatsCardsProps) {
   const safeTasks = Array.isArray(tasks) ? tasks : [];
   const total = safeTasks.length;
   const completed = safeTasks.filter(task => task.status === "completed").length;
-  const pending = safeTasks.filter(task => task.status === "pending").length;
+  const assigned = safeTasks.filter(task => task.status === "assigned").length;
   const overdue = safeTasks.filter(task => {
     if (!task.due_date || task.status === "completed") return false;
     const dueDate = new Date(task.due_date);
@@ -41,8 +41,8 @@ export default function TasksStatsCards({ tasks }: TasksStatsCardsProps) {
             <Clock className="w-4 h-4 text-yellow-600" />
           </div>
           <div>
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pending</p>
-            <p className="text-xl font-bold text-gray-900">{pending}</p>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Assigned</p>
+            <p className="text-xl font-bold text-gray-900">{assigned}</p>
           </div>
         </div>
       </div>

@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import * as Tabs from "@radix-ui/react-tabs";
-import { User, Mail, Award, Activity, FileText, Upload, Clock, CalendarCheck2, ActivitySquare, Stethoscope, Settings, Briefcase, Calendar as CalendarIcon, UserCog, Shield, Info } from "lucide-react";
+import { User, Mail, Award, Activity, FileText, Upload, Clock, CalendarCheck2, ActivitySquare, Stethoscope, Settings, Briefcase, Calendar as CalendarIcon, UserCog, Shield } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,7 +26,6 @@ import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { useUserRoles, useAssignRole, useRemoveRole } from '@/hooks/use-user-roles';
 import { useCanManageRoles } from '@/hooks/use-can-manage-roles';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 const InstructorFlightTypeRatesTable = dynamic(() => import("@/components/InstructorFlightTypeRatesTable"), { ssr: false });
 
 const tabItems = [
@@ -296,7 +295,7 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
         </div>
         <div className="w-full p-8">
           <Tabs.Content value="license" className="w-full">
-            <form onSubmit={handleSubmit(onSave)} className="space-y-8">
+            <form id="instructor-form" onSubmit={handleSubmit(onSave)} className="space-y-8">
               {/* Header with Save/Undo buttons */}
               <div className="flex flex-row items-center justify-between">
                 <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900">
@@ -660,9 +659,17 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
                 <Settings className="w-6 h-6 text-indigo-600" />
                 Instructor Settings
               </h2>
+              <div className="flex gap-2 items-center">
+                <Button type="submit" disabled={!isDirty} size="sm" className="min-w-[100px] font-semibold" form="instructor-settings-form">
+                  Save Settings
+                </Button>
+                <Button type="button" variant="outline" size="sm" disabled={!isDirty} onClick={() => reset()}>
+                  Undo
+                </Button>
+              </div>
             </div>
 
-            <form onSubmit={handleSubmit(onSave)} className="space-y-8">
+            <form id="instructor-settings-form" onSubmit={handleSubmit(onSave)} className="space-y-8">
               {/* Role Management Section */}
               <div className="space-y-4">
                 <h3 className="text-base font-medium text-gray-900 border-b border-gray-200 pb-2 flex items-center gap-2">
@@ -671,64 +678,37 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                            <UserCog className="w-4 h-4 text-indigo-500" />
-                            System Role
-                            <Info className="w-3 h-3 text-gray-400" />
-                          </label>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Controls what actions this user can perform in the system</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <UserCog className="w-4 h-4 text-indigo-500" />
+                      System Role
+                    </label>
+
                     {rolesLoading ? (
                       <div className="h-10 bg-gray-100 rounded animate-pulse"></div>
                     ) : (
-                      <div className="space-y-3">
-                        <Select
-                          value={currentRole || 'none'}
-                          onValueChange={handleRoleChange}
-                          disabled={!canManageRoles || assignRoleMutation.isPending || removeRoleMutation.isPending}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select a role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none" className="py-2">
-                              <span className="font-medium text-gray-700">No role assigned</span>
+                      <Select
+                        value={currentRole || 'none'}
+                        onValueChange={handleRoleChange}
+                        disabled={!canManageRoles || assignRoleMutation.isPending || removeRoleMutation.isPending}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No role assigned</SelectItem>
+                          {availableRoles.map((role) => (
+                            <SelectItem key={role.value} value={role.value}>
+                              {role.label}
                             </SelectItem>
-                            {availableRoles.map((role) => (
-                              <SelectItem key={role.value} value={role.value} className="py-2">
-                                <span className="font-medium">{role.label}</span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        
-                        {currentRole && currentRole !== 'none' && (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="secondary" className="text-xs">
-                                Current: {availableRoles.find(r => r.value === currentRole)?.label || currentRole}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-gray-600">
-                              {availableRoles.find(r => r.value === currentRole)?.description}
-                            </p>
-                          </div>
-                        )}
-                        
-                        {!canManageRoles && (
-                          <p className="text-xs text-gray-500">
-                            You need admin or owner permissions to change roles
-                          </p>
-                        )}
-                      </div>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+
+                    {!canManageRoles && (
+                      <p className="text-xs text-gray-500">
+                        You need admin or owner permissions to change roles
+                      </p>
                     )}
                   </div>
                 </div>
@@ -810,14 +790,6 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
                   </div>
                 </div>
                 
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" disabled={!isDirty} size="sm" className="min-w-[100px] font-semibold">
-                    Save Settings
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" disabled={!isDirty} onClick={() => reset()}>
-                    Undo
-                  </Button>
-                </div>
               </div>
             </form>
 

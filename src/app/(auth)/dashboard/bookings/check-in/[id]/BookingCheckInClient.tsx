@@ -66,6 +66,11 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
   const [chargeableTab, setChargeableTab] = useState<'landing_fee' | 'airways_fees' | 'other'>('landing_fee');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  // Determine if this is a solo or dual flight based on flight type
+  const instructionType = booking.flight_type?.instruction_type;
+  const isSoloFlight = instructionType === 'solo';
+  const isDualFlight = instructionType === 'dual';
+
   const handleCalculateCharges = useCallback(async (details: {
     chargeTime: number;
     aircraftRate: number;
@@ -152,44 +157,82 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
     });
   }, [invoice, invoiceItems, booking.id, completeBooking, resetComplete]);
 
-  // Show success modal when booking is completed
-  React.useEffect(() => {
-    if (completeSuccess) {
-      setShowSuccessModal(true);
-    }
-  }, [completeSuccess]);
-
   // Use optimistic data if available, otherwise use actual data
-  // Smart merging: if we have optimistic data from calculate charges, but the actual invoiceItems 
+  // Smart merging: if we have optimistic data from calculate charges, but the actual invoiceItems
   // has more items (from adding chargeables), merge them
   const mergedInvoiceItems = useMemo(() => {
-    if (optimisticData?.invoiceItems && invoiceItems.length > optimisticData.invoiceItems.length) {
-      // User has added chargeables after calculating charges
-      // Merge the optimistic calculate data with the new chargeable items
+    // If we have optimistic data from calculate charges
+    if (optimisticData?.invoiceItems) {
+      // Check if there are additional items in invoiceItems that aren't in optimisticData
       const calculateItemIds = new Set(optimisticData.invoiceItems.map(item => item.id));
       const additionalItems = invoiceItems.filter((item: InvoiceItem) => !calculateItemIds.has(item.id));
-      return [...optimisticData.invoiceItems, ...additionalItems];
+
+      // Always merge additional items, even if there are equal or fewer items
+      // This handles the case where optimistic items from addItem are added to invoiceItems
+      if (additionalItems.length > 0) {
+        return [...optimisticData.invoiceItems, ...additionalItems];
+      }
+
+      return optimisticData.invoiceItems;
     }
-    return optimisticData?.invoiceItems || lastCalculateResult?.invoiceItems || invoiceItems;
+
+    // If we have calculate result data but no current optimistic data
+    if (lastCalculateResult?.invoiceItems) {
+      const calculateItemIds = new Set(lastCalculateResult.invoiceItems.map(item => item.id));
+      const additionalItems = invoiceItems.filter((item: InvoiceItem) => !calculateItemIds.has(item.id));
+
+      if (additionalItems.length > 0) {
+        return [...lastCalculateResult.invoiceItems, ...additionalItems];
+      }
+
+      return lastCalculateResult.invoiceItems;
+    }
+
+    // Fallback to actual invoiceItems
+    return invoiceItems;
   }, [optimisticData?.invoiceItems, lastCalculateResult?.invoiceItems, invoiceItems]);
 
   const displayInvoiceItems = mergedInvoiceItems;
   
-  // Recalculate totals if we merged additional items
+  // Recalculate totals based on merged items
   const displayTotals = useMemo(() => {
-    if (mergedInvoiceItems === invoiceItems || (optimisticData?.invoiceItems && mergedInvoiceItems.length === optimisticData.invoiceItems.length)) {
-      // No merging happened, use existing totals
-      return optimisticData?.totals || lastCalculateResult?.totals || { subtotal, totalTax, total };
-    } else {
-      // We merged additional items, recalculate totals
+    // Check if we merged additional items by comparing against base data
+    const hasAdditionalItems =
+      (optimisticData?.invoiceItems && mergedInvoiceItems.length > optimisticData.invoiceItems.length) ||
+      (lastCalculateResult?.invoiceItems && !optimisticData?.invoiceItems && mergedInvoiceItems.length > lastCalculateResult.invoiceItems.length) ||
+      (!optimisticData?.invoiceItems && !lastCalculateResult?.invoiceItems);
+
+    if (hasAdditionalItems) {
+      // We have additional items, recalculate totals from merged items
       const mergedSubtotal = mergedInvoiceItems.reduce((sum: number, item: InvoiceItem) => sum + (item.amount || 0), 0);
       const mergedTotalTax = mergedInvoiceItems.reduce((sum: number, item: InvoiceItem) => sum + (item.tax_amount || 0), 0);
       const mergedTotal = mergedInvoiceItems.reduce((sum: number, item: InvoiceItem) => sum + (item.line_total || 0), 0);
       return { subtotal: mergedSubtotal, totalTax: mergedTotalTax, total: mergedTotal };
+    } else {
+      // No additional items, use existing calculated totals
+      return optimisticData?.totals || lastCalculateResult?.totals || { subtotal, totalTax, total };
     }
-  }, [mergedInvoiceItems, optimisticData?.totals, lastCalculateResult?.totals, subtotal, totalTax, total, invoiceItems, optimisticData?.invoiceItems]);
+  }, [mergedInvoiceItems, optimisticData?.invoiceItems, optimisticData?.totals, lastCalculateResult?.invoiceItems, lastCalculateResult?.totals, subtotal, totalTax, total]);
   
   const displayInvoice = optimisticData?.invoice || lastCalculateResult?.invoice || invoice;
+
+  // Show success modal when booking is completed, but only for dual flights
+  // Solo flights should skip the debrief modal and go directly to invoice/payment
+  React.useEffect(() => {
+    if (completeSuccess) {
+      if (isDualFlight) {
+        setShowSuccessModal(true);
+      } else if (isSoloFlight) {
+        // For solo flights, navigate directly to invoice/payment if available
+        if (displayInvoice?.id) {
+          router.push(`/dashboard/invoices/view/${displayInvoice.id}`);
+        }
+      } else {
+        // For other types (trial, etc.), show the modal as fallback
+        setShowSuccessModal(true);
+      }
+    }
+  }, [completeSuccess, isDualFlight, isSoloFlight, displayInvoice?.id, router]);
 
   // Show loading state only for critical data
   const isLoading = invoiceLoading && flightTypesLoading;
@@ -399,7 +442,8 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
             {completeError && <div className="text-red-600 text-sm">{completeError}</div>}
             {completeSuccess && (
               <div className="flex items-center gap-1 text-green-600 text-sm font-medium">
-                <CheckCircle2 className="w-4 h-4" /> Booking completed successfully!
+                <CheckCircle2 className="w-4 h-4" />
+                {isSoloFlight ? 'Solo flight completed successfully!' : 'Booking completed successfully!'}
               </div>
             )}
             <button

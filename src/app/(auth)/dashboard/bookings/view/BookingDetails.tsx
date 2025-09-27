@@ -59,9 +59,9 @@ interface BookingDetailsProps {
   bookings: Booking[]; // All bookings for conflict checking
 }
 
-// Helper to generate 30-min interval times
-const TIME_OPTIONS = Array.from({ length: ((23 - 7) * 2) + 3 }, (_, i) => {
-  const hour = 7 + Math.floor(i / 2);
+// Helper to generate 30-min interval times (24-hour coverage)
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
+  const hour = Math.floor(i / 2);
   const minute = i % 2 === 0 ? "00" : "30";
   return `${hour.toString().padStart(2, "0")}:${minute}`;
 });
@@ -76,6 +76,21 @@ function getUtcIsoString(dateStr: string, timeStr: string): string | null {
   return local.toISOString();
 }
 
+// Helper to extract date from UTC timestamp converted to local time
+function extractDateFromUtc(utcTimestamp: string): string {
+  if (!utcTimestamp) return "";
+  // Convert UTC timestamp to local time and extract date
+  const localDate = new Date(utcTimestamp);
+  return format(localDate, "yyyy-MM-dd");
+}
+
+// Helper to extract time from UTC timestamp converted to local time
+function extractTimeFromUtc(utcTimestamp: string): string {
+  if (!utcTimestamp) return "";
+  // Convert UTC timestamp to local time and extract time
+  const localDate = new Date(utcTimestamp);
+  return format(localDate, "HH:mm");
+}
 
 // Helper to convert User to MemberForHook
 function convertUserToMemberForHook(user?: User): MemberForHook {
@@ -120,10 +135,10 @@ export default function BookingDetails({ booking, members, instructors, aircraft
   
   const { control, handleSubmit, reset, formState, watch, setValue } = useForm<BookingDetailsFormData>({
     defaultValues: {
-      start_date: booking?.start_time ? format(parseISO(booking.start_time), "yyyy-MM-dd") : "",
-      start_time: booking?.start_time ? format(parseISO(booking.start_time), "HH:mm") : "",
-      end_date: booking?.end_time ? format(parseISO(booking.end_time), "yyyy-MM-dd") : "",
-      end_time: booking?.end_time ? format(parseISO(booking.end_time), "HH:mm") : "",
+      start_date: booking?.start_time ? extractDateFromUtc(booking.start_time) : "",
+      start_time: booking?.start_time ? extractTimeFromUtc(booking.start_time) : "",
+      end_date: booking?.end_time ? extractDateFromUtc(booking.end_time) : "",
+      end_time: booking?.end_time ? extractTimeFromUtc(booking.end_time) : "",
       member: booking?.user_id || "",
       instructor: booking?.instructor_id || PLACEHOLDER_VALUES.INSTRUCTOR,
       aircraft: booking?.aircraft_id || PLACEHOLDER_VALUES.AIRCRAFT,
@@ -313,10 +328,10 @@ export default function BookingDetails({ booking, members, instructors, aircraft
           {!isReadOnly && (
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={() => reset({
-                start_date: booking?.start_time ? format(parseISO(booking.start_time), "yyyy-MM-dd") : "",
-                start_time: booking?.start_time ? format(parseISO(booking.start_time), "HH:mm") : "",
-                end_date: booking?.end_time ? format(parseISO(booking.end_time), "yyyy-MM-dd") : "",
-                end_time: booking?.end_time ? format(parseISO(booking.end_time), "HH:mm") : "",
+                start_date: booking?.start_time ? extractDateFromUtc(booking.start_time) : "",
+                start_time: booking?.start_time ? extractTimeFromUtc(booking.start_time) : "",
+                end_date: booking?.end_time ? extractDateFromUtc(booking.end_time) : "",
+                end_time: booking?.end_time ? extractTimeFromUtc(booking.end_time) : "",
                 member: booking?.user_id || "",
                 instructor: booking?.instructor_id || PLACEHOLDER_VALUES.INSTRUCTOR,
                 aircraft: booking?.aircraft_id || PLACEHOLDER_VALUES.AIRCRAFT,
@@ -608,8 +623,8 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                   {...field}
                   placeholder="Description"
                   disabled={isReadOnly}
-                  className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top"
-                  rows={4}
+                  className="resize-none h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top"
+                  rows={5}
                 />
               )} />
             </div>
@@ -623,8 +638,8 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                   {...field}
                   placeholder="Important operational notes (e.g., fuel requirements, special instructions, safety notes)"
                   disabled={isReadOnly}
-                  className="resize-none h-16 w-full rounded-md border border-amber-300 bg-amber-50/50 px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-amber-500 focus-visible:ring-amber-500/20 focus-visible:ring-[3px] outline-none align-top placeholder:text-amber-600/60"
-                  rows={4}
+                  className="resize-none h-20 w-full rounded-md border border-amber-300 bg-amber-50/50 px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-amber-500 focus-visible:ring-amber-500/20 focus-visible:ring-[3px] outline-none align-top placeholder:text-amber-600/60"
+                  rows={5}
                 />
               )} />
             </div>

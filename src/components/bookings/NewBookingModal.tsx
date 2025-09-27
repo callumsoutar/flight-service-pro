@@ -60,9 +60,9 @@ import { createClient } from "@/lib/SupabaseBrowserClient";
  * - Allows manual override of calculated end time
  */
 
-// Helper to generate 30-min interval times
-const TIME_OPTIONS = Array.from({ length: ((23 - 7) * 2) + 3 }, (_, i) => {
-  const hour = 7 + Math.floor(i / 2);
+// Helper to generate 30-min interval times (24-hour coverage)
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
+  const hour = Math.floor(i / 2);
   const minute = i % 2 === 0 ? "00" : "30";
   return `${hour.toString().padStart(2, "0")}:${minute}`;
 });
@@ -497,7 +497,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       return;
     }
     
-    // Convert to UTC ISO strings
+    // Convert to UTC ISO strings that preserve the user's intended local time
     const start_time = getUtcIsoString(startDate, startTime);
     const end_time = getUtcIsoString(endDate, endTime);
     if (!start_time || !end_time) {
@@ -865,8 +865,8 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         value={purpose}
                         onChange={e => setPurpose(e.target.value)}
                         placeholder="Description"
-                        className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
-                        rows={4}
+                        className="resize-none h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
+                        rows={5}
                       />
                     </div>
                     <div className="max-w-[340px] w-full">
@@ -891,8 +891,8 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         value={remarks}
                         onChange={e => setRemarks(e.target.value)}
                         placeholder={isRestrictedRole ? "e.g., 'Need less than 80L fuel for weight and balance' or special requirements" : "Enter booking remarks"}
-                        className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
-                        rows={4}
+                        className="resize-none h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
+                        rows={5}
                       />
                     </div>
                   </div>
@@ -1016,8 +1016,8 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         value={purpose}
                         onChange={e => setPurpose(e.target.value)}
                         placeholder="Enter trial flight description"
-                        className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
-                        rows={4}
+                        className="resize-none h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
+                        rows={5}
                       />
                     </div>
                     <div className="max-w-[340px] w-full">
@@ -1042,8 +1042,8 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         value={remarks}
                         onChange={e => setRemarks(e.target.value)}
                         placeholder="Enter internal remarks"
-                        className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
-                        rows={4}
+                        className="resize-none h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
+                        rows={5}
                       />
                     </div>
                   </div>

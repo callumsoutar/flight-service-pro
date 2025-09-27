@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     const taskData = {
       title: body.title,
       description: body.description || null,
-      status: body.status || "pending",
+      status: body.status || "assigned",
       priority: body.priority || "medium",
       category: body.category || "Other",
       due_date: body.due_date || null,

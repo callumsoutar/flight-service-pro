@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
 
     // Process status counts
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pending = statusCounts?.filter((t: any) => t.status === "pending").length || 0;
+    const assigned = statusCounts?.filter((t: any) => t.status === "assigned").length || 0;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const inProgress = statusCounts?.filter((t: any) => t.status === "inProgress").length || 0;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
 
     const stats: TaskStats = {
       total: total || 0,
-      pending,
+      assigned,
       inProgress,
       completed,
       overdue,

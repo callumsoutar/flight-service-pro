@@ -653,8 +653,8 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
                 <textarea
                   {...field}
                   disabled={isReadOnly}
-                  className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top"
-                  rows={4}
+                  className="resize-none h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top"
+                  rows={5}
                 />
               )} />
             </div>
@@ -664,8 +664,8 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
                 <textarea
                   {...field}
                   disabled={isReadOnly}
-                  className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top"
-                  rows={4}
+                  className="resize-none h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top"
+                  rows={5}
                 />
               )} />
             </div>

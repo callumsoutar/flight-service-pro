@@ -35,7 +35,7 @@ interface TaskDetailsModalProps {
   onTaskUpdate?: (updatedTask: Task) => void;
 }
 
-const TASK_STATUSES: TaskStatus[] = ["pending", "inProgress", "completed", "overdue"];
+const TASK_STATUSES: TaskStatus[] = ["assigned", "inProgress", "completed", "overdue"];
 const TASK_PRIORITIES: TaskPriority[] = ["low", "medium", "high"];
 const TASK_CATEGORIES: TaskCategory[] = ["Safety", "Training", "Maintenance", "Administrative", "Other"];
 
@@ -60,7 +60,7 @@ const TASK_CATEGORIES: TaskCategory[] = ["Safety", "Training", "Maintenance", "A
 
 const getStatusDisplayText = (status: TaskStatus): string => {
   switch (status) {
-    case "pending": return "Pending";
+    case "assigned": return "Assigned";
     case "inProgress": return "In Progress";
     case "completed": return "Completed";
     case "overdue": return "Overdue";
@@ -83,7 +83,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   // Temporary edit values
   const [tempTitle, setTempTitle] = useState("");
   const [tempDescription, setTempDescription] = useState("");
-  const [tempStatus, setTempStatus] = useState<TaskStatus>("pending");
+  const [tempStatus, setTempStatus] = useState<TaskStatus>("assigned");
   const [tempPriority, setTempPriority] = useState<TaskPriority>("medium");
   const [tempCategory, setTempCategory] = useState<TaskCategory>("Other");
   const [tempDueDate, setTempDueDate] = useState<Date | undefined>(undefined);

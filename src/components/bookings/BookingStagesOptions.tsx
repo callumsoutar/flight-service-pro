@@ -171,7 +171,7 @@ export default function BookingStagesOptions({ bookingId, bookingStatus, instruc
                 size="sm"
               />
             </DropdownMenuItem>
-          ) : (
+          ) : bookingStatus !== 'complete' && (
             <DropdownMenuItem onClick={() => setCancelOpen(true)} className="text-red-600">
               <X className="w-4 h-4 mr-2" />
               Cancel Booking

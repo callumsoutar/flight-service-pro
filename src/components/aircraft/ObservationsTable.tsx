@@ -84,14 +84,13 @@ export function ObservationsTable({ aircraftId }: ObservationsTableProps) {
   if (isError) {
     return <div className="text-red-600">Failed to load observations.</div>;
   }
-  if (!observations || observations.length === 0) {
-    return <div className="text-muted-foreground py-8 text-center">No observations found for this aircraft.</div>;
-  }
 
   // Filter observations based on view
-  const filteredObservations = view === 'open'
-    ? observations.filter(o => o.observation_stage !== 'closed')
-    : observations;
+  const filteredObservations = observations && observations.length > 0
+    ? (view === 'open'
+        ? observations.filter(o => o.observation_stage !== 'closed')
+        : observations)
+    : [];
 
   return (
     <div>
@@ -121,9 +120,15 @@ export function ObservationsTable({ aircraftId }: ObservationsTableProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filteredObservations.length === 0 && view === 'open' ? (
+          {filteredObservations.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No open observations</TableCell>
+              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                {!observations || observations.length === 0
+                  ? "No observations found for this aircraft."
+                  : view === 'open'
+                    ? "No open observations"
+                    : "No observations"}
+              </TableCell>
             </TableRow>
           ) : (
             filteredObservations.map((obs) => (

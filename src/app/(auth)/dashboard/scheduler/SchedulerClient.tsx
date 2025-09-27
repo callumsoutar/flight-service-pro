@@ -5,7 +5,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { CalendarIcon, ChevronLeft, ChevronRight, X, Plane, Clock, User, Plane as PlaneIcon, AlertCircle, Loader2 } from "lucide-react";
+import { CalendarIcon, ChevronLeft, ChevronRight, X, Plane, Clock, User, Plane as PlaneIcon, AlertCircle, Loader2, Check } from "lucide-react";
 import { format } from "date-fns";
 import { NewBookingModal } from "@/components/bookings/NewBookingModal";
 import { CancelBookingModal } from "@/components/bookings/CancelBookingModal";
@@ -119,6 +119,7 @@ const FlightScheduler = () => {
   const [_bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isDateChanging, setIsDateChanging] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // State for aircraft
@@ -280,10 +281,12 @@ const FlightScheduler = () => {
   const timeSlots = generateTimeSlots();
 
   // Fetch all data - restored from original
-  const fetchAllData = useCallback(async (isInitialLoad = false) => {
+  const fetchAllData = useCallback(async (isInitialLoad = false, isDateChange = false) => {
     setError(null);
     if (isInitialLoad) {
       setLoading(true);
+    } else if (isDateChange) {
+      setIsDateChanging(true);
     } else {
       setRefreshing(true);
     }
@@ -392,15 +395,27 @@ const FlightScheduler = () => {
       const bookingsByResource: Record<string, Booking[]> = {};
       const convertedBookings: Booking[] = [];
       
+      // Debug logging for booking processing
+      console.log(`Processing ${bookingsData.bookings?.length || 0} bookings for date ${dateStr}`);
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (bookingsData.bookings || []).forEach((booking: any) => {
         try {
-          if (!booking.start_time || !booking.end_time) return;
+          if (!booking.start_time || !booking.end_time) {
+            console.log('Skipping booking - missing start/end time:', booking.id);
+            return;
+          }
           const bookingDate = new Date(booking.start_time);
-          if (isNaN(bookingDate.getTime())) return;
+          if (isNaN(bookingDate.getTime())) {
+            console.log('Skipping booking - invalid date:', booking.id, booking.start_time);
+            return;
+          }
           const bookingDateStr = format(bookingDate, 'yyyy-MM-dd');
 
+          console.log(`Booking ${booking.id}: date=${bookingDateStr}, targetDate=${dateStr}, status=${booking.status}`);
+
           if (bookingDateStr === dateStr && ['confirmed', 'flying', 'complete', 'unconfirmed'].includes(booking.status || '')) {
+            console.log(`Processing booking ${booking.id} - matches date and status criteria`);
             const startTime = bookingDate.getHours() + (bookingDate.getMinutes() / 60);
         const endTime = new Date(booking.end_time);
             if (isNaN(endTime.getTime())) return;
@@ -434,19 +449,43 @@ const FlightScheduler = () => {
             };
 
             convertedBookings.push(schedulerBooking);
+            console.log(`Added booking ${booking.id} to convertedBookings:`, schedulerBooking);
 
-            // Group by instructor
+            // Group by instructor - show booking even if instructor not currently scheduled
             if (booking.instructor_id) {
               const instructor = filteredInstructors.find((inst: Instructor) => inst.id === booking.instructor_id);
               const instructorName = instructor ? instructor.name : schedulerBooking.instructor;
-              if (!bookingsByResource[instructorName!]) {
-                bookingsByResource[instructorName!] = [];
+
+              // If instructor not found in filtered list, still show the booking with original instructor name
+              const displayName = instructorName || schedulerBooking.instructor;
+
+              if (!bookingsByResource[displayName]) {
+                bookingsByResource[displayName] = [];
               }
               if (instructor) schedulerBooking.instructor = instructor.name!;
-              bookingsByResource[instructorName!].push(schedulerBooking);
+              bookingsByResource[displayName].push(schedulerBooking);
+
+              // Add instructor to available list if not already there (for display purposes)
+              if (!instructor && booking.instructor) {
+                const tempInstructor: Instructor = {
+                  id: booking.instructor_id,
+                  user_id: booking.instructor.user_id || '',
+                  name: schedulerBooking.instructor,
+                  first_name: booking.instructor.first_name,
+                  last_name: booking.instructor.last_name,
+                  instructor_category: booking.instructor.instructor_category || null
+                };
+                setAvailableInstructors(prev => {
+                  const exists = prev.find(inst => inst.id === booking.instructor_id);
+                  if (!exists) {
+                    return [...prev, tempInstructor];
+                  }
+                  return prev;
+                });
+              }
             }
 
-            // Group by aircraft
+            // Group by aircraft - show booking even if aircraft not marked as online
             if (booking.aircraft_id) {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const aircraftMatch = onlineAircraft.find((aircraftData: any) =>
@@ -460,6 +499,32 @@ const FlightScheduler = () => {
                 bookingsByResource[aircraftDisplay] = [];
               }
               bookingsByResource[aircraftDisplay].push({ ...schedulerBooking, instructor: schedulerBooking.instructor || 'No Instructor' });
+
+              // Add aircraft to list if not already there (for display purposes)
+              if (!aircraftMatch && booking.aircraft) {
+                const tempAircraft: Aircraft = {
+                  id: booking.aircraft_id,
+                  registration: booking.aircraft.registration,
+                  type: booking.aircraft.type || '',
+                  status: 'active'
+                };
+                setAircraft(prev => {
+                  const exists = prev.find(ac => ac.id === booking.aircraft_id);
+                  if (!exists) {
+                    return [...prev, tempAircraft];
+                  }
+                  return prev;
+                });
+              }
+            }
+
+            // Fallback: if booking has no instructor_id or aircraft_id, show it under a generic category
+            if (!booking.instructor_id && !booking.aircraft_id) {
+              const fallbackKey = 'Unassigned Bookings';
+              if (!bookingsByResource[fallbackKey]) {
+                bookingsByResource[fallbackKey] = [];
+              }
+              bookingsByResource[fallbackKey].push(schedulerBooking);
             }
           }
         } catch (bookingError) {
@@ -487,6 +552,7 @@ const FlightScheduler = () => {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setIsDateChanging(false);
       setAircraftLoading(false);
       setInstructorsLoading(false);
     }
@@ -502,7 +568,7 @@ const FlightScheduler = () => {
   useEffect(() => {
     console.log('Data refresh triggered for date/business hours change');
     if (loading) return; // Skip if initial load is still happening
-    fetchAllData(false);
+    fetchAllData(false, true); // Mark as date change
   }, [selectedDate, businessHours, fetchAllData, loading]);
 
   // Close context menu when clicking outside
@@ -1381,7 +1447,7 @@ const FlightScheduler = () => {
   const renderResourceRow = (resource: Instructor | string, isInstructor = false, endorsements: string | null = null) => {
     const resourceKey = isInstructor ? (resource as Instructor).name : resource as string;
     const resourceBookings = bookingsByResource[resourceKey!] || [];
-    const rowHeight = 42; // Fixed height for all rows (30% reduction from 60px)
+    const rowHeight = 36; // Fixed height for all rows (further reduced for compact display)
     const visibleSlots = getVisibleTimeSlots();
     
     return (
@@ -1643,72 +1709,95 @@ const FlightScheduler = () => {
     );
   }
 
+  // Persistent Header Component (doesn't re-render with scheduler data)
+  const SchedulerHeader = React.memo(() => {
+    return (
+      <div className="bg-white p-4 border-b border-gray-200 rounded-t-lg sticky top-0 z-30">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => {
+                const previousDay = new Date(selectedDate);
+                previousDay.setDate(selectedDate.getDate() - 1);
+                setSelectedDate(previousDay);
+              }}
+              disabled={isDateChanging}
+              className={`text-xl transition-all duration-200 p-1 rounded-full ${
+                isDateChanging
+                  ? 'text-gray-400 cursor-not-allowed'
+                  : 'text-gray-600 hover:text-blue-500 hover:bg-gray-100 active:scale-95'
+              }`}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="font-bold text-lg text-gray-800 hover:text-blue-600 hover:bg-blue-50"
+                >
+                  <CalendarIcon className="w-5 h-5 mr-2" />
+                  {format(selectedDate, "EEEE, dd MMMM yyyy")}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => date && setSelectedDate(date)}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+
+            <button
+              onClick={() => {
+                const nextDay = new Date(selectedDate);
+                nextDay.setDate(selectedDate.getDate() + 1);
+                setSelectedDate(nextDay);
+              }}
+              disabled={isDateChanging}
+              className={`text-xl transition-all duration-200 p-1 rounded-full ${
+                isDateChanging
+                  ? 'text-gray-400 cursor-not-allowed'
+                  : 'text-gray-600 hover:text-blue-500 hover:bg-gray-100 active:scale-95'
+              }`}
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="text-sm">
+            <button
+              onClick={() => setSelectedDate(new Date())}
+              disabled={isDateChanging}
+              className={`px-4 py-2 rounded-full font-medium transition-all duration-200 ${
+                isDateChanging
+                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                  : 'bg-blue-500 hover:bg-blue-600 active:scale-95 cursor-pointer text-white'
+              }`}
+            >
+              Today
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  });
+  SchedulerHeader.displayName = 'SchedulerHeader';
+
   return (
     <SettingsProvider>
       <div className="w-full min-h-screen flex flex-col items-center">
         <div className="w-full max-w-[96vw] px-6 pt-8 pb-12 flex flex-col gap-8">
-          {/* Header Section - restored original style */}
-          <div className="bg-white p-4 border-b border-gray-200 rounded-t-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-                <button 
-                  onClick={() => {
-                    const previousDay = new Date(selectedDate);
-                    previousDay.setDate(selectedDate.getDate() - 1);
-                    setSelectedDate(previousDay);
-                  }}
-                  className="text-xl text-gray-600 hover:text-blue-500 transition-colors duration-200 p-1 rounded-full hover:bg-gray-100"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                
-                <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                      variant="ghost"
-                      className="font-bold text-lg text-gray-800 hover:text-blue-600 hover:bg-blue-50"
-                  >
-                    <CalendarIcon className="w-5 h-5 mr-2" />
-                    {format(selectedDate, "EEEE, dd MMMM yyyy")}
-                  </Button>
-                </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                      onSelect={(date) => date && setSelectedDate(date)}
-                      initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-              
-                <button 
-                onClick={() => {
-                    const nextDay = new Date(selectedDate);
-                    nextDay.setDate(selectedDate.getDate() + 1);
-                    setSelectedDate(nextDay);
-                  }}
-                  className="text-xl text-gray-600 hover:text-blue-500 transition-colors duration-200 p-1 rounded-full hover:bg-gray-100"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="text-sm">
-                <button 
-                  onClick={() => setSelectedDate(new Date())}
-                  className="bg-blue-500 hover:bg-blue-600 transition-colors duration-200 px-4 py-2 rounded-full font-medium cursor-pointer text-white"
-                >
-                  Today
-                </button>
-              </div>
-            </div>
-          </div>
+          {/* Persistent Header */}
+          <SchedulerHeader />
 
-          {/* Main Scheduler */}
+          {/* Main Scheduler - separated from header to prevent unnecessary re-renders */}
           <div className="w-full overflow-hidden mx-auto">
             <div className="relative">
-              {/* Refreshing overlay */}
-              {refreshing && (
+              {/* Refreshing overlay - only show for manual refreshes, not date changes */}
+              {refreshing && !isDateChanging && (
                 <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center rounded-md">
                   <div className="bg-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2">
                     <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
@@ -1717,9 +1806,12 @@ const FlightScheduler = () => {
                 </div>
               )}
 
+
               <div
                 ref={timelineRef}
-                className="w-full bg-white select-none rounded-md overflow-x-auto shadow-lg border min-w-[800px] max-w-full"
+                className={`w-full bg-white select-none rounded-md overflow-x-auto shadow-lg border min-w-[800px] max-w-full transition-opacity duration-300 ${
+                  isDateChanging ? 'opacity-75' : 'opacity-100'
+                }`}
                 onWheel={handleWheelScroll}
               >
               {/* Time Header with Navigation */}
@@ -1918,8 +2010,18 @@ const FlightScheduler = () => {
             <div className="bg-white rounded-lg shadow-lg border border-gray-200 border-l-4 border-l-blue-500 p-3 max-w-xs animate-in fade-in duration-150">
               {/* Header */}
               <div className="border-b border-blue-200 pb-2 mb-2">
-                <h3 className="font-semibold text-gray-900 text-sm">{hoveredBooking.student}</h3>
-                <p className="text-xs text-gray-500">{hoveredBooking.booking_type || 'flight'}</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900 text-sm">{hoveredBooking.student}</h3>
+                    <p className="text-xs text-gray-500">{hoveredBooking.booking_type || 'flight'}</p>
+                  </div>
+                  {/* Green tick for completed bookings */}
+                  {hoveredBooking.status === 'complete' && (
+                    <div className="flex-shrink-0">
+                      <Check className="w-5 h-5 text-green-500" />
+                    </div>
+                  )}
+                </div>
               </div>
               
               {/* Details */}
@@ -1963,12 +2065,12 @@ const FlightScheduler = () => {
                 transform: position.transform
               }}
           >
-            <div className="bg-gray-900 text-white rounded-lg shadow-xl p-3 text-sm">
-              <div className="font-medium">Click to create booking</div>
-              <div className="text-gray-300 text-xs mt-1">
+            <div className="bg-gray-900 text-white rounded-lg shadow-xl p-2 text-xs">
+              <div className="font-medium text-xs">Click to create booking</div>
+              <div className="text-gray-300 text-[10px] mt-1">
                 {hoveredTimeSlot.isInstructor ? 'Instructor' : 'Aircraft'}: {hoveredTimeSlot.resource}
               </div>
-              <div className="text-gray-300 text-xs">
+              <div className="text-gray-300 text-[10px]">
                 Time: {hoveredTimeSlot.timeSlot}
               </div>
             </div>
@@ -2005,13 +2107,16 @@ const FlightScheduler = () => {
                 View Contact Details
               </button>
               
-              <button
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-150"
-                onClick={() => handleContextMenuAction('change-aircraft', contextMenu.booking)}
-              >
-                <Plane className="w-4 h-4" />
-                Change Aircraft
-              </button>
+              {/* Change Aircraft - only show if booking is not complete */}
+              {contextMenu.booking.status !== 'complete' && (
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-150"
+                  onClick={() => handleContextMenuAction('change-aircraft', contextMenu.booking)}
+                >
+                  <Plane className="w-4 h-4" />
+                  Change Aircraft
+                </button>
+              )}
 
               {/* Confirm Booking - only show for unconfirmed bookings */}
               {contextMenu.booking.status === 'unconfirmed' && (

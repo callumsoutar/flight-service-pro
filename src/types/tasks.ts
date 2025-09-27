@@ -1,4 +1,4 @@
-export type TaskStatus = "pending" | "inProgress" | "completed" | "overdue";
+export type TaskStatus = "assigned" | "inProgress" | "completed" | "overdue";
 export type TaskPriority = "low" | "medium" | "high";
 export type TaskCategory = "Safety" | "Training" | "Maintenance" | "Administrative" | "Other";
 
@@ -132,7 +132,7 @@ export interface TaskFilters {
 
 export interface TaskStats {
   total: number;
-  pending: number;
+  assigned: number;
   inProgress: number;
   completed: number;
   overdue: number;
@@ -145,7 +145,7 @@ export interface TaskStats {
 }
 
 // Constants for UI
-export const TASK_STATUSES: TaskStatus[] = ["pending", "inProgress", "completed", "overdue"];
+export const TASK_STATUSES: TaskStatus[] = ["assigned", "inProgress", "completed", "overdue"];
 export const TASK_PRIORITIES: TaskPriority[] = ["low", "medium", "high"];
 export const TASK_CATEGORIES: TaskCategory[] = ["Safety", "Training", "Maintenance", "Administrative", "Other"];
 
@@ -155,7 +155,7 @@ export const getTaskStatusColor = (status: TaskStatus): string => {
     case "completed": return "bg-green-100 text-green-800 border-green-200";
     case "overdue": return "bg-red-100 text-red-800 border-red-200";
     case "inProgress": return "bg-blue-100 text-blue-800 border-blue-200";
-    case "pending": return "bg-yellow-100 text-yellow-800 border-yellow-200";
+    case "assigned": return "bg-yellow-100 text-yellow-800 border-yellow-200";
     default: return "bg-gray-100 text-gray-800 border-gray-200";
   }
 };
@@ -174,7 +174,7 @@ export const getTaskStatusIcon = (status: TaskStatus): string => {
     case "completed": return "CheckCircle";
     case "overdue": return "AlertTriangle";
     case "inProgress": return "Clock";
-    case "pending": return "Clock";
+    case "assigned": return "Clock";
     default: return "Clock";
   }
 };

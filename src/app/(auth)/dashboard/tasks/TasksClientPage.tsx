@@ -12,7 +12,6 @@ import { Task } from "@/types/tasks";
 
 const statusConfig = {
   assigned: { label: "Assigned", color: "bg-purple-100 text-purple-800 border-purple-200" },
-  pending: { label: "Pending", color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
   completed: { label: "Completed", color: "bg-green-100 text-green-800 border-green-200" },
   overdue: { label: "Overdue", color: "bg-red-100 text-red-800 border-red-200" },
   inProgress: { label: "In Progress", color: "bg-blue-100 text-blue-800 border-blue-200" }
@@ -160,7 +159,7 @@ export default function TasksClientPage({ }: { tasks: Task[] }) {
             </div>
             <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
               <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-              <span className="text-sm font-medium text-gray-700">Pending: {safeTasks.filter(t => t.status === "pending").length}</span>
+              <span className="text-sm font-medium text-gray-700">Assigned: {safeTasks.filter(t => t.status === "assigned").length}</span>
             </div>
             <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>

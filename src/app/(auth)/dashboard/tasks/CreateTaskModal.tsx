@@ -42,7 +42,7 @@ interface CreateTaskModalProps {
   onTaskCreate?: (newTask: Task) => void;
 }
 
-const TASK_STATUSES: TaskStatus[] = ["pending", "inProgress", "completed", "overdue"];
+const TASK_STATUSES: TaskStatus[] = ["assigned", "inProgress", "completed", "overdue"];
 const TASK_PRIORITIES: TaskPriority[] = ["low", "medium", "high"];
 const TASK_CATEGORIES: TaskCategory[] = ["Safety", "Training", "Maintenance", "Administrative", "Other"];
 
@@ -77,7 +77,7 @@ const TASK_CATEGORIES: TaskCategory[] = ["Safety", "Training", "Maintenance", "A
 
 const getStatusDisplayText = (status: TaskStatus): string => {
   switch (status) {
-    case "pending": return "Pending";
+    case "assigned": return "Assigned";
     case "inProgress": return "In Progress";
     case "completed": return "Completed";
     case "overdue": return "Overdue";
@@ -93,7 +93,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   // Form fields for new task
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [status, setStatus] = useState<TaskStatus>("pending");
+  const [status, setStatus] = useState<TaskStatus>("assigned");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [category, setCategory] = useState<TaskCategory>("Other");
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
@@ -191,7 +191,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     // Reset form fields
     setTitle("");
     setDescription("");
-    setStatus("pending");
+    setStatus("assigned");
     setPriority("medium");
     setCategory("Other");
     setDueDate(undefined);

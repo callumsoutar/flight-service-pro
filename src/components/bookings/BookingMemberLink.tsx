@@ -12,15 +12,16 @@ interface BookingMemberLinkProps {
 }
 
 export default function BookingMemberLink({ userId, firstName, lastName, roleLabel = "Member" }: BookingMemberLinkProps) {
-  const { data: currentUserData } = useCurrentUserRoles();
+  const { data: currentUserData, isLoading } = useCurrentUserRoles();
   const name = [firstName, lastName].filter(Boolean).join(" ") || userId;
-  
+
   // Check if current user has permission to view member details
   const isPrivileged = currentUserData?.role && ['admin', 'owner', 'instructor'].includes(currentUserData.role);
 
   // Only link to member view if user is privileged (admin, owner, instructor)
   // Members and students cannot access member view pages, even their own
-  const canViewMember = isPrivileged;
+  // During loading, default to no link to prevent hydration mismatch
+  const canViewMember = !isLoading && isPrivileged;
 
   return (
     <div className="mt-2 mb-4 flex items-center gap-2">
