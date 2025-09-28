@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import BookingsTable from './BookingsTable';
+import BookingsClientView from '@/components/bookings/BookingsClientView';
 import { Button } from '@/components/ui/button';
 import { CalendarDays, Clock, AlertCircle, Send } from 'lucide-react';
 import { NewBookingModal } from '@/components/bookings/NewBookingModal';
@@ -16,6 +16,7 @@ interface BookingsPageClientProps {
   members: MemberOption[];
   instructors: InstructorOption[];
   aircraftList: AircraftOption[];
+  userRole: string;
 }
 
 function getStatusCounts(bookings: Booking[]) {
@@ -30,7 +31,7 @@ function getStatusCounts(bookings: Booking[]) {
   return counts;
 }
 
-export default function BookingsPageClient({ bookings, members, instructors, aircraftList }: BookingsPageClientProps) {
+export default function BookingsPageClient({ bookings, members, instructors, aircraftList, userRole }: BookingsPageClientProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const statusCounts = getStatusCounts(bookings);
 
@@ -71,7 +72,7 @@ export default function BookingsPageClient({ bookings, members, instructors, air
           <p className="text-3xl font-bold text-blue-600">{statusCounts.flying}</p>
         </div>
       </div>
-      <BookingsTable bookings={bookings} members={members} instructors={instructors} aircraftList={aircraftList} />
+      <BookingsClientView bookings={bookings} members={members} instructors={instructors} aircraftList={aircraftList} userRole={userRole} />
       <NewBookingModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}

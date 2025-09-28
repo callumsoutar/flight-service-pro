@@ -33,13 +33,39 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
   }
 
-  // Only instructors and above can access observations (safety data)
+  // Observations access control - safety-critical data
   const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+  const isMember = userRole && userRole === 'member';
 
-  if (!isPrivilegedUser) {
+  if (!isPrivilegedUser && !isMember) {
     return NextResponse.json({ 
-      error: 'Forbidden: Observations access requires instructor role or above' 
+      error: 'Forbidden: Observations access requires member role or above' 
     }, { status: 403 });
+  }
+
+  // Members can only view observations for aircraft they have bookings for
+  if (isMember) {
+    const aircraft_id = new URL(req.url).searchParams.get('aircraft_id');
+    
+    if (!aircraft_id) {
+      return NextResponse.json({ 
+        error: 'Forbidden: Members must specify aircraft_id to view observations' 
+      }, { status: 403 });
+    }
+
+    // Verify the member has a booking for this aircraft
+    const { data: userBooking, error: bookingError } = await supabase
+      .from("bookings")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("aircraft_id", aircraft_id)
+      .limit(1);
+
+    if (bookingError || !userBooking || userBooking.length === 0) {
+      return NextResponse.json({ 
+        error: 'Forbidden: You can only view observations for aircraft you have bookings for' 
+      }, { status: 403 });
+    }
   }
   
   const { searchParams } = new URL(req.url);

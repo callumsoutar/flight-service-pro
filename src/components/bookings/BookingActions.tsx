@@ -1,8 +1,8 @@
 
 "use client";
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -43,6 +43,13 @@ export default function BookingActions({
   const actualBookingId = bookingId || booking?.id;
   const router = useRouter();
 
+  // Track component mounting to prevent hydration mismatch
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // React hooks must be called before any early returns
   const { data: authorization } = useFlightAuthorizationByBooking(actualBookingId || '');
 
@@ -75,6 +82,9 @@ export default function BookingActions({
 
   // Helper function to get authorization status display
   const getAuthorizationStatusText = () => {
+    // Don't render dynamic content until mounted to prevent hydration mismatch
+    if (!mounted) return "Flight Authorization";
+
     // Standard authorization status text (override status shown in badge instead)
     if (!authorization) return "Start Flight Authorization";
     switch (authorization.status) {
@@ -88,6 +98,9 @@ export default function BookingActions({
 
   // Helper function to get authorization status badge
   const getAuthorizationStatusBadge = () => {
+    // Don't render until component is mounted to prevent hydration mismatch
+    if (!mounted) return null;
+
     // Show override badge if authorization is overridden
     if (booking.authorization_override) {
       return (
@@ -96,7 +109,7 @@ export default function BookingActions({
         </span>
       );
     }
-    
+
     // Show authorization status if no override
     if (!authorization) return null;
     const statusColors = {
@@ -116,11 +129,14 @@ export default function BookingActions({
 
   // Helper function to get authorization status icon
   const getAuthorizationStatusIcon = () => {
+    // Default to FileSignature until mounted to prevent hydration mismatch
+    if (!mounted) return FileSignature;
+
     // If override is applied, show shield check icon
     if (booking.authorization_override) {
       return ShieldCheck;
     }
-    
+
     // Standard authorization status icons
     if (!authorization) return FileSignature;
     switch (authorization.status) {
@@ -141,6 +157,9 @@ export default function BookingActions({
 
   // Helper function to render authorization indicator badge
   const renderAuthorizationIndicator = () => {
+    // Don't render until component is mounted to prevent hydration mismatch
+    if (!mounted) return null;
+
     // Only show indicator if there's an authorization record or override
     if (!authorization && !booking.authorization_override) return null;
 
@@ -148,7 +167,7 @@ export default function BookingActions({
     let badgeColor = "bg-gray-500";
     let badgeIcon = FileText;
     let tooltipText = "";
-    
+
     if (booking.authorization_override) {
       badgeColor = "bg-blue-500";
       badgeIcon = ShieldCheck;
@@ -188,9 +207,9 @@ export default function BookingActions({
           <TooltipTrigger asChild>
             <div className="absolute -top-1 -right-1 flex items-center justify-center w-5 h-5 rounded-full bg-white border-2 border-white cursor-help">
               <div className={`w-3 h-3 rounded-full ${badgeColor} flex items-center justify-center`}>
-                {React.createElement(badgeIcon, { 
-                  className: "w-2 h-2 text-white", 
-                  strokeWidth: 3 
+                {React.createElement(badgeIcon, {
+                  className: "w-2 h-2 text-white",
+                  strokeWidth: 3
                 })}
               </div>
             </div>
@@ -203,10 +222,26 @@ export default function BookingActions({
     );
   };
 
+
   return (
     <div className="flex items-center justify-end gap-3">
+      {/* Flight Authorization Button for Restricted Users (Members/Students) on their own bookings */}
+      {mounted && isRestrictedUser && isBookingOwner && actualStatus === "confirmed" &&
+       ((isSoloFlight && requireFlightAuthorization) || authorization || booking.authorization_override) && (
+        <div className="relative">
+          <Button
+            onClick={handleAuthorizationNavigation}
+            className="h-10 px-6 text-base font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-purple-300"
+          >
+            {React.createElement(getAuthorizationStatusIcon(), { className: "w-4 h-4 mr-1" })}
+            {getAuthorizationStatusText()}
+          </Button>
+          {renderAuthorizationIndicator()}
+        </div>
+      )}
+
       {/* Check Flight Out Button - With dropdown for solo flights, simple button for non-solo */}
-      {actualStatus === "confirmed" && !hideCheckOutButton && (!mode || mode === 'check-out') && !isRestrictedUser && (
+      {mounted && actualStatus === "confirmed" && !hideCheckOutButton && (!mode || mode === 'check-out') && !isRestrictedUser && (
         <>
           {isSoloFlight ? (
             // Solo flight: show dropdown if flight authorization is required OR authorization exists OR is overridden, AND user can see authorization, otherwise simple button
@@ -231,7 +266,7 @@ export default function BookingActions({
                       </Link>
                     </DropdownMenuItem>
                     {/* Show flight authorization for solo flights when setting is enabled, any flight that has an authorization, or when overridden, AND user can see authorization */}
-                    {((isSoloFlight && requireFlightAuthorization) || authorization || booking.authorization_override) && canSeeAuthorization && (
+                    {mounted && ((isSoloFlight && requireFlightAuthorization) || authorization || booking.authorization_override) && canSeeAuthorization && (
                       <DropdownMenuItem onClick={handleAuthorizationNavigation} className="flex items-center">
                         {React.createElement(getAuthorizationStatusIcon(), { className: "w-4 h-4 mr-2" })}
                         <span className="flex-1">{getAuthorizationStatusText()}</span>
@@ -255,7 +290,7 @@ export default function BookingActions({
             )
           ) : (
             // Non-solo flight: show dropdown if authorization exists or is overridden, AND user can see authorization, otherwise simple button
-            (authorization || booking.authorization_override) && canSeeAuthorization ? (
+            mounted && (authorization || booking.authorization_override) && canSeeAuthorization ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <div className="relative">
@@ -275,7 +310,7 @@ export default function BookingActions({
                         Check Flight Out
                       </Link>
                     </DropdownMenuItem>
-                    {canSeeAuthorization && (
+                    {mounted && canSeeAuthorization && (
                       <DropdownMenuItem onClick={handleAuthorizationNavigation} className="flex items-center">
                         {React.createElement(getAuthorizationStatusIcon(), { className: "w-4 h-4 mr-2" })}
                         <span className="flex-1">{getAuthorizationStatusText()}</span>

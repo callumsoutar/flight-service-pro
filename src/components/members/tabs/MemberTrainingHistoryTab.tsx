@@ -234,7 +234,7 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
 
       setEditingInstructor(false);
       toast.success("Primary instructor updated successfully!");
-    } catch (error) {
+    } catch {
       toast.error("Failed to update instructor");
     } finally {
       setUpdatingInstructor(false);

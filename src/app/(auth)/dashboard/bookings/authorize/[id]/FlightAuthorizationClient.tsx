@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plane, User, CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Plane, CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -105,7 +105,7 @@ export function FlightAuthorizationClient({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -131,9 +131,9 @@ export function FlightAuthorizationClient({
       </div>
 
       {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-8">
         {/* Booking Summary */}
-        <Card className="mb-6">
+        <Card className="mb-4">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Plane className="w-5 h-5 text-blue-600" />
@@ -225,7 +225,7 @@ export function FlightAuthorizationClient({
 
         {/* Instructor Approval Actions */}
         {showApprovalActions && (
-          <Card className="mt-6 border-orange-200 bg-orange-50">
+          <Card className="mt-4 border-orange-200 bg-orange-50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-orange-800">
                 <CheckCircle className="w-5 h-5" />
@@ -293,33 +293,6 @@ export function FlightAuthorizationClient({
           </Card>
         )}
 
-        {/* Help Information */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="w-5 h-5 text-green-600" />
-              Need Help?
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <p className="text-sm text-gray-600">
-                If you have questions about completing this authorization form, please contact:
-              </p>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Your flight instructor for technical questions</li>
-                <li>• The front desk for administrative support</li>
-                <li>• Chief Flight Instructor for policy clarifications</li>
-              </ul>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
-                <p className="text-sm text-blue-800">
-                  <strong>Remember:</strong> All solo flights require instructor authorization. 
-                  Complete all sections accurately and ensure all pre-flight requirements are met.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

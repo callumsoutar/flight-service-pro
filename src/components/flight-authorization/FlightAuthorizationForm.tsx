@@ -235,7 +235,7 @@ export function FlightAuthorizationForm({
   const isLoading = createMutation.isPending || updateMutation.isPending || submitMutation.isPending || isSubmitting;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <Card>
         <CardHeader>
@@ -266,7 +266,7 @@ export function FlightAuthorizationForm({
       </Card>
 
       {/* Main Form */}
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
 
         {/* Flight Details Section */}
         <FlightDetailsSection
@@ -334,71 +334,80 @@ export function FlightAuthorizationForm({
         {/* Form Actions */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              {/* Status info */}
-              <div className="flex items-center gap-4">
-                {lastSavedAt && (
-                  <p className="text-sm text-gray-500">
-                    Last saved: {lastSavedAt.toLocaleTimeString()}
-                  </p>
-                )}
-                {isDraftSaving && (
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Saving draft...
-                  </div>
-                )}
-              </div>
+            <div className="space-y-3">
+              {/* Helper text for new users */}
+              {!existingAuthorization && (
+                <p className="text-sm text-gray-500">
+                  Save your draft first to enable the submit button for authorization approval.
+                </p>
+              )}
 
-              {/* Action buttons */}
-              <div className="flex items-center gap-3">
-                {onCancel && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={onCancel}
-                    disabled={isLoading}
-                  >
-                    Cancel
-                  </Button>
-                )}
+              <div className="flex items-center justify-between">
+                {/* Status info */}
+                <div className="flex items-center gap-4">
+                  {lastSavedAt && (
+                    <p className="text-sm text-gray-500">
+                      Last saved: {lastSavedAt.toLocaleTimeString()}
+                    </p>
+                  )}
+                  {isDraftSaving && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Saving draft...
+                    </div>
+                  )}
+                </div>
 
-                {!isReadOnly && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleSaveDraft}
-                    disabled={isLoading || isDraftSaving}
-                    className="flex items-center gap-2"
-                  >
-                    <Save className="w-4 h-4" />
-                    Save Draft
-                  </Button>
-                )}
+                {/* Action buttons */}
+                <div className="flex items-center gap-3">
+                  {onCancel && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={onCancel}
+                      disabled={isLoading}
+                    >
+                      Cancel
+                    </Button>
+                  )}
 
-                {canSubmit && (
-                  <Button
-                    type="button"
-                    disabled={isLoading}
-                    className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
-                    onClick={async () => {
-                      // Force call handleSubmit directly
-                      try {
-                        await handleSubmit(form.getValues());
-                      } catch (error) {
-                        console.error('Direct handleSubmit error:', error);
-                      }
-                    }}
-                  >
-                    {isLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4" />
-                    )}
-                    Submit for Authorization
-                  </Button>
-                )}
+                  {!isReadOnly && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleSaveDraft}
+                      disabled={isLoading || isDraftSaving}
+                      className="flex items-center gap-2"
+                    >
+                      <Save className="w-4 h-4" />
+                      Save Draft
+                    </Button>
+                  )}
 
+                  {canSubmit && (
+                    <Button
+                      type="button"
+                      disabled={isLoading}
+                      className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
+                      onClick={async () => {
+                        // Force call handleSubmit directly
+                        try {
+                          await handleSubmit(form.getValues());
+                        } catch (error) {
+                          console.error('Direct handleSubmit error:', error);
+                        }
+                      }}
+                    >
+                      {isLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
+                      Submit for Authorization
+                    </Button>
+                  )}
+
+                </div>
               </div>
             </div>
 

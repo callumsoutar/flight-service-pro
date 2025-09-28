@@ -1,12 +1,36 @@
-import { Text, Button, Hr } from '@react-email/components';
+import { Text, Button } from '@react-email/components';
 import EmailLayout from './components/EmailLayout';
 import { format, parseISO } from 'date-fns';
 
 interface DebriefReportProps {
-  booking: any;
-  lessonProgress: any;
-  lesson?: any;
-  flightExperiences?: any[];
+  booking: {
+    id?: string;
+    user?: { first_name?: string; last_name?: string };
+    start_time?: string;
+    aircraft?: { registration?: string };
+  };
+  lessonProgress: {
+    instructor?: {
+      user?: {
+        first_name?: string;
+        last_name?: string;
+        email?: string;
+      };
+    };
+    completed_date?: string;
+    flight_time?: number;
+    remarks?: string;
+    status?: string;
+    instructor_comments?: string;
+    lesson_highlights?: string;
+    airmanship?: string;
+    focus_next_lesson?: string;
+    areas_for_improvement?: string;
+  };
+  lesson?: {
+    name?: string;
+  } | null;
+  flightExperiences?: unknown[];
   dashboardUrl?: string;
 }
 
@@ -40,7 +64,7 @@ export default function DebriefReport({
           ✈️ Flight Debrief Report
         </Text>
         <Text className="text-sm text-gray-600 m-0">
-          Hi {booking.user?.first_name}, here's your personalized flight debrief from today's lesson.
+          Hi {booking.user?.first_name}, here&apos;s your personalized flight debrief from today&apos;s lesson.
         </Text>
       </div>
 
@@ -49,14 +73,12 @@ export default function DebriefReport({
         <div className="flex justify-between items-start">
           <div className="flex-1">
             <Text className="text-gray-800 font-semibold m-0 text-sm mb-1">
-              {lessonProgress.date
-                ? format(parseISO(lessonProgress.date), 'd MMM yyyy')
-                : format(parseISO(booking.start_time), 'd MMM yyyy')}
+              {lessonProgress.completed_date
+                ? format(parseISO(lessonProgress.completed_date), 'd MMM yyyy')
+                : booking.start_time ? format(parseISO(booking.start_time), 'd MMM yyyy') : 'N/A'}
             </Text>
             <Text className="text-gray-600 m-0 text-xs">
-              Aircraft: {booking.flight_logs?.[0]?.checked_out_aircraft?.registration || '—'}
-              {booking.flight_logs?.[0]?.checked_out_aircraft?.type &&
-                ` (${booking.flight_logs[0].checked_out_aircraft.type})`}
+              Aircraft: {booking.aircraft?.registration || '—'}
             </Text>
             {lesson && (
               <Text className="text-gray-600 m-0 text-xs mt-1">

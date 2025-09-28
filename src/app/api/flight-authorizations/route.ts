@@ -28,23 +28,40 @@ export async function GET(req: NextRequest) {
   // Flight authorization access control based on RLS policies
   const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
   const isStudent = userRole && userRole === 'student';
+  const isMember = userRole && userRole === 'member';
 
-  if (!isPrivilegedUser && !isStudent) {
+  if (!isPrivilegedUser && !isStudent && !isMember) {
     return NextResponse.json({ 
-      error: 'Forbidden: Flight authorization access requires student role or above' 
+      error: 'Forbidden: Flight authorization access requires member role or above' 
     }, { status: 403 });
   }
 
-  // Students can only view their own authorization requests
-  if (isStudent) {
+  // Students and members can only view their own authorization requests
+  if (isStudent || isMember) {
     const { searchParams } = new URL(req.url);
     const student_id = searchParams.get("student_id");
+    const booking_id = searchParams.get("booking_id");
     
-    // Force student_id to be the current user for students
-    if (!student_id || student_id !== user.id) {
+    // If filtering by student_id, force it to be the current user
+    if (student_id && student_id !== user.id) {
       return NextResponse.json({ 
         error: 'Forbidden: You can only view your own authorization requests' 
       }, { status: 403 });
+    }
+    
+    // If filtering by booking_id, verify the user owns the booking
+    if (booking_id) {
+      const { data: booking, error: bookingError } = await supabase
+        .from("bookings")
+        .select("user_id")
+        .eq("id", booking_id)
+        .single();
+        
+      if (bookingError || !booking || booking.user_id !== user.id) {
+        return NextResponse.json({ 
+          error: 'Forbidden: You can only view authorization requests for your own bookings' 
+        }, { status: 403 });
+      }
     }
   }
 
@@ -104,8 +121,8 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Filter sensitive data for students
-    const responseData = isStudent 
+    // Filter sensitive data for students and members
+    const responseData = (isStudent || isMember)
       ? (authorizations || []).map(filterAuthorizationData)
       : (authorizations || []);
 
@@ -146,10 +163,11 @@ export async function POST(req: NextRequest) {
 
   const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
   const isStudent = userRole && userRole === 'student';
+  const isMember = userRole && userRole === 'member';
 
-  if (!isPrivilegedUser && !isStudent) {
+  if (!isPrivilegedUser && !isStudent && !isMember) {
     return NextResponse.json({ 
-      error: 'Forbidden: Flight authorization creation requires student role or above' 
+      error: 'Forbidden: Flight authorization creation requires member role or above' 
     }, { status: 403 });
   }
 
@@ -195,10 +213,10 @@ export async function POST(req: NextRequest) {
       }
     }
     
-    // Students can only create authorizations for their own bookings
-    if (isStudent && booking.user_id !== user.id) {
+    // Students and members can only create authorizations for their own bookings
+    if ((isStudent || isMember) && booking.user_id !== user.id) {
       return NextResponse.json(
-        { error: "Students can only create authorizations for their own bookings" },
+        { error: "You can only create authorizations for your own bookings" },
         { status: 403 }
       );
     }

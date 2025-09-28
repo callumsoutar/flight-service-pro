@@ -339,7 +339,7 @@ export default function ExamHistoryTab({
                           <button
                             type="button"
                             aria-label={isOpen ? "Collapse" : "Expand"}
-                            onClick={() => setExamExpanded(e => ({ ...e, [syllabusId]: !isOpen }))}
+                            onClick={() => setExamExpanded({ ...examExpanded, [syllabusId]: !isOpen })}
                             className="p-1 hover:bg-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
                           >
                             {isOpen ? <ChevronDown className="w-4 h-4 text-gray-600" /> : <ChevronRight className="w-4 h-4 text-gray-600" />}

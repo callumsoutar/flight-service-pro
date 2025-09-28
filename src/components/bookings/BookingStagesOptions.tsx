@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -34,6 +34,13 @@ export default function BookingStagesOptions({ bookingId, bookingStatus, instruc
   const [sendingConfirmation, setSendingConfirmation] = useState(false);
   const [navigatingAircraft, setNavigatingAircraft] = useState(false);
   const router = useRouter();
+
+  // Track component mounting to prevent hydration mismatch
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Check if user has restricted access (member/student)
   const { isRestricted: isRestrictedUser } = useIsRestrictedUser();
@@ -113,6 +120,9 @@ export default function BookingStagesOptions({ bookingId, bookingStatus, instruc
 
   // Helper function to render instructor comments indicator badge
   const renderCommentsIndicator = () => {
+    // Don't render until component is mounted to prevent hydration mismatch
+    if (!mounted) return null;
+
     // Only show indicator if there are comments and user is not restricted
     if (instructorCommentsCount === 0 || isRestrictedUser) return null;
 
@@ -133,6 +143,20 @@ export default function BookingStagesOptions({ bookingId, bookingStatus, instruc
       </TooltipProvider>
     );
   };
+
+  // Don't render until mounted to prevent hydration mismatch
+  if (!mounted) {
+    return (
+      <Button variant="outline" className="h-10 px-6 text-base font-bold rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-gray-300">
+        Options <ChevronDown className="w-4 h-4" />
+      </Button>
+    );
+  }
+
+  // Hide options button for restricted users viewing completed bookings (no options would be available)
+  if (isRestrictedUser && bookingStatus === 'complete') {
+    return null;
+  }
 
   return (
     <>

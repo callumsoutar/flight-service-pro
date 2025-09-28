@@ -30,9 +30,9 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
       updated_at
     `);
 
-  // If user is member or student, only show their own bookings
+  // If user is member or student, only show their own bookings and exclude cancelled ones
   if (userRole === 'member' || userRole === 'student') {
-    bookingsQuery = bookingsQuery.eq('user_id', user.id);
+    bookingsQuery = bookingsQuery.eq('user_id', user.id).neq('status', 'cancelled');
   }
 
   const { data } = await bookingsQuery.order("start_time", { ascending: false });
@@ -90,6 +90,7 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
       members={members}
       instructors={instructors}
       aircraftList={aircraftList}
+      userRole={userRole}
     />
   );
 }

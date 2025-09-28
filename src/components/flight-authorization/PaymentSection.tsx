@@ -4,7 +4,7 @@ import { Controller, Control } from 'react-hook-form';
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { CreditCard, Calendar } from "lucide-react";
+import { CreditCard } from "lucide-react";
 import { FlightAuthorizationEditData } from '@/lib/validations/flight-authorization';
 import { paymentMethodOptions } from '@/lib/validations/flight-authorization';
 
@@ -14,7 +14,7 @@ interface PaymentSectionProps {
   flightDate?: string;
 }
 
-export function PaymentSection({ control, disabled = false, flightDate }: PaymentSectionProps) {
+export function PaymentSection({ control, disabled = false }: PaymentSectionProps) {
   // Format payment method labels
   const formatPaymentMethod = (method: string) => {
     switch (method) {
@@ -41,64 +41,39 @@ export function PaymentSection({ control, disabled = false, flightDate }: Paymen
           Payment Information
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Payment Method */}
-          <div className="space-y-2">
-            <Label htmlFor="payment_method" className="text-sm font-medium">
-              Payment Method *
-            </Label>
-            <Controller
-              name="payment_method"
-              control={control}
-              render={({ field, fieldState }) => (
-                <div className="space-y-1">
-                  <Select
-                    value={field.value}
-                    onValueChange={field.onChange}
-                    disabled={disabled}
-                  >
-                    <SelectTrigger className={fieldState.error ? 'border-red-500' : ''}>
-                      <SelectValue placeholder="Select payment method" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {paymentMethodOptions.map((method) => (
-                        <SelectItem key={method} value={method}>
-                          {formatPaymentMethod(method)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {fieldState.error && (
-                    <p className="text-xs text-red-600">{fieldState.error.message}</p>
-                  )}
-                  <p className="text-xs text-gray-500">
-                    Select your preferred payment method for this flight
-                  </p>
-                </div>
-              )}
-            />
-          </div>
-
-          {/* Flight Date (Read-only) */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              Date
-            </Label>
-            <div className="p-3 bg-gray-50 border rounded-md">
-              <p className="text-sm font-medium text-gray-900">
-                {flightDate ? new Date(flightDate).toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric'
-                }) : 'TBD'}
-              </p>
-            </div>
-          </div>
+      <CardContent className="space-y-4">
+        <div className="w-1/2">
+          <Label htmlFor="payment_method" className="text-sm font-medium">
+            Payment Method *
+          </Label>
+          <Controller
+            name="payment_method"
+            control={control}
+            render={({ field, fieldState }) => (
+              <div className="space-y-1 mt-2">
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  disabled={disabled}
+                >
+                  <SelectTrigger className={`h-10 w-full ${fieldState.error ? 'border-red-500' : 'border-gray-300'}`}>
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {paymentMethodOptions.map((method) => (
+                      <SelectItem key={method} value={method}>
+                        {formatPaymentMethod(method)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {fieldState.error && (
+                  <p className="text-xs text-red-600">{fieldState.error.message}</p>
+                )}
+              </div>
+            )}
+          />
         </div>
-
       </CardContent>
     </Card>
   );

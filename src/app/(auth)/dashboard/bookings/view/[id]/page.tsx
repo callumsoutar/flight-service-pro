@@ -43,18 +43,27 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
     .eq("id", bookingId)
     .single();
 
-  // Fetch instructor comments count
-  const { count: instructorCommentsCount } = await supabase
+  // Fetch instructor comments count (with error handling)
+  const { count: instructorCommentsCount, error: instructorCommentsError } = await supabase
     .from("instructor_comments")
     .select("id", { count: "exact", head: true })
     .eq("booking_id", bookingId);
+  
+  if (instructorCommentsError) {
+    console.warn("Failed to fetch instructor comments count:", instructorCommentsError.message);
+  }
 
-  // Check if lesson_progress exists for this booking
-  const { data: lessonProgressData } = await supabase
+  // Check if lesson_progress exists for this booking (with error handling)
+  const { data: lessonProgressData, error: lessonProgressError } = await supabase
     .from("lesson_progress")
     .select("id")
     .eq("booking_id", bookingId)
     .limit(1);
+  
+  if (lessonProgressError) {
+    console.warn("Failed to fetch lesson progress:", lessonProgressError.message);
+  }
+  
   hasLessonProgress = !!(lessonProgressData && lessonProgressData.length > 0);
 
   booking = bookingData;
@@ -233,6 +242,7 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
                 userId={booking.user_id}
                 firstName={booking.user?.first_name || member?.first_name}
                 lastName={booking.user?.last_name || member?.last_name}
+                currentUserRole={userRole}
               />
             )}
           </div>

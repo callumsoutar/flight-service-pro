@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Mail, Users, CreditCard, Calendar, History, Clock, BarChart2 } from "lucide-react";
+import { Mail, Users, CreditCard, Calendar, Clock, BarChart2 } from "lucide-react";
 import MemberContactTab from "./tabs/MemberContactTab";
 import { User } from "@/types/users";
 import MemberHistoryTab from "@/components/members/tabs/MemberHistoryTab";

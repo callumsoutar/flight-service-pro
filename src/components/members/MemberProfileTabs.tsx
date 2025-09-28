@@ -11,7 +11,6 @@ const MembershipsTab = lazy(() => import("./tabs/MemberMembershipsTab"));
 const AccountTab = lazy(() => import("./tabs/MemberAccountTab"));
 const FlightManagementTab = lazy(() => import("./tabs/MemberFlightHistoryTab"));
 const TrainingHistoryTab = lazy(() => import("./tabs/MemberTrainingHistoryTab"));
-const FlightHistoryTab = lazy(() => import("./tabs/FlightHistoryTab"));
 
 interface MemberProfileTabsProps {
   member: User;
@@ -63,7 +62,7 @@ export default function MemberProfileTabs({ member }: MemberProfileTabsProps) {
       <TabsContent value="flight">
         {tab === "flight" && (
           <Suspense fallback={<div>Loading...</div>}>
-            <FlightHistoryTab memberId={member.id} />
+            <FlightManagementTab memberId={member.id} />
           </Suspense>
         )}
       </TabsContent>

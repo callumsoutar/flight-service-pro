@@ -17,7 +17,6 @@ interface FlightHistoryTabProps {
 }
 
 export default function FlightHistoryTab({
-  memberId,
   allFlights,
   loading,
   error

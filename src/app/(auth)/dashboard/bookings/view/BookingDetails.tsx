@@ -514,13 +514,26 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                 )}
               />
             </div>
-            {!isSoloFlightType && (
-              <div>
-                <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Instructor</label>
-                <Controller
-                  name="instructor"
-                  control={control}
-                  render={({ field }) => (
+            <div>
+              <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Instructor</label>
+              <Controller
+                name="instructor"
+                control={control}
+                render={({ field }) => {
+                  // Determine if instructor should show "No instructor"
+                  const shouldShowNoInstructor = isSoloFlightType ||
+                    !instructorFieldValue ||
+                    instructorFieldValue === PLACEHOLDER_VALUES.INSTRUCTOR;
+
+                  if (shouldShowNoInstructor) {
+                    return (
+                      <div className="w-full border border-gray-200 bg-gray-50 rounded-lg px-3 py-2 text-gray-500 text-sm">
+                        No instructor
+                      </div>
+                    );
+                  }
+
+                  return (
                     <div className="relative">
                       <InstructorSelect
                         value={instructorValue}
@@ -541,13 +554,10 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                         </div>
                       )}
                     </div>
-                  )}
-                />
-              </div>
-            )}
-            {isSoloFlightType && (
-              <div></div>
-            )}
+                  );
+                }}
+              />
+            </div>
           </div>
 
           {/* Aircraft, Flight Type, Lesson, Booking Type */}
@@ -605,21 +615,23 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                 </Select>
               )} />
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="w-4 h-4" /> Booking Type</label>
-              <Controller name="booking_type" control={control} render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select booking type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["flight", "groundwork", "maintenance", "other"].map((type) => (
-                      <SelectItem key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )} />
-            </div>
+            {(!mounted || isRoleLoading || isRestrictedUser) ? null : (
+              <div>
+                <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="w-4 h-4" /> Booking Type</label>
+                <Controller name="booking_type" control={control} render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select booking type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["flight", "groundwork", "maintenance", "other"].map((type) => (
+                        <SelectItem key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )} />
+              </div>
+            )}
           </div>
 
           {/* Description & Remarks */}

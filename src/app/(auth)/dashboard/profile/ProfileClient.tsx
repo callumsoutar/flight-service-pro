@@ -28,6 +28,32 @@ const dueDatesSchema = z.object({
 
 type DueDatesFormValues = z.infer<typeof dueDatesSchema>;
 
+const getDaysUntilExpiry = (dateString: string | null | undefined): number | null => {
+  if (!dateString) return null;
+
+  const expiryDate = new Date(dateString);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  expiryDate.setHours(0, 0, 0, 0);
+
+  const diffTime = expiryDate.getTime() - today.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
+const getExpiryStatus = (daysRemaining: number | null): { color: string; bgColor: string; textColor: string } => {
+  if (daysRemaining === null) {
+    return { color: "gray", bgColor: "bg-gray-100", textColor: "text-gray-600" };
+  }
+
+  if (daysRemaining < 0) {
+    return { color: "red", bgColor: "bg-red-100", textColor: "text-red-700" };
+  } else if (daysRemaining <= 30) {
+    return { color: "yellow", bgColor: "bg-yellow-100", textColor: "text-yellow-700" };
+  } else {
+    return { color: "green", bgColor: "bg-green-100", textColor: "text-green-700" };
+  }
+};
+
 const tabItems = [
   { id: "profile", label: "Profile", icon: User },
   { id: "due-dates", label: "Due Dates", icon: Calendar },
@@ -185,115 +211,195 @@ export default function ProfileClient({ initialProfileData }: ProfileClientProps
                   </div>
                   
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div>
+                    <div className="space-y-6">
+                      <div className="h-[84px] flex flex-col">
                         <label className="block text-sm font-medium mb-2 text-gray-700">Class 1 Medical Due</label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              className="w-full justify-start text-left font-normal bg-white"
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {watch("class_1_medical_due") ? format(new Date(watch("class_1_medical_due")!), 'PPP') : 'Pick a date'}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <CalendarComponent
-                              mode="single"
-                              selected={watch("class_1_medical_due") ? new Date(watch("class_1_medical_due")!) : undefined}
-                              onSelect={(date) => {
-                                if (date) {
-                                  setValue("class_1_medical_due", format(date, 'yyyy-MM-dd'), { shouldDirty: true });
-                                }
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                        <div className="flex-1 flex flex-col justify-between">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="w-full justify-start text-left font-normal bg-white"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {watch("class_1_medical_due") ? format(new Date(watch("class_1_medical_due")!), 'PPP') : 'Pick a date'}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <CalendarComponent
+                                mode="single"
+                                selected={watch("class_1_medical_due") ? new Date(watch("class_1_medical_due")!) : undefined}
+                                onSelect={(date) => {
+                                  if (date) {
+                                    setValue("class_1_medical_due", format(date, 'yyyy-MM-dd'), { shouldDirty: true });
+                                  }
+                                }}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <div className="h-6 flex items-center mt-2">
+                            {(() => {
+                              const daysRemaining = getDaysUntilExpiry(watch("class_1_medical_due"));
+                              const status = getExpiryStatus(daysRemaining);
+
+                              if (daysRemaining === null) return null;
+
+                              return (
+                                <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${status.bgColor} ${status.textColor}`}>
+                                  {daysRemaining < 0
+                                    ? `Expired ${Math.abs(daysRemaining)} days ago`
+                                    : daysRemaining === 0
+                                    ? "Expires today"
+                                    : `${daysRemaining} days remaining`
+                                  }
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
                       </div>
-                      
-                      <div>
+
+                      <div className="h-[84px] flex flex-col">
                         <label className="block text-sm font-medium mb-2 text-gray-700">Class 2 Medical Due</label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              className="w-full justify-start text-left font-normal bg-white"
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {watch("class_2_medical_due") ? format(new Date(watch("class_2_medical_due")!), 'PPP') : 'Pick a date'}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <CalendarComponent
-                              mode="single"
-                              selected={watch("class_2_medical_due") ? new Date(watch("class_2_medical_due")!) : undefined}
-                              onSelect={(date) => {
-                                if (date) {
-                                  setValue("class_2_medical_due", format(date, 'yyyy-MM-dd'), { shouldDirty: true });
-                                }
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                        <div className="flex-1 flex flex-col justify-between">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="w-full justify-start text-left font-normal bg-white"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {watch("class_2_medical_due") ? format(new Date(watch("class_2_medical_due")!), 'PPP') : 'Pick a date'}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <CalendarComponent
+                                mode="single"
+                                selected={watch("class_2_medical_due") ? new Date(watch("class_2_medical_due")!) : undefined}
+                                onSelect={(date) => {
+                                  if (date) {
+                                    setValue("class_2_medical_due", format(date, 'yyyy-MM-dd'), { shouldDirty: true });
+                                  }
+                                }}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <div className="h-6 flex items-center mt-2">
+                            {(() => {
+                              const daysRemaining = getDaysUntilExpiry(watch("class_2_medical_due"));
+                              const status = getExpiryStatus(daysRemaining);
+
+                              if (daysRemaining === null) return null;
+
+                              return (
+                                <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${status.bgColor} ${status.textColor}`}>
+                                  {daysRemaining < 0
+                                    ? `Expired ${Math.abs(daysRemaining)} days ago`
+                                    : daysRemaining === 0
+                                    ? "Expires today"
+                                    : `${daysRemaining} days remaining`
+                                  }
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    
-                    <div className="space-y-4">
-                      <div>
+
+                    <div className="space-y-6">
+                      <div className="h-[84px] flex flex-col">
                         <label className="block text-sm font-medium mb-2 text-gray-700">DL9 Due</label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              className="w-full justify-start text-left font-normal bg-white"
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {watch("DL9_due") ? format(new Date(watch("DL9_due")!), 'PPP') : 'Pick a date'}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <CalendarComponent
-                              mode="single"
-                              selected={watch("DL9_due") ? new Date(watch("DL9_due")!) : undefined}
-                              onSelect={(date) => {
-                                if (date) {
-                                  setValue("DL9_due", format(date, 'yyyy-MM-dd'), { shouldDirty: true });
-                                }
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                        <div className="flex-1 flex flex-col justify-between">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="w-full justify-start text-left font-normal bg-white"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {watch("DL9_due") ? format(new Date(watch("DL9_due")!), 'PPP') : 'Pick a date'}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <CalendarComponent
+                                mode="single"
+                                selected={watch("DL9_due") ? new Date(watch("DL9_due")!) : undefined}
+                                onSelect={(date) => {
+                                  if (date) {
+                                    setValue("DL9_due", format(date, 'yyyy-MM-dd'), { shouldDirty: true });
+                                  }
+                                }}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <div className="h-6 flex items-center mt-2">
+                            {(() => {
+                              const daysRemaining = getDaysUntilExpiry(watch("DL9_due"));
+                              const status = getExpiryStatus(daysRemaining);
+
+                              if (daysRemaining === null) return null;
+
+                              return (
+                                <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${status.bgColor} ${status.textColor}`}>
+                                  {daysRemaining < 0
+                                    ? `Expired ${Math.abs(daysRemaining)} days ago`
+                                    : daysRemaining === 0
+                                    ? "Expires today"
+                                    : `${daysRemaining} days remaining`
+                                  }
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
                       </div>
-                      
-                      <div>
+
+                      <div className="h-[84px] flex flex-col">
                         <label className="block text-sm font-medium mb-2 text-gray-700">BFR Due</label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              className="w-full justify-start text-left font-normal bg-white"
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {watch("BFR_due") ? format(new Date(watch("BFR_due")!), 'PPP') : 'Pick a date'}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <CalendarComponent
-                              mode="single"
-                              selected={watch("BFR_due") ? new Date(watch("BFR_due")!) : undefined}
-                              onSelect={(date) => {
-                                if (date) {
-                                  setValue("BFR_due", format(date, 'yyyy-MM-dd'), { shouldDirty: true });
-                                }
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                        <div className="flex-1 flex flex-col justify-between">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="w-full justify-start text-left font-normal bg-white"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {watch("BFR_due") ? format(new Date(watch("BFR_due")!), 'PPP') : 'Pick a date'}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <CalendarComponent
+                                mode="single"
+                                selected={watch("BFR_due") ? new Date(watch("BFR_due")!) : undefined}
+                                onSelect={(date) => {
+                                  if (date) {
+                                    setValue("BFR_due", format(date, 'yyyy-MM-dd'), { shouldDirty: true });
+                                  }
+                                }}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <div className="h-6 flex items-center mt-2">
+                            {(() => {
+                              const daysRemaining = getDaysUntilExpiry(watch("BFR_due"));
+                              const status = getExpiryStatus(daysRemaining);
+
+                              if (daysRemaining === null) return null;
+
+                              return (
+                                <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${status.bgColor} ${status.textColor}`}>
+                                  {daysRemaining < 0
+                                    ? `Expired ${Math.abs(daysRemaining)} days ago`
+                                    : daysRemaining === 0
+                                    ? "Expires today"
+                                    : `${daysRemaining} days remaining`
+                                  }
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
