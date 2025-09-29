@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, description, type, rate, is_active } = body;
+    const { name, description, type, rate, is_taxable, is_active } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
         description: description || null,
         type,
         rate: Number(rate),
+        is_taxable: is_taxable ?? true, // Default to taxable
         is_active: is_active ?? true
       }])
       .select()
@@ -96,7 +97,7 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, name, description, type, rate, is_active } = body;
+    const { id, name, description, type, rate, is_taxable, is_active } = body;
 
     if (!id) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
@@ -107,12 +108,14 @@ export async function PATCH(req: NextRequest) {
       description?: string | null;
       type?: string;
       rate?: number;
+      is_taxable?: boolean;
       is_active?: boolean;
     } = {};
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description || null;
     if (type !== undefined) updateData.type = type;
     if (rate !== undefined) updateData.rate = Number(rate);
+    if (is_taxable !== undefined) updateData.is_taxable = is_taxable;
     if (is_active !== undefined) updateData.is_active = is_active;
 
     const { data, error } = await supabase

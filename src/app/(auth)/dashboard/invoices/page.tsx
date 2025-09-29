@@ -17,7 +17,7 @@ async function InvoicesPage({}: ProtectedPageProps) {
             Manage your flight school&apos;s invoices and billing
           </p>
         </div>
-        <Link href="/dashboard/invoices/new">
+        <Link href="/dashboard/invoices/edit/new">
           <Button className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-lg shadow text-base flex items-center gap-2">
             <Plus className="w-5 h-5" /> New Invoice
           </Button>

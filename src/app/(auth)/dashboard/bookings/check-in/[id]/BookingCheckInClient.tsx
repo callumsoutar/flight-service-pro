@@ -16,6 +16,7 @@ import {
   useInstructorRate 
 } from "@/hooks/use-booking-check-in";
 import { useInvoiceItems as useInvoiceItemsManagement } from "@/hooks/use-invoice-items";
+import { useOrganizationTaxRate } from "@/hooks/use-tax-rate";
 
 interface BookingCheckInClientProps {
   booking: Booking;
@@ -24,6 +25,7 @@ interface BookingCheckInClientProps {
 
 export default function BookingCheckInClient({ booking, instructors }: BookingCheckInClientProps) {
   const router = useRouter();
+  const { taxRate: organizationTaxRate } = useOrganizationTaxRate();
   
   // Get flight log data (should be the first/only flight log for this booking)
   const flightLog = booking.flight_logs?.[0];
@@ -84,6 +86,11 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
     tachEnd?: number;
     flightTimeHobbs: number;
     flightTimeTach: number;
+    soloEndHobbs?: number;
+    dualTime: number;
+    soloTime: number;
+    soloFlightType?: string;
+    soloAircraftRate?: number;
   }): Promise<void> => {
     // Prevent calculation if instructor rate is loading or missing
     if (instructorRateLoading) {
@@ -111,6 +118,11 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
       tachEnd: details.tachEnd,
       flightTimeHobbs: details.flightTimeHobbs,
       flightTimeTach: details.flightTimeTach,
+      soloEndHobbs: details.soloEndHobbs,
+      dualTime: details.dualTime,
+      soloTime: details.soloTime,
+      soloFlightType: details.soloFlightType,
+      soloAircraftRate: details.soloAircraftRate,
     });
   }, [booking.id, instructorRate, instructorRateLoading, calculateCharges, resetCalculate]);
 
@@ -271,7 +283,7 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
               <span className="text-base font-bold text-blue-700">{aircraft.registration}</span>
             </div>
           )}
-          <CheckInDetails 
+          <CheckInDetails
             aircraftId={flightLog?.checked_out_aircraft_id || undefined}
             selectedFlightTypeId={booking?.flight_type_id}
             instructorId={flightLog?.checked_out_instructor_id || undefined}
@@ -283,7 +295,9 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
             bookingStartTacho={flightLog?.tach_start}
             initialEndHobbs={flightLog?.hobbs_end}
             initialEndTacho={flightLog?.tach_end}
+            initialSoloEndHobbs={flightLog?.solo_end_hobbs}
             checkedOutInstructor={flightLog?.checked_out_instructor}
+            flightType={booking?.flight_type}
           />
         </div>
       </div>
@@ -409,7 +423,7 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
               <div className="mt-2">
                 <ChargeableSearchDropdown
                   onAdd={handleAddItem}
-                  taxRate={displayInvoice.tax_rate ?? 0.15}
+                  taxRate={displayInvoice.tax_rate ?? organizationTaxRate}
                   category={chargeableTab}
                 />
               </div>
@@ -428,7 +442,7 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
               <div className="font-medium">${displayTotals.subtotal.toFixed(2)}</div>
             </div>
             <div className="flex gap-8 text-sm">
-              <div className="text-muted-foreground">Tax ({Math.round((displayInvoice?.tax_rate ?? 0.15) * 100)}%):</div>
+              <div className="text-muted-foreground">Tax ({Math.round((displayInvoice?.tax_rate ?? organizationTaxRate) * 100)}%):</div>
               <div className="font-medium">${displayTotals.totalTax.toFixed(2)}</div>
             </div>
             <div className="flex gap-8 text-lg mt-2">

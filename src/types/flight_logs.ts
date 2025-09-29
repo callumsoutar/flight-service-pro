@@ -22,7 +22,12 @@ export interface FlightLog {
   flight_remarks?: string | null;
   created_at: string;
   updated_at: string;
-  
+
+  // Dual/Solo time tracking fields
+  solo_end_hobbs?: number | null;
+  dual_time?: number | null;
+  solo_time?: number | null;
+
   // Joined data
   checked_out_aircraft?: import("./aircraft").Aircraft;
   checked_out_instructor?: import("./instructors").Instructor;

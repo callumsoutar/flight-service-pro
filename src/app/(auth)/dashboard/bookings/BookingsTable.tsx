@@ -51,17 +51,17 @@ export default function BookingsTable({ bookings, members, instructors, aircraft
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full table-fixed min-w-[800px]">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Date</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Start Time</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">End Time</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Member</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Instructor</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Aircraft</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Purpose</th>
-                    <th className="text-left py-3 font-medium text-gray-900">Status</th>
+                    <th className="text-left py-2 pr-2 font-medium text-gray-900 text-xs sm:text-sm w-20 sm:w-24">Date</th>
+                    <th className="text-left py-2 pr-2 font-medium text-gray-900 text-xs sm:text-sm w-16 sm:w-20">Start Time</th>
+                    <th className="text-left py-2 pr-2 font-medium text-gray-900 text-xs sm:text-sm w-16 sm:w-20 hidden md:table-cell">End Time</th>
+                    <th className="text-left py-2 pr-2 font-medium text-gray-900 text-xs sm:text-sm w-20 sm:w-24">Member</th>
+                    <th className="text-left py-2 pr-2 font-medium text-gray-900 text-xs sm:text-sm w-20 sm:w-24 hidden lg:table-cell">Instructor</th>
+                    <th className="text-left py-2 pr-2 font-medium text-gray-900 text-xs sm:text-sm w-16 sm:w-20">Aircraft</th>
+                    <th className="text-left py-2 pr-2 font-medium text-gray-900 text-xs sm:text-sm hidden sm:table-cell w-24 sm:w-32">Purpose</th>
+                    <th className="text-left py-2 font-medium text-gray-900 text-xs sm:text-sm w-20 sm:w-24">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -78,58 +78,60 @@ export default function BookingsTable({ bookings, members, instructors, aircraft
                         }
                       }}
                     >
-                      <td className="py-3 pr-4 text-sm">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-gray-500" />
-                          <span className="font-medium">
+                      <td className="py-2 pr-2 text-xs sm:text-sm">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
+                          <span className="font-medium truncate">
                             {format(new Date(b.start_time), 'MMM dd, yyyy')}
                           </span>
                         </div>
                       </td>
-                      <td className="py-3 pr-4 text-sm">
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-gray-500" />
+                      <td className="py-2 pr-2 text-xs sm:text-sm">
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
                           <span className="text-gray-600">
                             {format(new Date(b.start_time), 'HH:mm')}
                           </span>
                         </div>
                       </td>
-                      <td className="py-3 pr-4 text-sm">
+                      <td className="py-2 pr-2 text-xs sm:text-sm hidden md:table-cell">
                         <span className="text-gray-600">
                           {format(new Date(b.end_time), 'HH:mm')}
                         </span>
                       </td>
-                      <td className="py-3 pr-4 text-sm">
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 text-gray-500" />
-                          <span className="font-medium text-gray-900">
+                      <td className="py-2 pr-2 text-xs sm:text-sm">
+                        <div className="flex items-center gap-1">
+                          <User className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
+                          <span className="font-medium text-gray-900 truncate">
                             {getMemberName(b.user_id)}
                           </span>
                         </div>
                       </td>
-                      <td className="py-3 pr-4 text-sm">
+                      <td className="py-2 pr-2 text-xs sm:text-sm hidden lg:table-cell">
                         {b.instructor_id ? (
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-gray-500" />
-                            <span>{getInstructorName(b.instructor_id)}</span>
+                          <div className="flex items-center gap-1">
+                            <User className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
+                            <span className="truncate">{getInstructorName(b.instructor_id)}</span>
                           </div>
                         ) : (
                           <span className="text-gray-400">Solo</span>
                         )}
                       </td>
-                      <td className="py-3 pr-4 font-medium text-gray-900">
-                        <div className="flex items-center gap-2">
-                          <Plane className="w-4 h-4 text-gray-500" />
-                          {getAircraftReg(b.aircraft_id ?? "")}
+                      <td className="py-2 pr-2 font-medium text-gray-900 text-xs sm:text-sm">
+                        <div className="flex items-center gap-1">
+                          <Plane className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
+                          <span className="truncate">
+                            {getAircraftReg(b.aircraft_id ?? "")}
+                          </span>
                         </div>
                       </td>
-                      <td className="py-3 pr-4 text-sm text-gray-600 max-w-xs">
+                      <td className="py-2 pr-2 text-xs sm:text-sm text-gray-600 hidden sm:table-cell">
                         <span className="truncate block" title={b.purpose || ""}>
                           {b.purpose || "--"}
                         </span>
                       </td>
-                      <td className="py-3">
-                        <StatusBadge status={b.status} className="font-semibold px-3 py-1 text-sm" />
+                      <td className="py-2">
+                        <StatusBadge status={b.status} className="font-semibold px-2 py-1 text-xs sm:text-sm" />
                       </td>
                     </tr>
                   ))}

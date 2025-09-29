@@ -30,6 +30,7 @@ export type Chargeable = {
   description: string | null;
   type: ChargeableType;
   rate: number;
+  is_taxable: boolean;
   is_active: boolean | null;
   voided_at: string | null;
   created_at: string;
@@ -42,6 +43,7 @@ export type ChargeableInsert = {
   description?: string | null;
   type: string;
   rate: number;
+  is_taxable?: boolean;
   is_active?: boolean | null;
   voided_at?: string | null;
   created_at?: string;
@@ -54,6 +56,7 @@ export type ChargeableUpdate = {
   description?: string | null;
   type?: string;
   rate?: number;
+  is_taxable?: boolean;
   is_active?: boolean | null;
   voided_at?: string | null;
   created_at?: string;

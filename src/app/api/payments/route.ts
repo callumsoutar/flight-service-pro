@@ -98,19 +98,44 @@ export async function POST(req: NextRequest) {
 
   const { invoice_id, amount, payment_method, payment_reference, notes } = parseResult.data;
 
-  // Call the process_payment function to create transaction and payment atomically
-  const { data, error } = await supabase.rpc('process_payment', {
-    p_invoice_id: invoice_id,
-    p_amount: Number(amount),
-    p_payment_method: payment_method,
-    p_payment_reference: payment_reference || null,
-    p_notes: notes || null,
-  });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    // Use atomic database function for payment processing
+    const { data: result, error } = await supabase.rpc('process_payment_atomic', {
+      p_invoice_id: invoice_id,
+      p_amount: Number(amount),
+      p_payment_method: payment_method,
+      p_payment_reference: payment_reference || null,
+      p_notes: notes || null
+    });
+    
+    if (error) {
+      console.error('Payment processing error:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    
+    if (!result.success) {
+      console.error('Payment processing failed:', result.error);
+      return NextResponse.json({ 
+        error: result.error,
+        details: result
+      }, { status: 400 });
+    }
+    
+    console.log(`Payment processed atomically: ${result.payment_id} for invoice ${result.invoice_id}`);
+    console.log(`Invoice status: ${result.new_status}, Remaining balance: ${result.remaining_balance}`);
+    
+    return NextResponse.json({ 
+      id: result.payment_id,
+      transaction_id: result.transaction_id,
+      invoice_id: result.invoice_id,
+      new_status: result.new_status,
+      remaining_balance: result.remaining_balance,
+      message: result.message
+    });
+  } catch (error) {
+    console.error('Payment creation error:', error);
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : 'Failed to process payment' 
+    }, { status: 500 });
   }
-
-  // data is the new payment id
-  return NextResponse.json({ id: data });
 } 

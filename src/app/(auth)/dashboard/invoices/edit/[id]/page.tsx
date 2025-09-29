@@ -8,8 +8,16 @@ interface EditInvoicePageProps extends ProtectedPageProps {
 
 async function EditInvoicePage({ params }: EditInvoicePageProps) {
   const { id } = await params;
+  
   if (!id) return null;
-  return <InvoiceEditClient id={id} />;
+  
+  // Handle new invoice mode
+  if (id === 'new') {
+    return <InvoiceEditClient mode="new" />;
+  }
+  
+  // Handle existing invoice edit
+  return <InvoiceEditClient id={id} mode="edit" />;
 }
 
 // Export protected component with role restriction for admin/owner only

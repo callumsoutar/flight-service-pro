@@ -16,6 +16,7 @@ interface ChargeableFormData {
   description: string;
   type: ChargeableType | "";
   rate: string;
+  is_taxable: boolean;
   is_active: boolean;
 }
 
@@ -37,6 +38,7 @@ export default function ChargeablesConfig() {
     description: "",
     type: "",
     rate: "",
+    is_taxable: true,
     is_active: true,
   });
 
@@ -45,6 +47,7 @@ export default function ChargeablesConfig() {
     description: "",
     type: "",
     rate: "",
+    is_taxable: true,
     is_active: true,
   });
 
@@ -91,6 +94,7 @@ export default function ChargeablesConfig() {
         description: selectedChargeable.description || "",
         type: selectedChargeable.type,
         rate: selectedChargeable.rate.toString(),
+        is_taxable: selectedChargeable.is_taxable,
         is_active: selectedChargeable.is_active ?? true,
       });
     }
@@ -102,6 +106,7 @@ export default function ChargeablesConfig() {
       description: "",
       type: "",
       rate: "",
+      is_taxable: true,
       is_active: true,
     });
   };
@@ -244,7 +249,8 @@ export default function ChargeablesConfig() {
     }).format(amount);
   };
 
-  const calculateTaxInclusiveRate = (rate: number) => {
+  const calculateTaxInclusiveRate = (rate: number, isTaxable: boolean = true) => {
+    if (!isTaxable) return rate;
     return rate * (1 + taxRate);
   };
 
@@ -333,6 +339,14 @@ export default function ChargeablesConfig() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Switch
+                    id="add-is_taxable"
+                    checked={addFormData.is_taxable}
+                    onCheckedChange={(checked) => setAddFormData({ ...addFormData, is_taxable: checked })}
+                  />
+                  <Label htmlFor="add-is_taxable">Taxable (uses organization tax rate)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
                     id="add-is_active"
                     checked={addFormData.is_active}
                     onCheckedChange={(checked) => setAddFormData({ ...addFormData, is_active: checked })}
@@ -414,6 +428,15 @@ export default function ChargeablesConfig() {
                       <Badge variant="secondary" className="text-xs">
                         {CHARGEABLE_TYPE_LABELS[chargeable.type]}
                       </Badge>
+                      {chargeable.is_taxable ? (
+                        <Badge variant="default" className="text-xs bg-green-100 text-green-800">
+                          Taxable
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
+                          Tax Exempt
+                        </Badge>
+                      )}
                       {!chargeable.is_active && (
                         <Badge variant="outline" className="text-xs text-gray-500">
                           Inactive
@@ -489,7 +512,12 @@ export default function ChargeablesConfig() {
                 {editFormData.rate && !isNaN(parseFloat(editFormData.rate)) && (
                   <div className="mt-2 text-sm text-gray-600">
                     <div>Tax Exclusive: {formatCurrency(parseFloat(editFormData.rate))}</div>
-                    <div>Tax Inclusive: {formatCurrency(calculateTaxInclusiveRate(parseFloat(editFormData.rate)))}</div>
+                    <div>
+                      {editFormData.is_taxable 
+                        ? `Tax Inclusive: ${formatCurrency(calculateTaxInclusiveRate(parseFloat(editFormData.rate), true))}`
+                        : `Tax Exempt: ${formatCurrency(calculateTaxInclusiveRate(parseFloat(editFormData.rate), false))}`
+                      }
+                    </div>
                   </div>
                 )}
               </div>
@@ -503,6 +531,15 @@ export default function ChargeablesConfig() {
                   placeholder="Enter description"
                   rows={3}
                 />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="edit-is_taxable"
+                  checked={editFormData.is_taxable}
+                  onCheckedChange={(checked) => setEditFormData({ ...editFormData, is_taxable: checked })}
+                />
+                <Label htmlFor="edit-is_taxable">Taxable (uses organization tax rate)</Label>
               </div>
 
               <div className="flex items-center space-x-2">

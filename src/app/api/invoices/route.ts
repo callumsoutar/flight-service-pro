@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/SupabaseServerClient";
-import { getTaxRateForUser } from "@/lib/tax-rates";
+import { InvoiceService } from "@/lib/invoice-service";
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
   }
   
   const body = await req.json();
-  const { user_id, booking_id, status = 'draft' } = body;
+  const { user_id, booking_id, status = 'draft', reference, issue_date, due_date, notes, items = [] } = body;
   
   if (!user_id) {
     return NextResponse.json({ error: 'Missing user_id' }, { status: 400 });
@@ -97,33 +97,88 @@ export async function POST(req: NextRequest) {
   }
   
   try {
-    // Get the appropriate tax rate for this user
-    const taxRate = await getTaxRateForUser(user_id);
+    // Get the organization tax rate (single-tenant: all invoices use same rate)
+    const taxRate = await InvoiceService.getTaxRateForInvoice();
     
-    // Create invoice with correct single-tenant schema fields
-    const { data, error } = await supabase
-      .from("invoices")
-      .insert([{
-        user_id,
-        booking_id,
-        status,
-        tax_rate: taxRate,
-        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-        subtotal: 0,
-        tax_total: 0,
-        total_amount: 0,
-        total_paid: 0,
-        balance_due: 0,
-      }])
-      .select()
-      .single();
+    // Use atomic database function to create invoice and transaction
+    const { data: result, error } = await supabase.rpc('create_invoice_with_transaction', {
+      p_user_id: user_id,
+      p_booking_id: booking_id || null,
+      p_status: status,
+      p_tax_rate: taxRate,
+      p_due_date: due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    });
       
     if (error) {
       console.error('Invoice creation error:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     
-    return NextResponse.json(data);
+    if (!result.success) {
+      console.error('Invoice creation failed:', result.error);
+      return NextResponse.json({ error: result.error }, { status: 500 });
+    }
+    
+    // Update invoice with additional fields
+    const { error: updateError } = await supabase
+      .from('invoices')
+      .update({
+        reference: reference || null,
+        issue_date: issue_date || new Date().toISOString(),
+        notes: notes || null
+      })
+      .eq('id', result.invoice_id);
+    
+    if (updateError) {
+      console.error('Failed to update invoice details:', updateError);
+      return NextResponse.json({ error: 'Failed to update invoice details' }, { status: 500 });
+    }
+    
+    // Create invoice items if provided
+    if (items.length > 0) {
+      const invoiceItems = items.map((item: { chargeable_id?: string; description: string; quantity: number; unit_price: number; tax_rate?: number | null; notes?: string }) => ({
+        invoice_id: result.invoice_id,
+        chargeable_id: item.chargeable_id,
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        tax_rate: item.tax_rate,
+        amount: item.quantity * item.unit_price,
+        tax_amount: (item.quantity * item.unit_price) * (item.tax_rate ?? 0),
+        line_total: (item.quantity * item.unit_price) * (1 + (item.tax_rate ?? 0))
+      }));
+      
+      const { error: itemsError } = await supabase
+        .from('invoice_items')
+        .insert(invoiceItems);
+      
+      if (itemsError) {
+        console.error('Failed to create invoice items:', itemsError);
+        return NextResponse.json({ error: 'Failed to create invoice items' }, { status: 500 });
+      }
+      
+      // Update invoice totals
+      await InvoiceService.updateInvoiceTotalsWithTransactionSync(result.invoice_id);
+    }
+    
+    // Fetch the complete invoice to return
+    const { data: invoice, error: fetchError } = await supabase
+      .from("invoices")
+      .select("*")
+      .eq("id", result.invoice_id)
+      .single();
+      
+    if (fetchError) {
+      console.error('Failed to fetch created invoice:', fetchError);
+      return NextResponse.json({ error: 'Invoice created but failed to fetch details' }, { status: 500 });
+    }
+    
+    console.log(`Invoice created atomically: ${result.invoice_number} (${result.status})`);
+    if (result.transaction_id) {
+      console.log(`Transaction created: ${result.transaction_id}`);
+    }
+    
+    return NextResponse.json(invoice);
   } catch (error) {
     console.error('Invoice creation error:', error);
     return NextResponse.json({ error: "Failed to create invoice" }, { status: 500 });
@@ -160,24 +215,76 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Invoice id is required" }, { status: 400 });
   }
   
-  const { error } = await supabase
-    .from("invoices")
-    .update(updateFields)
-    .eq("id", id);
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    // Add updated timestamp
+    const fieldsToUpdate = {
+      ...updateFields,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Handle status changes that might affect calculations
+    if (updateFields.status || updateFields.total_paid !== undefined) {
+      // Get current invoice data
+      const { data: currentInvoice, error: fetchError } = await supabase
+        .from("invoices")
+        .select("total_amount, total_paid, due_date, paid_date, status")
+        .eq("id", id)
+        .single();
+        
+      if (fetchError) {
+        return NextResponse.json({ error: fetchError.message }, { status: 500 });
+      }
+      
+      // Calculate new status if needed
+      const totalAmount = fieldsToUpdate.total_amount !== undefined ? fieldsToUpdate.total_amount : currentInvoice.total_amount;
+      const totalPaid = fieldsToUpdate.total_paid !== undefined ? fieldsToUpdate.total_paid : currentInvoice.total_paid;
+      const dueDate = fieldsToUpdate.due_date !== undefined ? fieldsToUpdate.due_date : currentInvoice.due_date;
+      const paidDate = fieldsToUpdate.paid_date !== undefined ? fieldsToUpdate.paid_date : currentInvoice.paid_date;
+      
+      // Auto-calculate status if not explicitly provided
+      if (!updateFields.status) {
+        fieldsToUpdate.status = InvoiceService.calculateInvoiceStatus(
+          totalAmount,
+          totalPaid,
+          dueDate ? new Date(dueDate) : null,
+          paidDate ? new Date(paidDate) : null
+        );
+      }
+      
+      // Auto-set paid_date if fully paid and not already set
+      if (totalPaid >= totalAmount && !paidDate && !fieldsToUpdate.paid_date) {
+        fieldsToUpdate.paid_date = new Date().toISOString();
+      }
+      
+      // Calculate balance_due
+      fieldsToUpdate.balance_due = totalAmount - totalPaid;
+    }
+    
+    const { error } = await supabase
+      .from("invoices")
+      .update(fieldsToUpdate)
+      .eq("id", id);
+      
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    
+    // Fetch and return the updated invoice
+    const { data: updatedInvoice, error: fetchError } = await supabase
+      .from("invoices")
+      .select("*")
+      .eq("id", id)
+      .single();
+      
+    if (fetchError) {
+      return NextResponse.json({ error: fetchError.message }, { status: 500 });
+    }
+    
+    return NextResponse.json({ invoice: updatedInvoice });
+  } catch (error) {
+    console.error('Invoice update error:', error);
+    return NextResponse.json({ error: "Failed to update invoice" }, { status: 500 });
   }
-  
-  // Fetch and return the updated invoice
-  const { data: updatedInvoice, error: fetchError } = await supabase
-    .from("invoices")
-    .select("*")
-    .eq("id", id)
-    .single();
-  if (fetchError) {
-    return NextResponse.json({ error: fetchError.message }, { status: 500 });
-  }
-  return NextResponse.json({ invoice: updatedInvoice });
 }
 
 export async function DELETE() {

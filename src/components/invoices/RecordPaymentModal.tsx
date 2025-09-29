@@ -12,16 +12,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { BadgeCheck, CreditCard, Banknote, DollarSign, Landmark, Receipt, Wallet, CheckCircle } from "lucide-react";
+import { BadgeCheck, CreditCard, DollarSign, Landmark, Receipt, Wallet, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
 const paymentMethods = [
   { value: "cash", label: "Cash", icon: DollarSign },
   { value: "credit_card", label: "Credit Card", icon: CreditCard },
+  { value: "debit_card", label: "Debit Card", icon: CreditCard },
   { value: "bank_transfer", label: "Bank Transfer", icon: Landmark },
-  { value: "direct_debit", label: "Direct Debit", icon: Banknote },
-  { value: "cheque", label: "Cheque", icon: Receipt },
+  { value: "check", label: "Check", icon: Receipt },
+  { value: "online_payment", label: "Online Payment", icon: Wallet },
   { value: "other", label: "Other", icon: Wallet },
 ];
 
@@ -52,13 +53,26 @@ export default function RecordPaymentModal({
 
   const isFullyPaid = amount >= balanceDue;
 
+  const validatePaymentAmount = (amount: number, balanceDue: number) => {
+    if (amount <= 0) {
+      return "Payment amount must be greater than zero.";
+    }
+    if (amount > balanceDue) {
+      return `Payment amount cannot exceed remaining balance of $${balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}.`;
+    }
+    return null;
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!amount || amount <= 0) {
-      setError("Payment amount must be greater than zero.");
+    
+    const validationError = validatePaymentAmount(amount, balanceDue);
+    if (validationError) {
+      setError(validationError);
       return;
     }
+    
     if (!method) {
       setError("Payment method is required.");
       return;

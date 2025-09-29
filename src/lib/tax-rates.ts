@@ -13,74 +13,22 @@ export interface TaxRate {
 }
 
 /**
- * Get the appropriate tax rate for a user based on their location
- * Falls back to default rate if no specific rate is found
+ * Get the organization's tax rate (single-tenant architecture)
+ * In a single-tenant system, there's only one tax rate per organization
+ * marked as is_default = true
  */
-export async function getTaxRateForUser(userId: string): Promise<number> {
-  const supabase = await createClient();
-  
-  try {
-    // 1. Get user's country/region from their profile
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('country, state')
-      .eq('id', userId)
-      .single();
-    
-    if (userError || !user) {
-      console.warn('Could not fetch user profile for tax rate, using default');
-      return await getDefaultTaxRate();
-    }
-    
-    const countryCode = user.country?.toUpperCase();
-    const regionCode = user.state?.toUpperCase();
-    
-    if (!countryCode) {
-      console.warn('No country code found for user, using default tax rate');
-      return await getDefaultTaxRate();
-    }
-    
-    // 2. Try to find a specific tax rate for the user's location
-    const query = supabase
-      .from('tax_rates')
-      .select('*')
-      .eq('country_code', countryCode)
-      .eq('is_active', true)
-      .order('is_default', { ascending: false })
-      .order('effective_from', { ascending: false });
-    
-    if (regionCode) {
-      // First try to find a region-specific rate
-      const { data: regionRate } = await query
-        .eq('region_code', regionCode)
-        .limit(1)
-        .single();
-      
-      if (regionRate) {
-        console.log(`Found region-specific tax rate: ${regionRate.rate} for ${countryCode}-${regionCode}`);
-        return regionRate.rate;
-      }
-    }
-    
-    // 3. Try to find a country-specific rate (no region)
-    const { data: countryRate } = await query
-      .is('region_code', null)
-      .limit(1)
-      .single();
-    
-    if (countryRate) {
-      console.log(`Found country-specific tax rate: ${countryRate.rate} for ${countryCode}`);
-      return countryRate.rate;
-    }
-    
-    // 4. Fall back to default rate
-    console.warn(`No tax rate found for ${countryCode}${regionCode ? `-${regionCode}` : ''}, using default`);
-    return await getDefaultTaxRate();
-    
-  } catch (error) {
-    console.error('Error fetching tax rate for user:', error);
-    return await getDefaultTaxRate();
-  }
+export async function getOrganizationTaxRate(): Promise<number> {
+  return await getDefaultTaxRate();
+}
+
+/**
+ * @deprecated Use getOrganizationTaxRate() instead
+ * For backward compatibility - in single-tenant architecture, 
+ * all users use the organization's tax rate
+ */
+export async function getTaxRateForUser(): Promise<number> {
+  console.warn('getTaxRateForUser is deprecated in single-tenant architecture. Use getOrganizationTaxRate() instead.');
+  return await getOrganizationTaxRate();
 }
 
 /**

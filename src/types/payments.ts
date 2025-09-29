@@ -3,9 +3,10 @@
 export type PaymentMethod =
   | 'cash'
   | 'credit_card'
+  | 'debit_card'
   | 'bank_transfer'
-  | 'direct_debit'
-  | 'cheque'
+  | 'check'
+  | 'online_payment'
   | 'other';
 
 export interface Payment {
