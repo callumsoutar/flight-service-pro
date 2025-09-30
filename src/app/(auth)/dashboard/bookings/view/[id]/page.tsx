@@ -9,6 +9,7 @@ import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
 import BookingHistoryCollapse from "../BookingHistoryCollapse";
 import { User } from "@/types/users";
 import { Aircraft } from "@/types/aircraft";
+import { Observation } from "@/types/observations";
 import BookingActions from "@/components/bookings/BookingActionsClient";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 import BookingConfirmActionClient from "@/components/bookings/BookingConfirmActionClient";
@@ -35,6 +36,7 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
   let lessons: { id: string; name: string }[] = [];
   let flightTypes: { id: string; name: string }[] = [];
   let hasLessonProgress = false;
+  let aircraftObservations: Observation[] = [];
 
   // Fetch booking with full user, instructor, aircraft, and flight_type objects
   const { data: bookingData } = await supabase
@@ -50,7 +52,7 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
     .eq("booking_id", bookingId);
   
   if (instructorCommentsError) {
-    console.warn("Failed to fetch instructor comments count:", instructorCommentsError.message);
+    // Failed to fetch instructor comments count - continue without it
   }
 
   // Check if lesson_progress exists for this booking (with error handling)
@@ -61,7 +63,7 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
     .limit(1);
   
   if (lessonProgressError) {
-    console.warn("Failed to fetch lesson progress:", lessonProgressError.message);
+    // Failed to fetch lesson progress - continue without it
   }
   
   hasLessonProgress = !!(lessonProgressData && lessonProgressData.length > 0);
@@ -71,6 +73,16 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
   // Redirect if booking not found
   if (!booking) {
     redirect('/dashboard/bookings');
+  }
+
+  // Fetch aircraft observations if aircraft exists
+  if (booking.aircraft_id) {
+    const { data: observationsData } = await supabase
+      .from("observations")
+      .select("*")
+      .eq("aircraft_id", booking.aircraft_id)
+      .in("observation_stage", ["open", "investigation"]);
+    aircraftObservations = observationsData || [];
   }
 
   // Check if user has permission to view this specific booking
@@ -291,6 +303,7 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
               instructor={instructor}
               aircraft={aircraft}
               bookingStatus={status}
+              aircraftObservations={aircraftObservations}
             />
           </div>
         </div>

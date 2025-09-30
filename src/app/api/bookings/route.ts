@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
   const bookingId = searchParams.get("id");
   const date = searchParams.get("date"); // YYYY-MM-DD format
+  const range = parseInt(searchParams.get("range") || "0", 10); // Number of days before and after
 
   try {
     let query = supabase
@@ -93,9 +94,17 @@ export async function GET(req: NextRequest) {
 
     // Filter by date if provided (for scheduler performance)
     if (date) {
-      const startOfDay = `${date}T00:00:00.000Z`;
-      const endOfDay = `${date}T23:59:59.999Z`;
-      query = query.gte("start_time", startOfDay).lte("start_time", endOfDay);
+      // Calculate date range accounting for timezone differences
+      const baseDate = new Date(date);
+      const startDate = new Date(baseDate);
+      startDate.setDate(baseDate.getDate() - range);
+      const endDate = new Date(baseDate);
+      endDate.setDate(baseDate.getDate() + range + 1); // +1 to include the end date
+
+      const startOfRange = startDate.toISOString().split('T')[0] + 'T00:00:00.000Z';
+      const endOfRange = endDate.toISOString().split('T')[0] + 'T23:59:59.999Z';
+
+      query = query.gte("start_time", startOfRange).lte("start_time", endOfRange);
     }
 
     // For restricted users (members/students), only show their own bookings unless it's for scheduler
@@ -239,8 +248,11 @@ export async function POST(req: NextRequest) {
   }
 
   // Send confirmation email after successful booking creation
+  // Skip email if this is part of a bulk operation (recurring bookings)
+  const skipEmail = req.nextUrl.searchParams.get('skip_email') === 'true';
+
   try {
-    if (data && data.user && data.user.email) {
+    if (!skipEmail && data && data.user && data.user.email) {
       // Prepare additional booking data for email
       let instructor = null;
       if (data.instructor && data.instructor.users) {
@@ -599,7 +611,7 @@ async function updateAircraftOnBookingCompletion(
   
   // Validate that we have the required meter readings
   if (!finalHobbsEnd || !finalTachEnd || !finalHobbsStart || !finalTachStart) {
-    console.log('Skipping aircraft update - missing meter readings');
+    // Skip aircraft update - missing meter readings
     return;
   }
 
@@ -668,7 +680,6 @@ async function updateAircraftOnBookingCompletion(
     throw new Error(`Failed to update aircraft: ${updateError.message}`);
   }
 
-  console.log(`Aircraft ${aircraftId} updated: meters set to H:${finalHobbsEnd}/T:${finalTachEnd}, total_hours: ${aircraft.total_hours} -> ${newTotalHours} (+${flightTimeToAdd.toFixed(2)})`);
 }
 
 function isMeterCorrection(existingBooking: BookingForAircraftUpdate, updates: BookingUpdatesForAircraft): boolean {
@@ -799,7 +810,6 @@ async function handleMeterCorrection(
     // Don't fail the correction if audit logging fails
   }
 
-  console.log(`Aircraft ${aircraftId} meter correction: booking ${bookingId}, credited time ${oldCreditedTime.toFixed(2)} -> ${newCreditedTime.toFixed(2)} (${creditedTimeDifference >= 0 ? '+' : ''}${creditedTimeDifference.toFixed(2)}h), total_hours: ${aircraft.total_hours} -> ${newTotalHours}`);
 }
 
 function calculateCreditedTimeFromMethod(hobbsTime: number, tachoTime: number, method: string): number {

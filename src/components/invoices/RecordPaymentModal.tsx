@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { BadgeCheck, CreditCard, DollarSign, Landmark, Receipt, Wallet, CheckCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, roundToTwoDecimals, formatCurrencyDisplay } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
 const paymentMethods = [
@@ -43,7 +43,8 @@ export default function RecordPaymentModal({
   balanceDue: number;
   defaultAmount?: number;
 }) {
-  const [amount, setAmount] = React.useState(defaultAmount || balanceDue);
+
+  const [amount, setAmount] = React.useState(roundToTwoDecimals(defaultAmount || balanceDue));
   const [method, setMethod] = React.useState<string>("");
   const [reference, setReference] = React.useState("");
   const [notes, setNotes] = React.useState("");
@@ -51,14 +52,16 @@ export default function RecordPaymentModal({
   const [error, setError] = React.useState<string | null>(null);
   const router = useRouter();
 
-  const isFullyPaid = amount >= balanceDue;
+  // Clean the balance due to avoid floating point precision issues
+  const cleanBalanceDue = roundToTwoDecimals(balanceDue);
+  const isFullyPaid = amount >= cleanBalanceDue;
 
   const validatePaymentAmount = (amount: number, balanceDue: number) => {
     if (amount <= 0) {
       return "Payment amount must be greater than zero.";
     }
     if (amount > balanceDue) {
-      return `Payment amount cannot exceed remaining balance of $${balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}.`;
+      return `Payment amount cannot exceed remaining balance of $${formatCurrencyDisplay(balanceDue)}.`;
     }
     return null;
   };
@@ -67,7 +70,7 @@ export default function RecordPaymentModal({
     e.preventDefault();
     setError(null);
     
-    const validationError = validatePaymentAmount(amount, balanceDue);
+    const validationError = validatePaymentAmount(amount, cleanBalanceDue);
     if (validationError) {
       setError(validationError);
       return;
@@ -97,7 +100,7 @@ export default function RecordPaymentModal({
         return;
       }
       // Reset form and close modal
-      setAmount(defaultAmount || balanceDue);
+      setAmount(roundToTwoDecimals(defaultAmount || balanceDue));
       setMethod("");
       setReference("");
       setNotes("");
@@ -137,9 +140,9 @@ export default function RecordPaymentModal({
           </div>
           <div className="flex flex-col gap-1 text-right">
             <div className="text-muted-foreground">Total Amount:</div>
-            <div className="font-semibold">${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            <div className="font-semibold">${formatCurrencyDisplay(totalAmount)}</div>
             <div className="text-muted-foreground mt-1">Remaining Balance:</div>
-            <div className="font-semibold text-green-600">${balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            <div className="font-semibold text-green-600">${formatCurrencyDisplay(cleanBalanceDue)}</div>
           </div>
         </div>
         {/* Form fields */}
@@ -206,7 +209,7 @@ export default function RecordPaymentModal({
         <div className="px-6 py-4 flex items-center gap-4 border-t bg-muted/40">
           <div className="flex-1">
             <div className="text-sm font-medium">Payment Amount:</div>
-            <div className={cn("text-2xl font-bold", isFullyPaid ? "text-green-600" : "text-foreground")}>${amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            <div className={cn("text-2xl font-bold", isFullyPaid ? "text-green-600" : "text-foreground")}>${formatCurrencyDisplay(amount)}</div>
           </div>
           {isFullyPaid && (
             <div className="flex items-center gap-2 text-green-600 text-sm">

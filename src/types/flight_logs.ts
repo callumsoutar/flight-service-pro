@@ -31,6 +31,30 @@ export interface FlightLog {
   // Joined data
   checked_out_aircraft?: import("./aircraft").Aircraft;
   checked_out_instructor?: import("./instructors").Instructor;
+  booking?: {
+    id: string;
+    aircraft_id: string;
+    user_id: string;
+    instructor_id?: string;
+    start_time: string;
+    end_time: string;
+    purpose?: string;
+    user?: {
+      first_name?: string;
+      last_name?: string;
+    };
+    instructor?: {
+      id: string;
+      user_id: string;
+      users?: {
+        first_name?: string;
+        last_name?: string;
+      }[];
+    };
+    lesson?: {
+      name: string;
+    };
+  };
 }
 
 export type FlightLogInsert = Omit<FlightLog, 'id' | 'created_at' | 'updated_at'>;

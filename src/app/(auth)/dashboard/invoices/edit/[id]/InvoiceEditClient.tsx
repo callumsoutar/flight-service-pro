@@ -27,6 +27,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useOrganizationTaxRate } from "@/hooks/use-tax-rate";
+import { InvoiceCalculations } from "@/lib/invoice-calculations";
+import { roundToTwoDecimals } from "@/lib/utils";
 import Link from "next/link";
 
 interface InvoiceEditClientProps {
@@ -277,26 +279,32 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
   };
 
   const saveDraftItemEdit = (item: InvoiceItem, idx: number) => {
-    // Recalculate amounts with new values
-    const amount = editRate * editQuantity;
-    const tax_amount = amount * organizationTaxRate;
-    const total_amount = amount + tax_amount;
-    const rate_inclusive = editRate * (1 + organizationTaxRate);
-
-    setDraftItems(prev => prev.map((draftItem, index) =>
-      index === idx ? {
-        ...draftItem,
-        unit_price: editRate,
+    try {
+      // Use InvoiceCalculations for currency-safe calculations
+      const calculatedAmounts = InvoiceCalculations.calculateItemAmounts({
         quantity: editQuantity,
-        rate_inclusive,
-        amount,
-        tax_amount,
-        line_total: total_amount,
-      } : draftItem
-    ));
+        unit_price: editRate,
+        tax_rate: organizationTaxRate
+      });
 
-    setEditingItemId(null);
-    toast.success('Item updated');
+      setDraftItems(prev => prev.map((draftItem, index) =>
+        index === idx ? {
+          ...draftItem,
+          unit_price: editRate,
+          quantity: editQuantity,
+          rate_inclusive: calculatedAmounts.rate_inclusive,
+          amount: calculatedAmounts.amount,
+          tax_amount: calculatedAmounts.tax_amount,
+          line_total: calculatedAmounts.line_total,
+        } : draftItem
+      ));
+
+      setEditingItemId(null);
+      toast.success('Item updated');
+    } catch (error) {
+      console.error('Failed to calculate item amounts:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update item calculations');
+    }
   };
 
   const deleteDraftItem = (idx: number) => {
@@ -488,10 +496,22 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
     }
   }, [reference, invoiceDate, dueDate, notes, selectedMember, isNewInvoice]);
 
-  // Calculate totals for draft items
-  const draftSubtotal = draftItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-  const draftTotalTax = draftItems.reduce((sum, item) => sum + (item.tax_amount || 0), 0);
-  const draftTotal = draftItems.reduce((sum, item) => sum + (item.line_total || 0), 0);
+  // Calculate totals for draft items with proper rounding and error handling
+  const getDraftTotals = () => {
+    try {
+      return InvoiceCalculations.calculateInvoiceTotals(draftItems);
+    } catch (error) {
+      console.error('Failed to calculate draft totals:', error);
+      // Return safe fallback values
+      return {
+        subtotal: 0,
+        tax_total: 0,
+        total_amount: 0
+      };
+    }
+  };
+
+  const { subtotal: draftSubtotal, tax_total: draftTotalTax, total_amount: draftTotal } = getDraftTotals();
 
   if (loading) return <div className="p-10 text-center text-muted-foreground">Loading invoice...</div>;
   
@@ -694,30 +714,37 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
           {/* Add Item Dropdown */}
           <ChargeableSearchDropdown
             onAdd={(item, quantity) => {
-              // Use tax-exclusive pricing (item.rate is tax-exclusive)
-              const amount = item.rate * quantity;
-              const tax_amount = amount * organizationTaxRate;
-              const total_amount = amount + tax_amount;
-              const rate_inclusive = item.rate * (1 + organizationTaxRate);
-              setDraftItems((prev) => [
-                ...prev,
-                {
-                  id: item.id + '-' + Date.now(),
-                  invoice_id: '',
-                  chargeable_id: item.id,
-                  description: item.name,
+              try {
+                // Use InvoiceCalculations for currency-safe calculations
+                const calculatedAmounts = InvoiceCalculations.calculateItemAmounts({
                   quantity,
                   unit_price: item.rate,
-                  rate_inclusive,
-                  amount,
-                  tax_rate: organizationTaxRate,
-                  tax_amount,
-                  line_total: total_amount,
-                  notes: null,
-                  created_at: '',
-                  updated_at: '',
-                },
-              ]);
+                  tax_rate: organizationTaxRate
+                });
+
+                setDraftItems((prev) => [
+                  ...prev,
+                  {
+                    id: item.id + '-' + Date.now(),
+                    invoice_id: '',
+                    chargeable_id: item.id,
+                    description: item.name,
+                    quantity,
+                    unit_price: item.rate,
+                    rate_inclusive: calculatedAmounts.rate_inclusive,
+                    amount: calculatedAmounts.amount,
+                    tax_rate: organizationTaxRate,
+                    tax_amount: calculatedAmounts.tax_amount,
+                    line_total: calculatedAmounts.line_total,
+                    notes: null,
+                    created_at: '',
+                    updated_at: '',
+                  },
+                ]);
+              } catch (error) {
+                console.error('Failed to calculate item amounts:', error);
+                toast.error(error instanceof Error ? error.message : 'Failed to add item with calculations');
+              }
             }}
             taxRate={organizationTaxRate}
           />
@@ -745,10 +772,10 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
   // Error handling for edit mode
   if (error || !invoice) return <div className="p-10 text-center text-destructive">Invoice not found.</div>;
 
-  // Existing edit mode UI
-  const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
-  const totalTax = items.reduce((sum, item) => sum + (item.tax_amount || 0), 0);
-  const total = items.reduce((sum, item) => sum + (item.line_total || 0), 0);
+  // Existing edit mode UI with proper rounding
+  const subtotal = roundToTwoDecimals(items.reduce((sum, item) => sum + item.amount, 0));
+  const totalTax = roundToTwoDecimals(items.reduce((sum, item) => sum + (item.tax_amount || 0), 0));
+  const total = roundToTwoDecimals(items.reduce((sum, item) => sum + (item.line_total || 0), 0));
 
   return (
     <div className="flex flex-col gap-8 p-6 md:p-10 max-w-4xl mx-auto">
@@ -895,7 +922,7 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
         <div className="w-full border rounded-lg overflow-hidden mb-4">
           <div className="grid grid-cols-6 gap-0 bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-600">
             <div className="col-span-2 pl-2">Item</div>
-            <div className="col-span-1 text-right">Rate</div>
+            <div className="col-span-1 text-right">Subtotal (incl. tax)</div>
             <div className="col-span-1 flex justify-center">Qty</div>
             <div className="col-span-1 text-right">Total</div>
             <div className="col-span-1 flex justify-center">Edit</div>
@@ -924,7 +951,7 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
                       onChange={e => setEditRate(Number(e.target.value))}
                     />
                   ) : (
-                    <span>${(item.rate_inclusive || item.unit_price || 0).toFixed(2)}</span>
+                    <span>${((item.rate_inclusive || item.unit_price || 0) * (item.quantity || 1)).toFixed(2)}</span>
                   )}
                 </div>
                 <div className="col-span-1 flex items-center justify-center">

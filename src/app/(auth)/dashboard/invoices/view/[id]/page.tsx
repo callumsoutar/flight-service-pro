@@ -2,6 +2,7 @@ import { Card } from '@/components/ui/card';
 import PaymentHistory from '@/components/invoices/PaymentHistory';
 import DraftRedirector from '@/components/invoices/DraftRedirector';
 import { createClient } from '@/lib/SupabaseServerClient';
+import { formatCurrencyDisplay } from '@/lib/utils';
 import { InvoiceItem } from '@/types/invoice_items';
 import * as React from 'react';
 import InvoiceViewHeader from '@/components/invoices/InvoiceViewHeader';
@@ -83,7 +84,7 @@ async function InvoiceViewPage({ params }: InvoiceViewPageProps) {
               <tr className="bg-gray-50">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Quantity</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Rate (incl. tax)</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Subtotal (incl. tax)</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Amount</th>
               </tr>
             </thead>
@@ -95,7 +96,7 @@ async function InvoiceViewPage({ params }: InvoiceViewPageProps) {
                   <tr key={item.id} className="border-b last:border-b-0">
                     <td className="px-4 py-3 text-sm">{item.description}</td>
                     <td className="px-4 py-3 text-right text-sm">{item.quantity || 0}</td>
-                    <td className="px-4 py-3 text-right text-sm">${(item.rate_inclusive || item.unit_price || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right text-sm">${((item.rate_inclusive || item.unit_price || 0) * (item.quantity || 1)).toFixed(2)}</td>
                     <td className="px-4 py-3 text-right text-sm font-medium">${(item.line_total || 0).toFixed(2)}</td>
                   </tr>
                 ))
@@ -107,26 +108,26 @@ async function InvoiceViewPage({ params }: InvoiceViewPageProps) {
         <div className="flex flex-col items-end mt-6 gap-1">
           <div className="flex gap-8 text-sm">
             <div className="text-muted-foreground">Subtotal (excl. Tax):</div>
-            <div className="font-medium">${(invoice.subtotal || 0).toFixed(2)}</div>
+            <div className="font-medium">${formatCurrencyDisplay(invoice.subtotal || 0)}</div>
           </div>
           <div className="flex gap-8 text-sm">
             <div className="text-muted-foreground">Tax ({invoice.tax_rate ? Math.round(invoice.tax_rate * 100) : 0}%):</div>
-            <div className="font-medium">${(invoice.tax_total || 0).toFixed(2)}</div>
+            <div className="font-medium">${formatCurrencyDisplay(invoice.tax_total || 0)}</div>
           </div>
           <div className="flex gap-8 text-lg mt-2">
             <div className="font-bold">Total:</div>
-            <div className="font-bold text-green-600">${(invoice.total_amount || 0).toFixed(2)}</div>
+            <div className="font-bold text-green-600">${formatCurrencyDisplay(invoice.total_amount || 0)}</div>
           </div>
         </div>
         {/* Paid & Balance Due */}
         <div className="flex flex-col items-end mt-4 gap-1">
           <div className="flex gap-8 text-sm">
             <div className="text-muted-foreground">Paid:</div>
-            <div className="font-semibold text-blue-700">${(invoice.total_paid || 0).toFixed(2)}</div>
+            <div className="font-semibold text-blue-700">${formatCurrencyDisplay(invoice.total_paid || 0)}</div>
           </div>
           <div className="flex gap-8 text-sm">
             <div className="text-muted-foreground">Balance Due:</div>
-            <div className="font-semibold text-red-600">${(invoice.balance_due || 0).toFixed(2)}</div>
+            <div className="font-semibold text-red-600">${formatCurrencyDisplay(invoice.balance_due || 0)}</div>
           </div>
         </div>
         {/* Add Payment Button (below balance due, tight spacing) */}

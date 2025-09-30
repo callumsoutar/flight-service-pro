@@ -10,6 +10,7 @@ export type StudentSyllabusEnrollment = {
   created_at: string;
   updated_at: string;
   primary_instructor_id: string | null;
+  aircraft_type: string | null;
 };
 
 export type StudentSyllabusEnrollmentInsert = {
@@ -22,6 +23,7 @@ export type StudentSyllabusEnrollmentInsert = {
   created_at?: string;
   updated_at?: string;
   primary_instructor_id?: string | null;
+  aircraft_type?: string | null;
 };
 
 export type StudentSyllabusEnrollmentUpdate = {
@@ -34,4 +36,5 @@ export type StudentSyllabusEnrollmentUpdate = {
   created_at?: string;
   updated_at?: string;
   primary_instructor_id?: string | null;
+  aircraft_type?: string | null;
 }; 

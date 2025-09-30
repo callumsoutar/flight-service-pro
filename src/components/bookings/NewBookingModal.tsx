@@ -14,6 +14,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   CalendarIcon,
   UserIcon,
@@ -23,10 +25,12 @@ import {
   ClipboardList,
   StickyNote,
   AlignLeft,
-  Info,
   Users,
   Phone,
   Mail,
+  CheckCircle,
+  Star,
+  Repeat,
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
@@ -38,6 +42,8 @@ import { TypeRatingWarning } from "@/components/bookings/TypeRatingWarning";
 import { useSettingsContext } from "@/contexts/SettingsContext";
 import { TimeSlot } from "@/types/settings";
 import { useCurrentUserRoles } from "@/hooks/use-user-roles";
+import { useIsRestrictedUser } from "@/hooks/use-role-protection";
+import { useMemberSyllabusEnrollments } from "@/hooks/use-member-syllabus-enrollments";
 import { createClient } from "@/lib/SupabaseBrowserClient";
 
 /**
@@ -75,6 +81,14 @@ interface AircraftOption {
   id: string;
   registration: string;
   type: string;
+  aircraft_type_id?: string | null;
+  aircraft_type?: {
+    id: string;
+    name: string;
+    category: string | null;
+    description: string | null;
+  };
+  prioritise_scheduling?: boolean;
 }
 
 interface NewBookingModalProps {
@@ -129,9 +143,25 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
-  
+
+  // Recurring booking fields
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringDays, setRecurringDays] = useState<string[]>([]);
+  const [recurringUntilDate, setRecurringUntilDate] = useState<Date | null>(null);
+  const [conflictHandling, setConflictHandling] = useState<"skip" | "stop" | "ask">("skip");
+  const [recurringProgress, setRecurringProgress] = useState<{
+    total: number;
+    current: number;
+    created: number;
+    conflicts: number;
+    errors: number;
+  } | null>(null);
+
   // Type rating validation
   const { validation, isValidating, error: validationError, validateTypeRating, resetValidation } = useInstructorTypeRating();
+
+  // Syllabus enrollment data for preferred aircraft selection
+  const { preferredAircraftTypeIds } = useMemberSyllabusEnrollments(selectedMember?.id || null);
 
   // Settings context for default booking duration and time slots
   const { getSettingValue } = useSettingsContext();
@@ -145,6 +175,9 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
 
   // Check if user has restricted role (member or student)
   const isRestrictedRole = userRole === 'member' || userRole === 'student';
+
+  // Check if user is restricted (for privilege checking)
+  const { isRestricted: isRestrictedUser } = useIsRestrictedUser();
 
   /**
    * Calculates end time based on start time and duration
@@ -389,6 +422,11 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       setCustomerName("");
       setCustomerPhone("");
       setCustomerEmail("");
+      setIsRecurring(false);
+      setRecurringDays([]);
+      setRecurringUntilDate(null);
+      setConflictHandling("skip");
+      setRecurringProgress(null);
       setCurrentUser(null); // Reset current user state
       resetValidation(); // Reset type rating validation state
     }, 200);
@@ -414,6 +452,78 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
   // Helper: check if two time ranges overlap
   function isOverlap(startA: Date, endA: Date, startB: Date, endB: Date) {
     return startA < endB && endA > startB;
+  }
+
+  // Helper: generate recurring dates based on selected days
+  function generateRecurringDates(startDate: Date, untilDate: Date, selectedDays: string[]): Date[] {
+    const dates: Date[] = [];
+    const dayNameToNumber: { [key: string]: number } = {
+      sunday: 0,
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
+    };
+
+    // Convert selected day names to day numbers
+    const selectedDayNumbers = selectedDays.map(day => dayNameToNumber[day]);
+
+    // Start from the start date and find all matching days until the until date
+    const currentDate = new Date(startDate);
+    currentDate.setHours(0, 0, 0, 0); // Reset time to start of day
+
+    while (currentDate <= untilDate) {
+      const dayOfWeek = currentDate.getDay();
+
+      // If this day of week is selected and it's on or after the start date
+      if (selectedDayNumbers.includes(dayOfWeek) && currentDate >= startDate) {
+        dates.push(new Date(currentDate));
+      }
+
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return dates;
+  }
+
+  // Helper: check for conflicts on a specific date and time
+  function checkConflictForDateTime(date: Date, startTime: string, endTime: string): boolean {
+    const start = new Date(
+      date.getFullYear(), date.getMonth(), date.getDate(),
+      Number(startTime.split(":")[0]), Number(startTime.split(":")[1])
+    );
+    const end = new Date(
+      date.getFullYear(), date.getMonth(), date.getDate(),
+      Number(endTime.split(":")[0]), Number(endTime.split(":")[1])
+    );
+
+    // Check against all active bookings
+    const activeStatuses = ["unconfirmed", "confirmed", "briefing", "flying"];
+
+    for (const booking of bookings) {
+      if (activeStatuses.includes(booking.status) && booking.start_time && booking.end_time) {
+        const bookingStart = new Date(booking.start_time);
+        const bookingEnd = new Date(booking.end_time);
+
+        // Check for time overlap and resource conflicts
+        if (isOverlap(start, end, bookingStart, bookingEnd)) {
+          // Check if aircraft conflicts
+          if (booking.aircraft_id === aircraftId) {
+            return true;
+          }
+
+          // Check if instructor conflicts (if we have one selected)
+          if (instructor?.id && booking.instructor_id === instructor.id) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
   }
 
   // Compute unavailable aircraft/instructors for the selected time
@@ -455,14 +565,14 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
   async function handleSubmit(e: React.FormEvent, statusOverride?: string) {
     e.preventDefault();
     setError(null);
-    
+
     // Basic validation - different requirements for trial flights vs regular bookings
     if (activeTab === "trial") {
       if (!customerName || !customerEmail || !aircraftId || !startDate || !startTime || !endDate || !endTime || !purpose) {
         setError("Please fill in all required fields (customer name, email, aircraft, start/end time, description).");
         return;
       }
-      
+
       // Email validation for trial flights
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(customerEmail)) {
@@ -482,6 +592,24 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       // Additional validation for non-restricted roles
       if (!isRestrictedRole && !selectedMember) {
         setError("Please select a member for this booking.");
+        return;
+      }
+    }
+
+    // Recurring booking validation
+    if (isRecurring) {
+      if (recurringDays.length === 0) {
+        setError("Please select at least one day for recurring bookings.");
+        return;
+      }
+
+      if (!recurringUntilDate) {
+        setError("Please select an end date for recurring bookings.");
+        return;
+      }
+
+      if (startDate && recurringUntilDate < startDate) {
+        setError("End date must be after the start date for recurring bookings.");
         return;
       }
     }
@@ -557,35 +685,177 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
         }
       }
       
-      // Build booking payload
-      const payload = {
-        user_id: userId,
-        aircraft_id: aircraftId,
-        start_time,
-        end_time,
-        purpose,
-        booking_type: activeTab === "trial" ? "flight" : bookingType,
-        instructor_id: instructor?.id || null,
-        remarks: remarks || null,
-        lesson_id: activeTab === "trial" ? null : (isRestrictedRole ? null : (lesson || null)),
-        flight_type_id: isRestrictedRole ? null : (flightType || null),
-        status: statusOverride || "unconfirmed",
-      };
-      const res = await fetch("/api/bookings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Failed to create booking");
-      } else {
-        // Call the optimistic update callback if provided
-        if (onBookingCreated && data.booking) {
-          onBookingCreated(data.booking);
+      if (isRecurring && startDate && recurringUntilDate) {
+        // Recurring booking logic
+        const recurringDates = generateRecurringDates(startDate, recurringUntilDate, recurringDays);
+
+        if (recurringDates.length === 0) {
+          setError("No valid dates found for the selected recurring pattern.");
+          return;
         }
-        if (refresh) refresh();
-        handleClose();
+
+        // Initialize progress tracking
+        setRecurringProgress({
+          current: 0,
+          total: recurringDates.length,
+          created: 0,
+          conflicts: 0,
+          errors: 0
+        });
+
+        let createdCount = 0;
+        let conflictCount = 0;
+        let errorCount = 0;
+        let shouldStop = false;
+
+        for (let i = 0; i < recurringDates.length && !shouldStop; i++) {
+          const bookingDate = recurringDates[i];
+
+          // Update progress
+          setRecurringProgress(prev => prev ? {
+            ...prev,
+            current: i + 1
+          } : null);
+
+          // Calculate start and end times for this date
+          const bookingStartTime = getUtcIsoString(bookingDate, startTime);
+          const bookingEndTime = getUtcIsoString(bookingDate, endTime);
+
+          if (!bookingStartTime || !bookingEndTime) {
+            errorCount++;
+            continue;
+          }
+
+          // Check for conflicts for this specific date
+          const hasConflict = checkConflictForDateTime(bookingDate, startTime, endTime);
+
+          if (hasConflict) {
+            conflictCount++;
+
+            if (conflictHandling === "stop") {
+              shouldStop = true;
+              break;
+            } else if (conflictHandling === "skip") {
+              continue;
+            }
+            // For "ask" mode, we could implement a modal here, but for now treat as skip
+          }
+
+          try {
+            const payload = {
+              user_id: userId,
+              aircraft_id: aircraftId,
+              start_time: bookingStartTime,
+              end_time: bookingEndTime,
+              purpose,
+              booking_type: activeTab === "trial" ? "flight" : bookingType,
+              instructor_id: instructor?.id || null,
+              remarks: remarks || null,
+              lesson_id: activeTab === "trial" ? null : (isRestrictedRole ? null : (lesson || null)),
+              flight_type_id: isRestrictedRole ? null : (flightType || null),
+              status: statusOverride || "unconfirmed",
+            };
+
+            const res = await fetch("/api/bookings?skip_email=true", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              createdCount++;
+
+              // Call the optimistic update callback for each booking
+              if (onBookingCreated && data.booking) {
+                onBookingCreated(data.booking);
+              }
+            } else {
+              errorCount++;
+            }
+          } catch {
+            errorCount++;
+          }
+
+          // Small delay to avoid overwhelming the server (reduced since emails are skipped)
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        // Final progress update
+        setRecurringProgress({
+          current: recurringDates.length,
+          total: recurringDates.length,
+          created: createdCount,
+          conflicts: conflictCount,
+          errors: errorCount
+        });
+
+        // Send a single summary email for the recurring booking series
+        if (createdCount > 0) {
+          try {
+            // Send summary email notification about the bulk booking creation
+            const summaryPayload = {
+              user_id: userId,
+              booking_count: createdCount,
+              start_date: startDate.toISOString().split('T')[0],
+              until_date: recurringUntilDate.toISOString().split('T')[0],
+              days: recurringDays,
+              time_slot: `${startTime} - ${endTime}`,
+              aircraft_id: aircraftId,
+              instructor_id: instructor?.id || null,
+              purpose: purpose,
+            };
+
+            // Call a separate API endpoint for bulk booking notifications
+            fetch("/api/bookings/bulk-notification", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(summaryPayload),
+            }).catch(() => {
+              // Silently handle email failure - don't block the UI
+            });
+          } catch {
+            // Silently handle any errors with email sending
+          }
+
+          setTimeout(() => {
+            if (refresh) refresh();
+            handleClose();
+          }, 2000);
+        } else {
+          setError("No bookings were created. Please check for conflicts and try again.");
+        }
+      } else {
+        // Single booking logic
+        const payload = {
+          user_id: userId,
+          aircraft_id: aircraftId,
+          start_time,
+          end_time,
+          purpose,
+          booking_type: activeTab === "trial" ? "flight" : bookingType,
+          instructor_id: instructor?.id || null,
+          remarks: remarks || null,
+          lesson_id: activeTab === "trial" ? null : (isRestrictedRole ? null : (lesson || null)),
+          flight_type_id: isRestrictedRole ? null : (flightType || null),
+          status: statusOverride || "unconfirmed",
+        };
+        const res = await fetch("/api/bookings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error || "Failed to create booking");
+        } else {
+          // Call the optimistic update callback if provided
+          if (onBookingCreated && data.booking) {
+            onBookingCreated(data.booking);
+          }
+          if (refresh) refresh();
+          handleClose();
+        }
       }
     } catch {
       setError("Failed to create booking");
@@ -715,6 +985,127 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       <span>{timeSlotValidation.message}</span>
                     </div>
                   )}
+
+                  {/* Recurring Booking Toggle */}
+                  <div className="mt-4 border-t pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Repeat className="w-4 h-4 text-muted-foreground" />
+                        <label className="text-sm font-medium">Recurring Booking</label>
+                      </div>
+                      <Switch
+                        checked={isRecurring}
+                        onCheckedChange={setIsRecurring}
+                        aria-label="Enable recurring booking"
+                      />
+                    </div>
+
+                    {/* Recurring Options - Show when toggle is enabled */}
+                    {isRecurring && (
+                      <div className="space-y-4 bg-muted/30 p-4 rounded-lg border">
+                        <div>
+                          <label className="block text-xs font-semibold mb-2">Repeat on days</label>
+                          <div className="grid grid-cols-7 gap-2">
+                            {[
+                              { key: "monday", label: "Mon" },
+                              { key: "tuesday", label: "Tue" },
+                              { key: "wednesday", label: "Wed" },
+                              { key: "thursday", label: "Thu" },
+                              { key: "friday", label: "Fri" },
+                              { key: "saturday", label: "Sat" },
+                              { key: "sunday", label: "Sun" },
+                            ].map((day) => (
+                              <div key={day.key} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={day.key}
+                                  checked={recurringDays.includes(day.key)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setRecurringDays([...recurringDays, day.key]);
+                                    } else {
+                                      setRecurringDays(recurringDays.filter(d => d !== day.key));
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={day.key}
+                                  className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                  {day.label}
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold mb-2">Until date</label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className={
+                                    "w-full justify-start text-left font-normal " +
+                                    (!recurringUntilDate ? "text-muted-foreground" : "")
+                                  }
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {recurringUntilDate ? format(recurringUntilDate, "dd MMM yyyy") : <span>Pick end date</span>}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={recurringUntilDate ?? undefined}
+                                  onSelect={date => setRecurringUntilDate(date ?? null)}
+                                  disabled={(date) => date < new Date() || (startDate ? date < startDate : false)}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold mb-2">If conflict occurs</label>
+                            <Select value={conflictHandling} onValueChange={setConflictHandling as (value: string) => void}>
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select conflict handling" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="skip">Skip conflicted bookings</SelectItem>
+                                <SelectItem value="stop">Stop at first conflict</SelectItem>
+                                <SelectItem value="ask">Ask me for each conflict</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        {/* Progress indicator during bulk creation */}
+                        {recurringProgress && (
+                          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Repeat className="w-4 h-4 text-blue-600" />
+                              <span className="text-sm font-medium text-blue-900">
+                                Creating recurring bookings... {recurringProgress.created} of {recurringProgress.total}
+                              </span>
+                            </div>
+                            <div className="w-full bg-blue-200 rounded-full h-2">
+                              <div
+                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${(recurringProgress.created / recurringProgress.total) * 100}%` }}
+                              ></div>
+                            </div>
+                            {(recurringProgress.conflicts > 0 || recurringProgress.errors > 0) && (
+                              <div className="mt-2 text-xs text-red-600">
+                                {recurringProgress.conflicts + recurringProgress.errors} bookings failed due to conflicts or errors
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 {/* Tab-specific content */}
@@ -758,7 +1149,32 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                   {/* Aircraft and Flight Type/Booking Type row */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 mb-4">
                     <div className="max-w-[340px] w-full">
-                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><Plane className="w-4 h-4" /> Aircraft</label>
+                      <div className="flex items-center mb-2">
+                        <label className="block text-xs font-semibold flex items-center gap-1">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span tabIndex={0} className="cursor-pointer text-muted-foreground hover:text-indigo-600 focus:outline-none">
+                                  <Plane className="w-4 h-4" aria-label="Aircraft indicators info" />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-80">
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                                    <span className="text-sm">Green checkmark: Aircraft types matching this member&apos;s syllabus enrollments</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Star className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                                    <span className="text-sm">Amber star: Aircraft prioritised for scheduling</span>
+                                  </div>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          Aircraft
+                        </label>
+                      </div>
                       <Select value={aircraftId} onValueChange={(selectedAircraftId) => {
                         // Clear any previous aircraft conflict errors when selecting a different aircraft
                         if (error && error.includes("aircraft is already booked")) {
@@ -772,9 +1188,21 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         <SelectContent>
                           {aircraft.map(a => {
                             const isBooked = unavailable.aircraft.has(a.id);
+                            const isPreferred = preferredAircraftTypeIds.includes(a.aircraft_type_id || '');
+                            const isPriority = a.prioritise_scheduling === true;
                             return (
                               <SelectItem key={a.id} value={a.id} disabled={isBooked}>
-                                {a.registration} ({a.type}){isBooked ? " (booked)" : ""}
+                                <div className="flex items-center gap-2">
+                                  {isPreferred && (
+                                    <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                                  )}
+                                  {isPriority && (
+                                    <Star className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                                  )}
+                                  <span>
+                                    {a.registration} ({a.type}){isBooked ? " (booked)" : ""}
+                                  </span>
+                                </div>
                               </SelectItem>
                             );
                           })}
@@ -874,18 +1302,6 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         <label className="block text-xs font-semibold flex items-center gap-1">
                           <StickyNote className="w-4 h-4" /> Booking Remarks
                         </label>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span tabIndex={0} className="ml-1 cursor-pointer text-muted-foreground hover:text-indigo-600 focus:outline-none">
-                                <Info className="w-4 h-4" aria-label="Booking remarks info" />
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              These comments will not be seen by the student.
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
                       </div>
                       <Textarea
                         value={remarks}
@@ -959,7 +1375,32 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       )}
                     </div>
                     <div className="max-w-[340px] w-full">
-                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><Plane className="w-4 h-4" /> Aircraft</label>
+                      <div className="flex items-center mb-2">
+                        <label className="block text-xs font-semibold flex items-center gap-1">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span tabIndex={0} className="cursor-pointer text-muted-foreground hover:text-indigo-600 focus:outline-none">
+                                  <Plane className="w-4 h-4" aria-label="Aircraft indicators info" />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-80">
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                                    <span className="text-sm">Green checkmark: Aircraft types matching this member&apos;s syllabus enrollments</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Star className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                                    <span className="text-sm">Amber star: Aircraft prioritised for scheduling</span>
+                                  </div>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          Aircraft
+                        </label>
+                      </div>
                       <Select value={aircraftId} onValueChange={(selectedAircraftId) => {
                         // Clear any previous aircraft conflict errors when selecting a different aircraft
                         if (error && error.includes("aircraft is already booked")) {
@@ -973,9 +1414,21 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         <SelectContent>
                           {aircraft.map(a => {
                             const isBooked = unavailable.aircraft.has(a.id);
+                            const isPreferred = preferredAircraftTypeIds.includes(a.aircraft_type_id || '');
+                            const isPriority = a.prioritise_scheduling === true;
                             return (
                               <SelectItem key={a.id} value={a.id} disabled={isBooked}>
-                                {a.registration} ({a.type}){isBooked ? " (booked)" : ""}
+                                <div className="flex items-center gap-2">
+                                  {isPreferred && (
+                                    <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                                  )}
+                                  {isPriority && (
+                                    <Star className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                                  )}
+                                  <span>
+                                    {a.registration} ({a.type}){isBooked ? " (booked)" : ""}
+                                  </span>
+                                </div>
                               </SelectItem>
                             );
                           })}
@@ -1025,18 +1478,6 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         <label className="block text-xs font-semibold flex items-center gap-1">
                           <StickyNote className="w-4 h-4" /> Booking Remarks
                         </label>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span tabIndex={0} className="ml-1 cursor-pointer text-muted-foreground hover:text-indigo-600 focus:outline-none">
-                                <Info className="w-4 h-4" aria-label="Booking remarks info" />
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              Internal notes about this trial flight booking.
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
                       </div>
                       <Textarea
                         value={remarks}
@@ -1060,6 +1501,17 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                 >
                   {isRestrictedRole ? 'Save Booking' : 'Save'}
                 </Button>
+                {/* Save and Confirm button - only visible to privileged users */}
+                {!isRestrictedUser && (
+                  <Button
+                    type="button"
+                    className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md cursor-pointer"
+                    disabled={loading}
+                    onClick={e => handleSubmit(e, 'confirmed')}
+                  >
+                    Save and Confirm
+                  </Button>
+                )}
               </DialogFooter>
               {error && <div className="text-red-600 text-sm mb-2 text-center w-full">{error}</div>}
             </div>

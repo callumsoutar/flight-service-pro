@@ -5,7 +5,6 @@ import { User } from "@/types/users";
 import { Aircraft } from "@/types/aircraft";
 import { Observation } from "@/types/observations";
 import { Users, User as UserIcon, UserCheck, Plane, AlertTriangle, Info } from "lucide-react";
-import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { ViewObservationModal } from "@/components/aircraft/ViewObservationModal";
@@ -26,9 +25,10 @@ interface BookingResourcesProps {
   instructor?: JoinedInstructor | null;
   aircraft?: Aircraft | null;
   bookingStatus?: string;
+  aircraftObservations?: Observation[];
 }
 
-export default function BookingResources({ member, instructor, aircraft, bookingStatus }: BookingResourcesProps) {
+export default function BookingResources({ member, instructor, aircraft, bookingStatus, aircraftObservations = [] }: BookingResourcesProps) {
   const [selectedObservationId, setSelectedObservationId] = useState<string | null>(null);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -36,22 +36,8 @@ export default function BookingResources({ member, instructor, aircraft, booking
   // Check if user has restricted access (member/student)
   const { isRestricted: isRestrictedUser } = useIsRestrictedUser();
 
-  // Fetch observations for the aircraft
-  const { data: observations } = useQuery<Observation[]>({
-    queryKey: ['aircraft-observations', aircraft?.id],
-    queryFn: async () => {
-      if (!aircraft?.id) return [];
-      const res = await fetch(`/api/observations?aircraft_id=${aircraft.id}`);
-      if (!res.ok) throw new Error('Failed to fetch observations');
-      return res.json();
-    },
-    enabled: !!aircraft?.id,
-  });
-
-  // Filter observations to show only open and investigation stages
-  const activeObservations = observations?.filter(obs => 
-    obs.observation_stage === 'open' || obs.observation_stage === 'investigation'
-  ) || [];
+  // Use pre-loaded observations (already filtered for open/investigation stages)
+  const activeObservations = aircraftObservations;
 
 
   const handleContactDetailsClick = (userId: string) => {

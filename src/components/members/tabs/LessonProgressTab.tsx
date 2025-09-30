@@ -173,17 +173,6 @@ export default function LessonProgressTab({
                   variant="outline"
                   size="sm"
                   onClick={() => setDateRange({
-                    from: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
-                    to: new Date()
-                  })}
-                  className="text-xs"
-                >
-                  60 Days
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDateRange({
                     from: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
                     to: new Date()
                   })}
@@ -195,12 +184,12 @@ export default function LessonProgressTab({
                   variant="outline"
                   size="sm"
                   onClick={() => setDateRange({
-                    from: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000),
+                    from: new Date(0),
                     to: new Date()
                   })}
                   className="text-xs"
                 >
-                  12 Months
+                  All Time
                 </Button>
               </div>
             </div>

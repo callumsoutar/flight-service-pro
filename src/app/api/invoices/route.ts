@@ -136,18 +136,30 @@ export async function POST(req: NextRequest) {
     
     // Create invoice items if provided
     if (items.length > 0) {
-      const invoiceItems = items.map((item: { chargeable_id?: string; description: string; quantity: number; unit_price: number; tax_rate?: number | null; notes?: string }) => ({
-        invoice_id: result.invoice_id,
-        chargeable_id: item.chargeable_id,
-        description: item.description,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        tax_rate: item.tax_rate,
-        amount: item.quantity * item.unit_price,
-        tax_amount: (item.quantity * item.unit_price) * (item.tax_rate ?? 0),
-        line_total: (item.quantity * item.unit_price) * (1 + (item.tax_rate ?? 0))
-      }));
-      
+      const invoiceItems = items.map((item: { chargeable_id?: string; description: string; quantity: number; unit_price: number; tax_rate?: number | null; notes?: string }) => {
+        // Use InvoiceService for currency-safe calculations
+        const calculatedAmounts = InvoiceService.calculateItemAmounts({
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          tax_rate: item.tax_rate ?? taxRate
+        });
+
+        return {
+          invoice_id: result.invoice_id,
+          chargeable_id: item.chargeable_id,
+          description: item.description,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          tax_rate: item.tax_rate ?? taxRate,
+          // Application-calculated values using currency-safe arithmetic
+          amount: calculatedAmounts.amount,
+          tax_amount: calculatedAmounts.tax_amount,
+          line_total: calculatedAmounts.line_total,
+          rate_inclusive: calculatedAmounts.rate_inclusive,
+          notes: item.notes || null
+        };
+      });
+
       const { error: itemsError } = await supabase
         .from('invoice_items')
         .insert(invoiceItems);
@@ -173,10 +185,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invoice created but failed to fetch details' }, { status: 500 });
     }
     
-    console.log(`Invoice created atomically: ${result.invoice_number} (${result.status})`);
-    if (result.transaction_id) {
-      console.log(`Transaction created: ${result.transaction_id}`);
-    }
     
     return NextResponse.json(invoice);
   } catch (error) {

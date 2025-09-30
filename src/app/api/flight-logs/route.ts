@@ -109,7 +109,7 @@ export async function PATCH(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
-  
+
   // Auth check
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -118,6 +118,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const bookingId = searchParams.get("booking_id");
+  const aircraftId = searchParams.get("aircraft_id");
 
   try {
     let query = supabase
@@ -125,7 +126,23 @@ export async function GET(req: NextRequest) {
       .select(`
         *,
         checked_out_aircraft:checked_out_aircraft_id(id, registration, type),
-        checked_out_instructor:checked_out_instructor_id(*)
+        checked_out_instructor:checked_out_instructor_id(*),
+        booking:booking_id(
+          id,
+          aircraft_id,
+          user_id,
+          instructor_id,
+          start_time,
+          end_time,
+          purpose,
+          user:user_id(first_name, last_name),
+          instructor:instructor_id(
+            id,
+            user_id,
+            users:users!instructors_user_id_fkey(first_name, last_name)
+          ),
+          lesson:lesson_id(name)
+        )
       `);
 
     if (bookingId) {
@@ -137,15 +154,33 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ flight_log: data });
     }
 
+    // We need to filter by aircraft through the booking relationship
+    // This requires joining with bookings table first
+    if (aircraftId) {
+      // Use a more explicit approach - filter through booking table
+      const { data: bookingIds } = await supabase
+        .from("bookings")
+        .select("id")
+        .eq("aircraft_id", aircraftId);
+
+      if (bookingIds && bookingIds.length > 0) {
+        const ids = bookingIds.map(b => b.id);
+        query = query.in("booking_id", ids);
+      } else {
+        // No bookings for this aircraft, return empty
+        return NextResponse.json({ flight_logs: [] });
+      }
+    }
+
     const { data, error } = await query.order("created_at", { ascending: false });
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     return NextResponse.json({ flight_logs: data || [] });
   } catch (error) {
-    return NextResponse.json({ 
-      error: "Internal server error", 
-      details: error instanceof Error ? error.message : 'Unknown error' 
+    return NextResponse.json({
+      error: "Internal server error",
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }

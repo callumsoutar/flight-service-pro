@@ -10,7 +10,7 @@ import Progress from "@/components/ui/progress";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { format, subDays, startOfDay, endOfDay, isWithinInterval } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, isWithinInterval, differenceInDays } from "date-fns";
 import { 
   ArrowLeft, 
   User, 
@@ -276,6 +276,30 @@ export default function StudentTrainingRecordClient({ memberId }: StudentTrainin
   // Get selected enrollment progress
   const selectedEnrollment = enrollments.find(e => e.syllabus_id === selectedSyllabusId);
 
+  // Calculate last flight info
+  const getLastFlightInfo = () => {
+    if (allFlights.length === 0) return null;
+
+    // Sort flights by actual_end or booking_end_time to get the most recent
+    const sortedFlights = [...allFlights].sort((a, b) => {
+      const dateA = new Date(a.actual_end || a.booking_end_time || '');
+      const dateB = new Date(b.actual_end || b.booking_end_time || '');
+      return dateB.getTime() - dateA.getTime();
+    });
+
+    const lastFlight = sortedFlights[0];
+    const lastFlightDate = new Date(lastFlight.actual_end || lastFlight.booking_end_time || '');
+    const daysSinceLastFlight = differenceInDays(new Date(), lastFlightDate);
+
+    return {
+      date: lastFlightDate,
+      daysSince: daysSinceLastFlight,
+      flight: lastFlight
+    };
+  };
+
+  const lastFlightInfo = getLastFlightInfo();
+
   if (loading) {
     return (
       <main className="max-w-7xl mx-auto p-6">
@@ -385,16 +409,16 @@ export default function StudentTrainingRecordClient({ memberId }: StudentTrainin
               {selectedEnrollment && (
                 <div className="space-y-6">
                   {/* Progress Section - Similar to Screenshot */}
-                  <div className="bg-gray-50 rounded-lg p-6 border border-gray-100">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                        <GraduationCap className="w-6 h-6 text-indigo-600" />
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                        <GraduationCap className="w-5 h-5 text-indigo-600" />
                       </div>
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-gray-900">
                           {selectedEnrollment.syllabus?.name || 'Private Pilots License'}
                         </h3>
-                        <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center justify-between mt-1">
                           <div className="flex items-center gap-6 text-sm text-gray-600">
                             <span className="font-medium">
                               {selectedEnrollment.progress?.completed_lessons || 0} lessons passed
@@ -428,6 +452,7 @@ export default function StudentTrainingRecordClient({ memberId }: StudentTrainin
                         <th className="text-left py-3 pl-4 pr-4 font-medium text-gray-900">Syllabus</th>
                         <th className="text-left py-3 pr-4 font-medium text-gray-900">Primary Instructor</th>
                         <th className="text-left py-3 pr-4 font-medium text-gray-900">Enrolled</th>
+                        <th className="text-left py-3 pr-4 font-medium text-gray-900">Last Flight</th>
                         <th className="text-left py-3 pr-4 font-medium text-gray-900">Status</th>
                       </tr>
                     </thead>
@@ -460,14 +485,40 @@ export default function StudentTrainingRecordClient({ memberId }: StudentTrainin
                           <td className="py-4 pr-4 text-sm">
                             <div className="flex items-center gap-2">
                               <Calendar className="w-4 h-4 text-gray-500" />
-                              <span className="font-medium">
-                                {new Date(enrollment.enrolled_at).toLocaleDateString('en-GB', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  year: 'numeric'
-                                })}
-                              </span>
+                              <div className="flex flex-col">
+                                <span className="font-medium">
+                                  {new Date(enrollment.enrolled_at).toLocaleDateString('en-GB', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric'
+                                  })}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {differenceInDays(new Date(), new Date(enrollment.enrolled_at))} days ago
+                                </span>
+                              </div>
                             </div>
+                          </td>
+                          <td className="py-4 pr-4 text-sm">
+                            {lastFlightInfo ? (
+                              <div className="flex items-center gap-2">
+                                <Plane className="w-4 h-4 text-gray-500" />
+                                <div className="flex flex-col">
+                                  <span className="font-medium">
+                                    {lastFlightInfo.date.toLocaleDateString('en-GB', {
+                                      day: '2-digit',
+                                      month: 'short',
+                                      year: 'numeric'
+                                    })}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    {lastFlightInfo.daysSince} days ago
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">No flights</span>
+                            )}
                           </td>
                           <td className="py-4 pr-4">
                             <Badge
@@ -631,16 +682,19 @@ export default function StudentTrainingRecordClient({ memberId }: StudentTrainin
                     <th className="text-left py-3 pr-4 font-medium text-gray-900">Instructor</th>
                     <th className="text-left py-3 pr-4 font-medium text-gray-900">Lesson</th>
                     <th className="text-left py-3 pr-4 font-medium text-gray-900">Flight Time</th>
+                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {flights.map((flight) => (
-                    <tr 
-                      key={flight.flight_log_id} 
-                      className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={() => (window.location.href = `/dashboard/bookings/view/${flight.booking_id}`)}
+                    <tr
+                      key={flight.flight_log_id}
+                      className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                     >
-                      <td className="py-3 pr-4 text-sm">
+                      <td
+                        className="py-3 pr-4 text-sm cursor-pointer"
+                        onClick={() => (window.location.href = `/dashboard/bookings/view/${flight.booking_id}`)}
+                      >
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-gray-500" />
                           <span className="font-medium">
@@ -648,18 +702,24 @@ export default function StudentTrainingRecordClient({ memberId }: StudentTrainin
                           </span>
                         </div>
                       </td>
-                      <td className="py-3 pr-4 font-medium text-gray-900">
+                      <td
+                        className="py-3 pr-4 font-medium text-gray-900 cursor-pointer"
+                        onClick={() => (window.location.href = `/dashboard/bookings/view/${flight.booking_id}`)}
+                      >
                         <div className="flex items-center gap-2">
                           <Plane className="w-4 h-4 text-gray-500" />
                           {flight.aircraft_registration || `Aircraft ${flight.aircraft_id?.substring(0, 8) || 'N/A'}`}
                         </div>
                       </td>
-                      <td className="py-3 pr-4 text-sm">
+                      <td
+                        className="py-3 pr-4 text-sm cursor-pointer"
+                        onClick={() => (window.location.href = `/dashboard/bookings/view/${flight.booking_id}`)}
+                      >
                         {flight.instructor_id ? (
                           <div className="flex items-center gap-2">
                             <User className="w-4 h-4 text-gray-500" />
                             <span>
-                              {flight.instructor_first_name || flight.instructor_last_name 
+                              {flight.instructor_first_name || flight.instructor_last_name
                                 ? `${flight.instructor_first_name || ""} ${flight.instructor_last_name || ""}`.trim()
                                 : 'Instructor'
                               }
@@ -669,7 +729,10 @@ export default function StudentTrainingRecordClient({ memberId }: StudentTrainin
                           <span className="text-gray-400">Solo</span>
                         )}
                       </td>
-                      <td className="py-3 pr-4 text-sm">
+                      <td
+                        className="py-3 pr-4 text-sm cursor-pointer"
+                        onClick={() => (window.location.href = `/dashboard/bookings/view/${flight.booking_id}`)}
+                      >
                         {flight.lesson_name ? (
                           <div className="flex items-center gap-2">
                             <BookOpen className="w-4 h-4 text-gray-500" />
@@ -681,8 +744,28 @@ export default function StudentTrainingRecordClient({ memberId }: StudentTrainin
                           <span className="text-gray-400">No lesson</span>
                         )}
                       </td>
-                      <td className="py-3 text-sm font-medium">
+                      <td
+                        className="py-3 pr-4 text-sm font-medium cursor-pointer"
+                        onClick={() => (window.location.href = `/dashboard/bookings/view/${flight.booking_id}`)}
+                      >
                         {getFlightHoursDisplay(flight)}h
+                      </td>
+                      <td className="py-3 text-sm">
+                        {flight.lesson_progress_id ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.location.href = `/dashboard/bookings/debrief/view/${flight.booking_id}`;
+                            }}
+                            className="h-8 px-3 text-xs"
+                          >
+                            View Debrief
+                          </Button>
+                        ) : (
+                          <span className="text-gray-400 text-xs">No debrief</span>
+                        )}
                       </td>
                     </tr>
                   ))}

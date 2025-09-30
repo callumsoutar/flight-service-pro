@@ -49,6 +49,14 @@ interface Aircraft {
   total_hours?: number;
   current_tach?: number;
   current_hobbs?: number;
+  aircraft_type_id?: string | null;
+  aircraft_type?: {
+    id: string;
+    name: string;
+    category: string | null;
+    description: string | null;
+  };
+  prioritise_scheduling?: boolean;
 }
 
 interface Instructor {
@@ -290,19 +298,26 @@ const FlightScheduler = () => {
     }
 
     try {
-      // Use local date string for the selected date
-      const dateStr = selectedDate.getFullYear() + '-' +
+      // Get local date string for querying DATE columns (roster, shift overrides)
+      // DATE columns don't have timezone info, so we use local calendar date
+      const localDateStr = selectedDate.getFullYear() + '-' +
         String(selectedDate.getMonth() + 1).padStart(2, '0') + '-' +
         String(selectedDate.getDate()).padStart(2, '0');
+      
+      // Convert local date to UTC for TIMESTAMP queries (bookings)
+      // Bookings use TIMESTAMPTZ so we need UTC conversion with range
+      const localDate = new Date(localDateStr + 'T00:00:00');
+      const utcDateStr = localDate.toISOString().split('T')[0];
       const dayOfWeek = selectedDate.getDay();
 
       // Fetch everything in parallel
+      // Note: Use localDateStr for DATE columns (shift_overrides), utcDateStr for TIMESTAMP columns (bookings)
       const [instructorsRes, aircraftRes, rosterRulesRes, shiftOverridesRes, bookingsRes] = await Promise.all([
         fetch('/api/instructors', { credentials: 'include' }),
         fetch('/api/aircraft', { credentials: 'include' }),
         fetch(`/api/roster-rules?day_of_week=${dayOfWeek}&is_active=true`, { credentials: 'include' }),
-        fetch(`/api/shift-overrides?override_date=${dateStr}`, { credentials: 'include' }),
-        fetch(`/api/bookings?date=${dateStr}`, { credentials: 'include' })
+        fetch(`/api/shift-overrides?override_date=${localDateStr}`, { credentials: 'include' }),
+        fetch(`/api/bookings?date=${utcDateStr}&range=2`, { credentials: 'include' })
       ]);
 
       // Check each response and log specific failures
@@ -334,7 +349,10 @@ const FlightScheduler = () => {
           id: aircraft.id,
           registration: aircraft.registration,
           type: aircraft.type,
-          status: aircraft.status || 'active'
+          status: aircraft.status || 'active',
+          aircraft_type_id: aircraft.aircraft_type_id,
+          aircraft_type: aircraft.aircraft_type,
+          prioritise_scheduling: aircraft.prioritise_scheduling
         }));
 
       // Process instructors with proper endorsement handling
@@ -405,13 +423,14 @@ const FlightScheduler = () => {
           if (isNaN(bookingDate.getTime())) {
             return;
           }
-          // Extract UTC date from booking start time for comparison
-          const bookingUTCDate = new Date(booking.start_time);
-          const bookingDateStr = bookingUTCDate.getUTCFullYear() + '-' +
-            String(bookingUTCDate.getUTCMonth() + 1).padStart(2, '0') + '-' +
-            String(bookingUTCDate.getUTCDate()).padStart(2, '0');
+          // Convert booking time to local date for comparison with selectedDate
+          const bookingLocalDate = new Date(booking.start_time);
+          // Get local date string in same format as selectedDate
+          const bookingLocalDateStr = bookingLocalDate.getFullYear() + '-' +
+            String(bookingLocalDate.getMonth() + 1).padStart(2, '0') + '-' +
+            String(bookingLocalDate.getDate()).padStart(2, '0');
 
-          if (bookingDateStr === dateStr && ['confirmed', 'flying', 'complete', 'unconfirmed'].includes(booking.status || '')) {
+          if (bookingLocalDateStr === localDateStr && ['confirmed', 'flying', 'complete', 'unconfirmed'].includes(booking.status || '')) {
             const startTime = bookingDate.getHours() + (bookingDate.getMinutes() / 60);
         const endTime = new Date(booking.end_time);
             if (isNaN(endTime.getTime())) return;
@@ -937,6 +956,7 @@ const FlightScheduler = () => {
         bookingData.aircraftRegistration = aircraftMatch.registration;
       }
     }
+    
     
     // Store the prefilled booking data and open modal
     setPrefilledBookingData(bookingData);
@@ -1880,7 +1900,10 @@ const FlightScheduler = () => {
             aircraft={aircraft.map(a => ({
               id: a.id,
               registration: a.registration,
-              type: a.type
+              type: a.type,
+              aircraft_type_id: a.aircraft_type_id,
+              aircraft_type: a.aircraft_type,
+              prioritise_scheduling: a.prioritise_scheduling
             }))}
             bookings={rawBookings}
             prefilledData={prefilledBookingData || (selectedTimeSlot ? {
@@ -1925,7 +1948,10 @@ const FlightScheduler = () => {
             aircraft={aircraft.map(a => ({
               id: a.id,
               registration: a.registration,
-              type: a.type
+              type: a.type,
+              aircraft_type_id: a.aircraft_type_id,
+              aircraft_type: a.aircraft_type,
+              prioritise_scheduling: a.prioritise_scheduling
             }))}
             onAircraftChanged={async (bookingId, newAircraftId) => {
               try {

@@ -1,6 +1,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { Invoice, InvoiceStatus } from "@/types/invoices";
 import { Badge } from "../ui/badge";
+import { formatCurrencyDisplay } from "@/lib/utils";
 
 const statusColorMap: Record<InvoiceStatus, { variant: "default" | "secondary" | "destructive" | "outline", className?: string }> = {
   draft: { variant: "outline", className: "bg-gray-100 text-gray-600 border-gray-200" },
@@ -59,7 +60,7 @@ export const columns: ColumnDef<Invoice>[] = [
   {
     accessorKey: "total_amount",
     header: "Total",
-    cell: ({ row }) => <span>${(row.original.total_amount ?? 0).toFixed(2)}</span>,
+    cell: ({ row }) => <span>${formatCurrencyDisplay(row.original.total_amount ?? 0)}</span>,
     enableSorting: true,
   },
 ]; 

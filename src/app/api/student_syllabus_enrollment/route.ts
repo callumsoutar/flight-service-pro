@@ -11,6 +11,7 @@ const insertSchema = z.object({
   completed_at: z.string().nullable().optional(),
   status: z.string().optional(),
   primary_instructor_id: z.string().uuid().nullable().optional(),
+  aircraft_type: z.string().uuid().nullable().optional(),
 });
 
 const updateSchema = insertSchema.partial();
@@ -22,7 +23,10 @@ export async function GET(req: NextRequest) {
   const user_id = searchParams.get("user_id");
   const syllabus_id = searchParams.get("syllabus_id");
 
-  let query = supabase.from("student_syllabus_enrollment").select("*");
+  let query = supabase.from("student_syllabus_enrollment").select(`
+    *,
+    aircraft_type_details:aircraft_type(id, name, category, description)
+  `);
   if (id) query = query.eq("id", id);
   if (user_id) query = query.eq("user_id", user_id);
   if (syllabus_id) query = query.eq("syllabus_id", syllabus_id);

@@ -1,19 +1,19 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, User, Clock, BarChart2, CalendarDays } from "lucide-react";
+import { Calendar, User, Clock, BarChart2, CalendarDays, Plane } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import type { FlightHistoryEntry } from "@/types/flight_history";
+import type { FlightLog } from "@/types/flight_logs";
 
 interface AircraftFlightHistoryTabProps {
   aircraftId: string;
 }
 
 export default function AircraftFlightHistoryTab({ aircraftId }: AircraftFlightHistoryTabProps) {
-  const [allFlights, setAllFlights] = useState<FlightHistoryEntry[]>([]);
+  const [allFlights, setAllFlights] = useState<FlightLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,17 +28,19 @@ export default function AircraftFlightHistoryTab({ aircraftId }: AircraftFlightH
       setError(null);
 
       try {
-        const response = await fetch(`/api/flight-history?aircraft_id=${aircraftId}`);
+        const response = await fetch(`/api/flight-logs?aircraft_id=${aircraftId}`);
         const data = await response.json();
 
         if (response.ok) {
-          setAllFlights(data.flight_history || []);
+          console.log("Flight logs loaded:", data.flight_logs?.length || 0, "records");
+          setAllFlights(data.flight_logs || []);
         } else {
-          setError(data.error || "Failed to load flight history");
+          console.error("API error:", data.error);
+          setError(data.error || "Failed to load flight logs");
         }
       } catch (err) {
-        setError("Failed to load flight history");
-        console.error("Error loading aircraft flight history:", err);
+        setError("Failed to load flight logs");
+        console.error("Error loading aircraft flight logs:", err);
       } finally {
         setLoading(false);
       }
@@ -49,7 +51,11 @@ export default function AircraftFlightHistoryTab({ aircraftId }: AircraftFlightH
 
   // Filter flights by date range
   const flights = allFlights.filter((flight) => {
-    const flightDate = new Date(flight.actual_end || flight.booking_end_time || '');
+    // Use booking end time as the primary date for filtering
+    const dateToCheck = flight.booking?.end_time || flight.created_at;
+    if (!dateToCheck) return false;
+
+    const flightDate = new Date(dateToCheck);
     return isWithinInterval(flightDate, { start: dateFrom, end: dateTo });
   });
 
@@ -67,14 +73,14 @@ export default function AircraftFlightHistoryTab({ aircraftId }: AircraftFlightH
     setIsDatePickerOpen(false);
   };
 
-  const getFlightHours = (flight: FlightHistoryEntry): number => {
+  const getFlightHours = (flight: FlightLog): number => {
     const flightTime = flight.flight_time;
     if (flightTime == null) return 0;
     const hours = typeof flightTime === 'string' ? Number(flightTime) : flightTime;
     return isFinite(hours) ? hours : 0;
   };
 
-  const getFlightHoursDisplay = (flight: FlightHistoryEntry): string => {
+  const getFlightHoursDisplay = (flight: FlightLog): string => {
     const flightTime = flight.flight_time;
     if (flightTime == null) return "-";
 
@@ -88,7 +94,7 @@ export default function AircraftFlightHistoryTab({ aircraftId }: AircraftFlightH
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-muted-foreground">Loading flight history...</div>
+        <div className="text-muted-foreground">Loading flight logs...</div>
       </div>
     );
   }
@@ -255,71 +261,91 @@ export default function AircraftFlightHistoryTab({ aircraftId }: AircraftFlightH
         </Card>
       ) : (
         <Card className="rounded-md">
-          <CardContent>
+          <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Date</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Member</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Instructor</th>
-                    <th className="text-left py-3 pr-4 font-medium text-gray-900">Description</th>
-                    <th className="text-left py-3 font-medium text-gray-900">Flight Time</th>
-                    <th className="text-left py-3 font-medium text-gray-900">Actions</th>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Date</th>
+                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Member</th>
+                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Instructor</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Hobbs Start</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Hobbs End</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Tach Start</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Tach End</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Flight Time</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {flights.map((flight) => (
-                    <tr key={flight.flight_log_id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 pr-4 text-sm">
-                        <span className="font-medium">
-                          {format(new Date(flight.actual_end || flight.booking_end_time || ''), 'MMM dd, yyyy')}
-                        </span>
+                    <tr key={flight.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-2 px-3 text-xs">
+                        <div className="flex flex-col">
+                          <span className="font-medium">
+                            {format(new Date(flight.booking?.end_time || flight.created_at), 'MMM dd, yyyy')}
+                          </span>
+                          <span className="text-gray-500 text-xs">
+                            {flight.booking?.start_time && flight.booking?.end_time
+                              ? `${format(new Date(flight.booking.start_time), 'HH:mm')}-${format(new Date(flight.booking.end_time), 'HH:mm')}`
+                              : '-'
+                            }
+                          </span>
+                        </div>
                       </td>
-                      <td className="py-3 pr-4 font-medium text-gray-900">
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 text-gray-500" />
-                          <span>
-                            {flight.student_first_name || flight.student_last_name
-                              ? `${flight.student_first_name || ""} ${flight.student_last_name || ""}`.trim()
+                      <td className="py-2 px-3 text-xs">
+                        <div className="flex items-center gap-1">
+                          <User className="w-3 h-3 text-gray-500" />
+                          <span className="font-medium">
+                            {flight.booking?.user?.first_name || flight.booking?.user?.last_name
+                              ? `${flight.booking.user.first_name || ""} ${flight.booking.user.last_name || ""}`.trim()
                               : 'Member'
                             }
                           </span>
                         </div>
                       </td>
-                      <td className="py-3 pr-4 text-sm">
-                        {flight.instructor_id ? (
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-gray-500" />
+                      <td className="py-2 px-3 text-xs">
+                        {flight.booking?.instructor ? (
+                          <div className="flex items-center gap-1">
+                            <User className="w-3 h-3 text-gray-500" />
                             <span>
-                              {flight.instructor_first_name || flight.instructor_last_name
-                                ? `${flight.instructor_first_name || ""} ${flight.instructor_last_name || ""}`.trim()
+                              {flight.booking.instructor.users?.[0]?.first_name || flight.booking.instructor.users?.[0]?.last_name
+                                ? `${flight.booking.instructor.users[0].first_name || ""} ${flight.booking.instructor.users[0].last_name || ""}`.trim()
                                 : 'Instructor'
                               }
                             </span>
                           </div>
                         ) : (
-                          <span className="text-gray-400">Solo</span>
+                          <span className="text-gray-400 flex items-center gap-1">
+                            <Plane className="w-3 h-3" />
+                            Solo
+                          </span>
                         )}
                       </td>
-                      <td className="py-3 pr-4 text-sm text-gray-600 max-w-xs">
-                        <span className="truncate block" title={flight.lesson_name || flight.booking_purpose || ''}>
-                          {flight.lesson_name || flight.booking_purpose || 'Flight'}
-                        </span>
+                      <td className="py-2 px-2 text-center text-xs font-mono">
+                        {flight.hobbs_start != null ? flight.hobbs_start.toFixed(1) : '-'}
                       </td>
-                      <td className="py-3 pr-4 text-sm">
+                      <td className="py-2 px-2 text-center text-xs font-mono">
+                        {flight.hobbs_end != null ? flight.hobbs_end.toFixed(1) : '-'}
+                      </td>
+                      <td className="py-2 px-2 text-center text-xs font-mono">
+                        {flight.tach_start != null ? flight.tach_start.toFixed(1) : '-'}
+                      </td>
+                      <td className="py-2 px-2 text-center text-xs font-mono">
+                        {flight.tach_end != null ? flight.tach_end.toFixed(1) : '-'}
+                      </td>
+                      <td className="py-2 px-2 text-center text-xs font-mono font-semibold">
                         {getFlightHoursDisplay(flight)}
                       </td>
-                      <td className="py-3">
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.location.href = `/dashboard/bookings/view/${flight.booking_id}`}
-                          >
-                            View
-                          </Button>
-                        </div>
+                      <td className="py-2 px-2 text-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.location.href = `/dashboard/bookings/check-in/${flight.booking_id}`}
+                          className="h-6 px-2 text-xs"
+                        >
+                          View
+                        </Button>
                       </td>
                     </tr>
                   ))}

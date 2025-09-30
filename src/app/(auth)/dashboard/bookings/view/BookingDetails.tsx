@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { Booking } from "@/types/bookings";
 import MemberSelect from "@/components/invoices/MemberSelect";
 import InstructorSelect from "@/components/invoices/InstructorSelect";
-import { useBookingUpdate, useMemberValue, useInstructorValue } from "@/hooks/use-booking-view";
+import { useBookingUpdate } from "@/hooks/use-booking-view";
 import { useRouter } from "next/navigation";
 import type { User } from "@/types/users";
 import { PLACEHOLDER_VALUES } from "@/constants/placeholders";
@@ -239,17 +239,57 @@ export default function BookingDetails({ booking, members, instructors, aircraft
     return { aircraft: aircraftSet, instructors: instructorSet };
   }, [bookings, startDate, startTime, endDate, endTime, booking.id]);
   
-  // Use optimized hooks for data fetching
-  const memberValue = useMemberValue(
-    memberFieldValue, 
-    members, 
-    convertUserToMemberForHook(booking?.user)
-  );
-  const instructorValue = useInstructorValue(
-    instructorFieldValue, 
-    instructors, 
-    convertInstructorForHook(booking?.instructor)
-  );
+  // Use pre-loaded data directly instead of async hooks
+  const memberValue = React.useMemo(() => {
+    if (!memberFieldValue || memberFieldValue.trim() === "") {
+      return null;
+    }
+
+    // Use existing user data from server-side join if available
+    const existingUser = convertUserToMemberForHook(booking?.user);
+    if (existingUser && existingUser.id === memberFieldValue) {
+      return existingUser;
+    }
+
+    // Fallback to members list
+    const selectedMember = members.find(m => m.id === memberFieldValue);
+    if (selectedMember) {
+      return {
+        id: selectedMember.id,
+        first_name: selectedMember.name.split(" ")[0] || "",
+        last_name: selectedMember.name.split(" ").slice(1).join(" ") || "",
+        email: "",
+      };
+    }
+
+    return null;
+  }, [memberFieldValue, members, booking?.user]);
+
+  const instructorValue = React.useMemo(() => {
+    if (!instructorFieldValue || instructorFieldValue === PLACEHOLDER_VALUES.INSTRUCTOR) {
+      return null;
+    }
+
+    // Use existing instructor data from server-side join if available
+    const existingInstructor = convertInstructorForHook(booking?.instructor);
+    if (existingInstructor && existingInstructor.id === instructorFieldValue) {
+      return existingInstructor;
+    }
+
+    // Fallback to instructors list
+    const selectedInstructor = instructors.find(i => i.id === instructorFieldValue);
+    if (selectedInstructor) {
+      return {
+        id: selectedInstructor.id,
+        user_id: selectedInstructor.id,
+        first_name: selectedInstructor.name.split(" ")[0] || "",
+        last_name: selectedInstructor.name.split(" ").slice(1).join(" ") || "",
+        email: "",
+      };
+    }
+
+    return null;
+  }, [instructorFieldValue, instructors, booking?.instructor]);
   
   // Use optimized mutation for saving
   const { mutate: updateBooking, isPending: saving, isSuccess: saveSuccess } = useBookingUpdate(() => {
@@ -505,11 +545,6 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                       }}
                       disabled={isReadOnly}
                     />
-                    {memberFieldValue && !memberValue && (
-                      <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-md">
-                        <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-                      </div>
-                    )}
                   </div>
                 )}
               />
@@ -548,11 +583,6 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                         }}
                         disabled={isReadOnly}
                       />
-                      {instructorFieldValue && !instructorValue && instructorFieldValue !== PLACEHOLDER_VALUES.INSTRUCTOR && (
-                        <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-md">
-                          <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-                        </div>
-                      )}
                     </div>
                   );
                 }}

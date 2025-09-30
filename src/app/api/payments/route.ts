@@ -121,8 +121,6 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
     
-    console.log(`Payment processed atomically: ${result.payment_id} for invoice ${result.invoice_id}`);
-    console.log(`Invoice status: ${result.new_status}, Remaining balance: ${result.remaining_balance}`);
     
     return NextResponse.json({ 
       id: result.payment_id,

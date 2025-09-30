@@ -11,19 +11,23 @@ import type { User } from "@/types/users";
 import type { Instructor } from "@/types/instructors";
 import type { Syllabus } from "@/types/syllabus";
 import type { StudentSyllabusEnrollment } from "@/types/student_syllabus_enrollment";
+import type { AircraftType } from "@/types/aircraft_types";
 
 import {
   Target,
   Edit3,
   X,
   BookOpen,
-  GraduationCap
+  GraduationCap,
+  Plus,
+  UserPlus
 } from "lucide-react";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, differenceInDays } from "date-fns";
 
 // Import the new tab components
 import LessonProgressTab from "./LessonProgressTab";
 import ExamHistoryTab from "./ExamHistoryTab";
+import EnrollMemberModal from "./EnrollMemberModal";
 
 interface MemberTrainingHistoryTabProps {
   memberId: string;
@@ -61,24 +65,30 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
   const [selectedSyllabusId, setSelectedSyllabusId] = useState<string>("");
   const [instructors, setInstructors] = useState<Record<string, User>>({});
   const [allInstructors, setAllInstructors] = useState<Instructor[]>([]);
+  const [aircraftTypes, setAircraftTypes] = useState<AircraftType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingInstructor, setEditingInstructor] = useState(false);
   const [updatingInstructor, setUpdatingInstructor] = useState(false);
+  const [editingAircraftType, setEditingAircraftType] = useState(false);
+  const [updatingAircraftType, setUpdatingAircraftType] = useState(false);
 
   // Exam results state
   const [examResults, setExamResults] = useState<ExamResultWithExamSyllabus[]>([]);
   const [examExpanded, setExamExpanded] = useState<Record<string, boolean>>({});
 
-  // Date range state - default to last 30 days
+  // Date range state - default to last 90 days
   const [dateRange, setDateRange] = useState<{from: Date; to: Date}>({
-    from: startOfDay(subDays(new Date(), 30)),
+    from: startOfDay(subDays(new Date(), 90)),
     to: endOfDay(new Date())
   });
 
   // UI state for tabs and expanded rows
   const [selectedTab, setSelectedTab] = useState("lessons");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  // Enrollment modal state
+  const [enrollModalOpen, setEnrollModalOpen] = useState(false);
 
   const toggleRowExpansion = (recordId: string) => {
     const newExpandedRows = new Set(expandedRows);
@@ -103,10 +113,11 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
       fetch(`/api/syllabus`).then(res => res.json()).then(data => Array.isArray(data.syllabi) ? data.syllabi : []),
       fetch(`/api/student_syllabus_enrollment?user_id=${memberId}`).then(res => res.json()).then(data => Array.isArray(data.data) ? data.data : []),
       fetch(`/api/instructors`).then(res => res.json()).then(data => Array.isArray(data.instructors) ? data.instructors : []),
+      fetch(`/api/aircraft-types`).then(res => res.json()).then(data => Array.isArray(data.aircraft_types) ? data.aircraft_types : []),
       fetch(`/api/exam_results?user_id=${memberId}`).then(res => res.json()).then(data => Array.isArray(data.exam_results) ? data.exam_results : []),
       fetch(`/api/exams`).then(res => res.json()).then(data => Array.isArray(data.exams) ? data.exams : []),
     ])
-      .then(async ([progressData, lessonsData, syllabiData, enrollmentData, instructorsData, examResultsData]) => {
+      .then(async ([progressData, lessonsData, syllabiData, enrollmentData, instructorsData, aircraftTypesData, examResultsData]) => {
         // Sort records by date, most recent first
         const sortedRecords = progressData.sort((a: LessonProgress, b: LessonProgress) =>
           new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime()
@@ -116,6 +127,7 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
         setLessons(lessonsData);
         setSyllabi(syllabiData);
         setEnrollments(enrollmentData);
+        setAircraftTypes(aircraftTypesData);
         setExamResults(examResultsData);
 
         // Filter syllabi to only show enrolled ones
@@ -241,6 +253,55 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
     }
   };
 
+  // Handle aircraft type change
+  const handleAircraftTypeChange = async (aircraftTypeId: string) => {
+    if (!currentEnrollment) return;
+
+    setUpdatingAircraftType(true);
+    try {
+      const res = await fetch("/api/student_syllabus_enrollment", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: currentEnrollment.id,
+          aircraft_type: aircraftTypeId,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update aircraft type");
+
+      // Update local state
+      setEnrollments(prev => prev.map(e =>
+        e.id === currentEnrollment.id
+          ? { ...e, aircraft_type: aircraftTypeId }
+          : e
+      ));
+
+      setEditingAircraftType(false);
+      toast.success("Aircraft type updated successfully!");
+    } catch {
+      toast.error("Failed to update aircraft type");
+    } finally {
+      setUpdatingAircraftType(false);
+    }
+  };
+
+  // Handle enrollment creation
+  const handleEnrollmentCreated = (newEnrollment: StudentSyllabusEnrollment) => {
+    setEnrollments(prev => [...prev, newEnrollment]);
+
+    // Update enrolled syllabi
+    const newSyllabus = syllabi.find(s => s.id === newEnrollment.syllabus_id);
+    if (newSyllabus) {
+      setEnrolledSyllabi(prev => [...prev, newSyllabus]);
+    }
+
+    // Set as selected if it's the first enrollment
+    if (enrollments.length === 0) {
+      setSelectedSyllabusId(newEnrollment.syllabus_id);
+    }
+  };
+
   const progressStats = getProgressStats();
 
   const tabs = [
@@ -274,6 +335,35 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
 
   return (
     <div className="w-full space-y-6">
+      {/* No Enrollments - Call to Action */}
+      {enrolledSyllabi.length === 0 && (
+        <Card className="rounded-md">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                  <UserPlus className="w-4 h-4 text-gray-500" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">No Syllabus Enrollments</h3>
+                  <p className="text-xs text-gray-600">
+                    Enroll this member to start tracking training progress
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={() => setEnrollModalOpen(true)}
+                size="sm"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                <UserPlus className="w-4 h-4 mr-2" />
+                Enroll
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Progress Summary */}
       {selectedSyllabusId && (
         <Card className="rounded-md">
@@ -284,23 +374,37 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
                 {enrolledSyllabi.length > 1 ? 'Training Progress' : enrolledSyllabi.find(s => s.id === selectedSyllabusId)?.name}
               </CardTitle>
 
-              {enrolledSyllabi.length > 1 && (
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-gray-700">Syllabus:</span>
-                  <Select value={selectedSyllabusId} onValueChange={setSelectedSyllabusId}>
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Select syllabus" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {enrolledSyllabi.map((syllabus) => (
-                        <SelectItem key={syllabus.id} value={syllabus.id}>
-                          {syllabus.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              <div className="flex items-center gap-3">
+                {enrolledSyllabi.length > 1 && (
+                  <>
+                    <span className="text-sm font-medium text-gray-700">Syllabus:</span>
+                    <Select value={selectedSyllabusId} onValueChange={setSelectedSyllabusId}>
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Select syllabus" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {enrolledSyllabi.map((syllabus) => (
+                          <SelectItem key={syllabus.id} value={syllabus.id}>
+                            {syllabus.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
+                {/* Add enrollment button - show if there are syllabi available for enrollment */}
+                {syllabi.filter(s => !enrolledSyllabi.some(es => es.id === s.id)).length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEnrollModalOpen(true)}
+                    className="h-8 w-8 p-0 border-dashed border-gray-300 hover:border-indigo-400 hover:bg-indigo-50"
+                    title="Enroll in additional syllabus"
+                  >
+                    <Plus className="w-4 h-4 text-gray-500 hover:text-indigo-600" />
+                  </Button>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -327,12 +431,19 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
                 <div className="flex items-center gap-6">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-gray-600">Enrolled:</span>
-                    <span className="text-sm text-gray-900">
-                      {currentEnrollment?.enrolled_at ?
-                        format(new Date(currentEnrollment.enrolled_at), 'MMM d, yyyy') :
-                        'Unknown'
-                      }
-                    </span>
+                    <div className="flex flex-col">
+                      <span className="text-sm text-gray-900">
+                        {currentEnrollment?.enrolled_at ?
+                          format(new Date(currentEnrollment.enrolled_at), 'MMM d, yyyy') :
+                          'Unknown'
+                        }
+                      </span>
+                      {currentEnrollment?.enrolled_at && (
+                        <span className="text-xs text-gray-500">
+                          {differenceInDays(new Date(), new Date(currentEnrollment.enrolled_at))} days ago
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -381,6 +492,59 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
                         variant="ghost"
                         size="sm"
                         onClick={() => setEditingInstructor(true)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600">Aircraft Type:</span>
+                  {editingAircraftType ? (
+                    <div className="flex items-center gap-2">
+                      <Select
+                        defaultValue={currentEnrollment?.aircraft_type || ""}
+                        onValueChange={handleAircraftTypeChange}
+                        disabled={updatingAircraftType}
+                      >
+                        <SelectTrigger className="w-[180px] h-8">
+                          <SelectValue placeholder="Select aircraft type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {aircraftTypes.map(aircraftType => (
+                            <SelectItem key={aircraftType.id} value={aircraftType.id}>
+                              {aircraftType.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingAircraftType(false)}
+                        disabled={updatingAircraftType}
+                        className="h-8 w-8 p-0"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-900">
+                        {currentEnrollment?.aircraft_type ?
+                          (() => {
+                            const aircraftType = aircraftTypes.find(at => at.id === currentEnrollment.aircraft_type);
+                            return aircraftType ? aircraftType.name : 'Unknown';
+                          })() :
+                          'Not assigned'
+                        }
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingAircraftType(true)}
                         className="h-8 w-8 p-0"
                       >
                         <Edit3 className="w-3 h-3" />
@@ -458,6 +622,18 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
           </div>
         </Tabs.Root>
       </div>
+
+      {/* Enrollment Modal */}
+      <EnrollMemberModal
+        isOpen={enrollModalOpen}
+        onClose={() => setEnrollModalOpen(false)}
+        memberId={memberId}
+        syllabi={syllabi}
+        instructors={allInstructors}
+        aircraftTypes={aircraftTypes}
+        existingEnrollments={enrollments}
+        onEnrollmentCreated={handleEnrollmentCreated}
+      />
     </div>
   );
 }

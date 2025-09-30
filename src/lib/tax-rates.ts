@@ -1,16 +1,5 @@
 import { createClient } from './SupabaseServerClient';
-
-export interface TaxRate {
-  id: string;
-  country_code: string;
-  region_code: string | null;
-  tax_name: string;
-  rate: number;
-  is_default: boolean;
-  effective_from: string;
-  created_at: string;
-  updated_at: string;
-}
+import type { TaxRate } from '@/types/tax_rates';
 
 /**
  * Get the organization's tax rate (single-tenant architecture)

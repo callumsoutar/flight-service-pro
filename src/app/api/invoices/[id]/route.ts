@@ -34,7 +34,6 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     
     // If status is being changed, let InvoiceService handle it (includes transaction logic)
     if (statusChange && typeof statusChange === 'string') {
-      console.log(`Invoice ${id} status changed to: ${statusChange}`);
       await InvoiceService.updateInvoiceStatus(id, statusChange);
       
       // Remove status from updateData since InvoiceService already handled it

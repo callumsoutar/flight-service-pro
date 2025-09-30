@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { Search, Users, BookOpen, Target, User, Clock, ChevronRight, GraduationCap, Plane } from "lucide-react";
+import { differenceInDays } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,10 @@ interface EnrollmentWithDetails extends StudentSyllabusEnrollment {
     flight_hours: number;
     percentage: number;
   };
+  lastFlight?: {
+    date: Date;
+    daysSince: number;
+  } | null;
 }
 
 export default function TrainingClientPage() {
@@ -106,7 +111,8 @@ export default function TrainingClientPage() {
 
             // Fetch progress data for this student
             let progress = { completed_lessons: 0, total_lessons: 0, flight_hours: 0, percentage: 0 };
-            
+            let lastFlightInfo: { date: Date; daysSince: number; } | null = null;
+
             try {
               // Get lesson progress for this user and syllabus
               const [progressRes, flightRes] = await Promise.all([
@@ -117,11 +123,11 @@ export default function TrainingClientPage() {
               if (progressRes.ok) {
                 const progressData = await progressRes.json();
                 const lessonProgress = progressData.data || [];
-                
+
                 // Get lessons for this syllabus (correct approach from MemberTrainingHistoryTab)
                 const syllabusLessons = lessonsList.filter((lesson: { syllabus_id: string }) => lesson.syllabus_id === enrollment.syllabus_id);
                 const totalLessons = syllabusLessons.length;
-                
+
                 // Count passed lessons for this syllabus (correct approach from MemberTrainingHistoryTab)
                 const passedLessons = lessonProgress.filter((record: { status: string; lesson_id: string }) => {
                   if (record.status !== 'pass') return false;
@@ -136,7 +142,6 @@ export default function TrainingClientPage() {
                   percentage: totalLessons > 0 ? Math.round((passedLessons / totalLessons) * 100) : 0
                 };
               }
-
               if (flightRes.ok) {
                 const flightData = await flightRes.json();
                 const flights = flightData.flight_history || [];
@@ -147,6 +152,25 @@ export default function TrainingClientPage() {
                   return total + hours;
                 }, 0);
                 progress.flight_hours = totalHours;
+
+                // Calculate last flight info
+                if (flights.length > 0) {
+                  // Sort flights by actual_end or booking_end_time to get the most recent
+                  const sortedFlights = [...flights].sort((a: { actual_end?: string; booking_end_time?: string }, b: { actual_end?: string; booking_end_time?: string }) => {
+                    const dateA = new Date(a.actual_end || a.booking_end_time || '');
+                    const dateB = new Date(b.actual_end || b.booking_end_time || '');
+                    return dateB.getTime() - dateA.getTime();
+                  });
+
+                  const lastFlight = sortedFlights[0];
+                  const lastFlightDate = new Date(lastFlight.actual_end || lastFlight.booking_end_time || '');
+                  const daysSinceLastFlight = differenceInDays(new Date(), lastFlightDate);
+
+                  lastFlightInfo = {
+                    date: lastFlightDate,
+                    daysSince: daysSinceLastFlight
+                  };
+                }
               }
             } catch (err) {
               console.log('Error fetching progress for user:', enrollment.user_id, err);
@@ -157,7 +181,8 @@ export default function TrainingClientPage() {
               user,
               syllabus,
               instructor,
-              progress
+              progress,
+              lastFlight: lastFlightInfo
             };
           })
         );
@@ -430,17 +455,29 @@ export default function TrainingClientPage() {
                               <div className="flex items-center gap-1">
                                 <Clock className="w-4 h-4" />
                                 <span>
-                                  Enrolled {new Date(enrollment.enrolled_at).toLocaleDateString('en-GB', { 
-                                    day: '2-digit', 
-                                    month: 'short', 
-                                    year: 'numeric' 
+                                  Enrolled {new Date(enrollment.enrolled_at).toLocaleDateString('en-GB', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric'
                                   })}
                                 </span>
                               </div>
+                              {enrollment.lastFlight && (
+                                <div className="flex items-center gap-1">
+                                  <Plane className="w-4 h-4" />
+                                  <span>
+                                    Last flight {enrollment.lastFlight.date.toLocaleDateString('en-GB', {
+                                      day: '2-digit',
+                                      month: 'short',
+                                      year: 'numeric'
+                                    })} ({enrollment.lastFlight.daysSince} days ago)
+                                  </span>
+                                </div>
+                              )}
                               {enrollment.progress && enrollment.progress.flight_hours > 0 && (
                                 <div className="flex items-center gap-1">
                                   <Plane className="w-4 h-4" />
-                                  <span>{enrollment.progress.flight_hours.toFixed(1)}h</span>
+                                  <span>{enrollment.progress.flight_hours.toFixed(1)}h total</span>
                                 </div>
                               )}
                             </div>

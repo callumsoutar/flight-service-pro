@@ -582,7 +582,60 @@ CREATE TRIGGER calculate_invoice_item_amounts_trigger
   FOR EACH ROW EXECUTE FUNCTION calculate_invoice_item_amounts();
 ```
 
+## Invoice Number Configuration Improvements
+
+### Problem Identified
+During the migration process, a critical issue was discovered with hardcoded invoice number patterns throughout the codebase:
+
+- **Hardcoded "INV-" prefix** in database functions and application code
+- **Inconsistent fallback logic** using `INV-${invoice.id}` format
+- **Unused settings system** - `InvoicingSettings.invoice_prefix` existed but wasn't integrated
+- **Poor separation of concerns** - invoice number patterns scattered across multiple files
+
+### Solution Implemented
+
+#### 1. Centralized Configuration (`src/constants/invoice.ts`)
+```typescript
+export const INVOICE_CONFIG = {
+  DEFAULT_PREFIX: 'INV',
+  FORMAT_PATTERN: '{PREFIX}-{YEAR_MONTH}-{SEQUENCE}',
+  SEQUENCE_PADDING: 4,
+  DATE_FORMAT: 'YYYY-MM',
+  FALLBACK_PATTERN: '{PREFIX}-{ID}',
+} as const;
+```
+
+#### 2. Configurable Database Functions
+- `generate_invoice_number_with_prefix(p_prefix)` - accepts any prefix
+- `generate_invoice_number_app()` - uses default "INV" prefix
+- Maintains backward compatibility
+
+#### 3. Settings Integration
+- `InvoiceService.getInvoicePrefix()` - reads from settings
+- Falls back to default if setting not found
+- Validates prefix format (alphanumeric, uppercase)
+
+#### 4. Consistent Fallback Logic
+- Uses same prefix as sequential numbers
+- Clear distinction between sequential and fallback formats
+- Example: `INV-2025-09-0001` vs `INV-{uuid}`
+
+### Benefits Achieved
+1. **Maintainability**: Single source of truth for invoice number patterns
+2. **Flexibility**: Can change prefix via settings without code changes
+3. **Consistency**: All invoice numbers follow same pattern rules
+4. **Backward Compatibility**: Existing invoices continue to work
+5. **Validation**: Proper format validation and error handling
+
+### Files Modified
+- `src/constants/invoice.ts` - New centralized configuration
+- `src/lib/invoice-service.ts` - Updated to use configurable patterns
+- Database functions - Made configurable with prefix parameter
+- Settings integration - Connected to existing `InvoicingSettings`
+
 ## Conclusion
 
 This migration plan provides a safe, methodical approach to moving invoice business logic from database triggers to application code. The dual-write strategy ensures data consistency during the transition, while comprehensive testing validates accuracy. The result will be a more maintainable, testable, and debuggable invoicing system.
+
+**Additional Achievement**: The migration process also revealed and fixed critical invoice number configuration issues, resulting in a more flexible and maintainable invoice numbering system that can be configured through the settings UI without requiring code changes.
 
