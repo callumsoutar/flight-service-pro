@@ -3,9 +3,13 @@ import * as React from "react";
 import type { Booking } from "@/types/bookings";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/bookings/StatusBadge";
+import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { Plane, User, Calendar, Clock } from "lucide-react";
+import { Plane, User, Calendar, Clock, Check, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
+import { useSettingsContext } from "@/contexts/SettingsContext";
+import { TimeSlot } from "@/types/settings";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface BookingsTableProps {
   bookings: Booking[];
@@ -13,13 +17,17 @@ interface BookingsTableProps {
   instructors: { id: string; name: string }[];
   aircraftList: { id: string; registration: string; type: string }[];
   statusFilter?: string;
+  showConfirmButton?: boolean;
+  onConfirmBooking?: (bookingId: string) => Promise<void>;
 }
 
 
 
 
-export default function BookingsTable({ bookings, members, instructors, aircraftList, statusFilter = "all" }: BookingsTableProps) {
+export default function BookingsTable({ bookings, members, instructors, aircraftList, statusFilter = "all", showConfirmButton = false, onConfirmBooking }: BookingsTableProps) {
   const router = useRouter();
+  const { getSettingValue } = useSettingsContext();
+  const customTimeSlots = getSettingValue('bookings', 'custom_time_slots', []);
 
   // Filter bookings by status
   const filteredBookings = React.useMemo(() => {
@@ -38,6 +46,52 @@ export default function BookingsTable({ bookings, members, instructors, aircraft
   const getAircraftReg = React.useCallback((id: string) => {
     return aircraftList.find((a) => a.id === id)?.registration || "--";
   }, [aircraftList]);
+
+  // Time slot validation function
+  const validateBookingTimeSlot = React.useCallback((booking: Booking): boolean => {
+    // If no custom time slots are configured, any time is valid
+    if (!Array.isArray(customTimeSlots) || customTimeSlots.length === 0) {
+      return true;
+    }
+
+    // If booking doesn't have proper times, consider it valid (don't show warning)
+    if (!booking.start_time || !booking.end_time) {
+      return true;
+    }
+
+    const bookingDate = new Date(booking.start_time);
+    const startTime = format(new Date(booking.start_time), 'HH:mm');
+    const endTime = format(new Date(booking.end_time), 'HH:mm');
+
+    // Get the weekday name for the booking date
+    const weekdayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const weekdayName = weekdayNames[bookingDate.getDay()];
+
+    // Convert times to minutes for easier comparison
+    const timeToMinutes = (time: string) => {
+      const [hours, minutes] = time.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+
+    const bookingStartMinutes = timeToMinutes(startTime);
+    const bookingEndMinutes = timeToMinutes(endTime);
+
+    // Check if booking fits within any configured time slot
+    const fitsInAnySlot = customTimeSlots.some((slot: TimeSlot) => {
+      // Check if this slot is active on the selected day
+      if (!slot.days || !slot.days.includes(weekdayName)) {
+        return false;
+      }
+
+      const slotStartMinutes = timeToMinutes(slot.start_time);
+      const slotEndMinutes = timeToMinutes(slot.end_time);
+
+      // Check if booking is fully contained within this slot
+      return bookingStartMinutes >= slotStartMinutes && bookingEndMinutes <= slotEndMinutes;
+    });
+
+    return fitsInAnySlot;
+  }, [customTimeSlots]);
 
   // Render
   return (
@@ -61,7 +115,12 @@ export default function BookingsTable({ bookings, members, instructors, aircraft
                     <th className="text-left py-2 pr-2 font-medium text-gray-900 text-xs sm:text-sm w-20 sm:w-24 hidden lg:table-cell">Instructor</th>
                     <th className="text-left py-2 pr-2 font-medium text-gray-900 text-xs sm:text-sm w-16 sm:w-20">Aircraft</th>
                     <th className="text-left py-2 pr-2 font-medium text-gray-900 text-xs sm:text-sm hidden sm:table-cell w-24 sm:w-32">Purpose</th>
-                    <th className="text-left py-2 font-medium text-gray-900 text-xs sm:text-sm w-20 sm:w-24">Status</th>
+                    {statusFilter !== "unconfirmed" && (
+                      <th className="text-left py-2 pr-2 font-medium text-gray-900 text-xs sm:text-sm w-20 sm:w-24">Status</th>
+                    )}
+                    {showConfirmButton && (
+                      <th className="text-left py-2 font-medium text-gray-900 text-xs sm:text-sm w-24">Actions</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -92,6 +151,18 @@ export default function BookingsTable({ bookings, members, instructors, aircraft
                           <span className="text-gray-600">
                             {format(new Date(b.start_time), 'HH:mm')}
                           </span>
+                          {!validateBookingTimeSlot(b) && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <AlertTriangle className="w-3 h-3 text-amber-500 opacity-60" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Booking time doesn't conform to configured time slots</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </div>
                       </td>
                       <td className="py-2 pr-2 text-xs sm:text-sm hidden md:table-cell">
@@ -130,9 +201,28 @@ export default function BookingsTable({ bookings, members, instructors, aircraft
                           {b.purpose || "--"}
                         </span>
                       </td>
-                      <td className="py-2">
-                        <StatusBadge status={b.status} className="font-semibold px-2 py-1 text-xs sm:text-sm" />
-                      </td>
+                      {statusFilter !== "unconfirmed" && (
+                        <td className="py-2">
+                          <StatusBadge status={b.status} className="font-semibold px-2 py-1 text-xs sm:text-sm" />
+                        </td>
+                      )}
+                      {showConfirmButton && (
+                        <td className="py-2">
+                          {b.status === 'unconfirmed' && onConfirmBooking && (
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onConfirmBooking(b.id);
+                              }}
+                              className="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1 h-6"
+                            >
+                              <Check className="w-3 h-3 mr-1" />
+                              Confirm
+                            </Button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

@@ -10,6 +10,9 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
   let instructors: { id: string; name: string }[] = [];
   let aircraftList: { id: string; registration: string; type: string }[] = [];
 
+  const isPrivilegedUser = ['instructor', 'admin', 'owner'].includes(userRole);
+  const isRestrictedUser = ['member', 'student'].includes(userRole);
+
   // Build query based on user role
   let bookingsQuery = supabase
     .from("bookings")
@@ -30,59 +33,87 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
       updated_at
     `);
 
-  // If user is member or student, only show their own bookings and exclude cancelled ones
-  if (userRole === 'member' || userRole === 'student') {
+  if (isRestrictedUser) {
+    // Restricted users: only their own bookings, exclude cancelled
     bookingsQuery = bookingsQuery.eq('user_id', user.id).neq('status', 'cancelled');
+    const { data } = await bookingsQuery.order("start_time", { ascending: false });
+    bookings = (data ?? []) as Booking[];
+  } else if (isPrivilegedUser) {
+    // Privileged users: fetch unconfirmed, confirmed, and flying bookings initially
+    // Advanced search will handle other queries via API
+    bookingsQuery = bookingsQuery.in('status', ['unconfirmed', 'confirmed', 'flying']);
+    const { data } = await bookingsQuery.order("start_time", { ascending: false });
+    bookings = (data ?? []) as Booking[];
   }
 
-  const { data } = await bookingsQuery.order("start_time", { ascending: false });
-  bookings = (data ?? []) as Booking[];
+  if (isRestrictedUser) {
+    // For restricted users: fetch only data for their bookings
+    const uniqueMemberIds = Array.from(new Set(bookings.map(b => b.user_id).filter(Boolean)));
+    let memberUsers: { id: string; first_name?: string; last_name?: string }[] = [];
+    if (uniqueMemberIds.length > 0) {
+      const { data: memberUserRows } = await supabase
+        .from("users")
+        .select("id, first_name, last_name")
+        .in("id", uniqueMemberIds);
+      memberUsers = memberUserRows || [];
+    }
+    members = memberUsers.map(user => ({
+      id: user.id,
+      name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.id,
+    }));
 
-  // Fetch only members referenced by bookings (user_id in bookings)
-  const uniqueMemberIds = Array.from(new Set(bookings.map(b => b.user_id).filter(Boolean)));
-  let memberUsers: { id: string; first_name?: string; last_name?: string }[] = [];
-  if (uniqueMemberIds.length > 0) {
-    const { data: memberUserRows } = await supabase
-      .from("users")
-      .select("id, first_name, last_name")
-      .in("id", uniqueMemberIds);
-    memberUsers = memberUserRows || [];
-  }
-  members = memberUsers.map(user => ({
-    id: user.id,
-    name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.id,
-  }));
+    const uniqueInstructorIds = Array.from(new Set(bookings.map(b => b.instructor_id).filter(Boolean)));
+    let instructorRows: { id: string; first_name?: string; last_name?: string }[] = [];
+    if (uniqueInstructorIds.length > 0) {
+      const { data: instructorData } = await supabase
+        .from("instructors")
+        .select("id, first_name, last_name")
+        .in("id", uniqueInstructorIds);
+      instructorRows = instructorData || [];
+    }
+    instructors = instructorRows.map(instructor => ({
+      id: instructor.id,
+      name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.id,
+    }));
 
-  // Fetch only instructors referenced by bookings (instructor_id in bookings)
-  const uniqueInstructorIds = Array.from(new Set(bookings.map(b => b.instructor_id).filter(Boolean)));
-  let instructorRows: { id: string; first_name?: string; last_name?: string }[] = [];
-  if (uniqueInstructorIds.length > 0) {
-    const { data: instructorData } = await supabase
-      .from("instructors")
-      .select("id, first_name, last_name")
-      .in("id", uniqueInstructorIds);
-    instructorRows = instructorData || [];
-  }
-  instructors = instructorRows.map(instructor => ({
-    id: instructor.id,
-    name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.id,
-  }));
+    const uniqueAircraftIds = Array.from(new Set(bookings.map(b => b.aircraft_id).filter(Boolean)));
+    let aircraft: { id: string; registration: string; type: string }[] = [];
+    if (uniqueAircraftIds.length > 0) {
+      const { data: aircraftRows } = await supabase
+        .from("aircraft")
+        .select("id, registration, type")
+        .in("id", uniqueAircraftIds);
+      aircraft = aircraftRows || [];
+    }
+    aircraftList = aircraft.map(a => ({
+      id: a.id,
+      registration: a.registration,
+      type: a.type || "Unknown",
+    }));
+  } else if (isPrivilegedUser) {
+    // For privileged users: fetch ALL members, instructors, and aircraft for search functionality
+    const [memberUsersResponse, instructorDataResponse, aircraftResponse] = await Promise.all([
+      supabase.from("users").select("id, first_name, last_name"),
+      supabase.from("instructors").select("id, first_name, last_name"),
+      supabase.from("aircraft").select("id, registration, type")
+    ]);
 
-  // Fetch only aircraft referenced by bookings (aircraft_id in bookings)
-  const uniqueAircraftIds = Array.from(new Set(bookings.map(b => b.aircraft_id).filter(Boolean)));
-  let aircraft: { id: string; registration: string; type: string }[] = [];
-  if (uniqueAircraftIds.length > 0) {
-    const { data: aircraftRows } = await supabase
-      .from("aircraft")
-      .select("id, registration, type")
-      .in("id", uniqueAircraftIds);
-    aircraft = aircraftRows || [];
+    members = (memberUsersResponse.data || []).map(user => ({
+      id: user.id,
+      name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.id,
+    }));
+
+    instructors = (instructorDataResponse.data || []).map(instructor => ({
+      id: instructor.id,
+      name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.id,
+    }));
+
+    aircraftList = (aircraftResponse.data || []).map(a => ({
+      id: a.id,
+      registration: a.registration,
+      type: a.type || "Unknown",
+    }));
   }
-  aircraftList = aircraft.map(a => ({
-    id: a.id,
-    registration: a.registration,
-    type: a.type || "Unknown",
-  }));
 
   return (
     <BookingsPageClient
