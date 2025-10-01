@@ -37,15 +37,6 @@ export interface Membership {
   updated_at: string;
 }
 
-export interface MembershipRenewal {
-  id: string;
-  old_membership_id: string;
-  new_membership_id: string;
-  renewed_by: string;
-  renewal_date: string;
-  notes?: string;
-}
-
 export interface MembershipSummary {
   current_membership?: Membership;
   status: MembershipStatus;
@@ -60,16 +51,19 @@ export interface CreateMembershipRequest {
   user_id: string;
   membership_type_id: string;
   start_date?: string; // Defaults to today
-  expiry_date?: string; // Calculated from type duration
+  custom_expiry_date?: string; // Override calculated expiry date
   auto_renew?: boolean;
   notes?: string;
+  create_invoice?: boolean; // Flag to create invoice
 }
 
 export interface RenewMembershipRequest {
   membership_id: string;
   membership_type_id?: string; // Can change type during renewal
+  custom_expiry_date?: string; // Override calculated expiry date
   auto_renew?: boolean;
   notes?: string;
+  create_invoice?: boolean; // Flag to create invoice
 }
 
 // Constants

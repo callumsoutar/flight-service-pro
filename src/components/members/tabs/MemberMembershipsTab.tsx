@@ -107,7 +107,7 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
   const handleCreateMembership = async (membershipData: {
     user_id: string;
     membership_type_id: string;
-    auto_renew: boolean;
+    custom_expiry_date?: string;
     notes?: string;
     create_invoice: boolean;
   }) => {

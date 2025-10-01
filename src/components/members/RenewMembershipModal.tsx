@@ -18,10 +18,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { 
   RefreshCw, 
   CreditCard, 
-  Calendar,
+  Calendar as CalendarIcon,
   Gift,
   CheckCircle,
   Clock,
@@ -31,8 +33,12 @@ import {
   Info,
   ArrowRight
 } from "lucide-react";
-import { format, addMonths } from "date-fns";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import { MembershipType, Membership } from "@/types/memberships";
+import { calculateDefaultMembershipExpiry } from '@/lib/membership-year-utils';
+import { DEFAULT_MEMBERSHIP_YEAR_CONFIG } from '@/lib/membership-defaults';
+import { MembershipYearConfig } from '@/types/settings';
 
 interface RenewMembershipModalProps {
   open: boolean;
@@ -41,6 +47,7 @@ interface RenewMembershipModalProps {
   membershipTypes: MembershipType[];
   onRenew: (data: {
     membership_type_id?: string;
+    custom_expiry_date?: string;
     auto_renew: boolean;
     notes?: string;
     create_invoice: boolean;
@@ -59,6 +66,26 @@ export default function RenewMembershipModal({
   const [notes, setNotes] = useState("");
   const [createInvoice, setCreateInvoice] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [membershipYearConfig, setMembershipYearConfig] = useState<MembershipYearConfig>(DEFAULT_MEMBERSHIP_YEAR_CONFIG);
+  const [useCustomExpiry, setUseCustomExpiry] = useState(false);
+  const [customExpiryDate, setCustomExpiryDate] = useState<Date | undefined>(undefined);
+
+  // Fetch membership year configuration
+  useEffect(() => {
+    async function fetchMembershipYearConfig() {
+      try {
+        const response = await fetch('/api/settings?category=memberships&key=membership_year');
+        const data = await response.json();
+        if (data.setting?.setting_value) {
+          setMembershipYearConfig(data.setting.setting_value as MembershipYearConfig);
+        }
+      } catch (error) {
+        console.error('Failed to fetch membership year config:', error);
+        // Use default config on error
+      }
+    }
+    fetchMembershipYearConfig();
+  }, []);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -67,16 +94,22 @@ export default function RenewMembershipModal({
       setAutoRenew(currentMembership.auto_renew || false);
       setNotes("");
       setCreateInvoice(true);
+      setUseCustomExpiry(false);
+      setCustomExpiryDate(undefined);
     }
   }, [open, currentMembership]);
 
   const selectedType = membershipTypes.find(t => t.id === selectedTypeId) || currentMembership.membership_types;
   const isChangingType = selectedTypeId !== currentMembership.membership_type_id;
 
-  // Calculate new expiry date
-  const newExpiryDate = selectedType 
-    ? addMonths(new Date(), selectedType.duration_months)
+  // Calculate new expiry date using membership year configuration or custom override
+  const calculatedExpiryDate = selectedType 
+    ? calculateDefaultMembershipExpiry(membershipYearConfig, new Date())
     : null;
+  
+  const newExpiryDate = useCustomExpiry && customExpiryDate 
+    ? customExpiryDate 
+    : calculatedExpiryDate;
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
@@ -85,7 +118,10 @@ export default function RenewMembershipModal({
         membership_type_id: isChangingType ? selectedTypeId : undefined,
         auto_renew: autoRenew,
         notes: notes.trim() || undefined,
-        create_invoice: createInvoice
+        create_invoice: createInvoice,
+        custom_expiry_date: useCustomExpiry && customExpiryDate 
+          ? customExpiryDate.toISOString().split('T')[0]
+          : undefined
       });
       onClose();
     } catch (error) {
@@ -265,6 +301,63 @@ export default function RenewMembershipModal({
                   </div>
                 </div>
 
+                {/* Custom Expiry Date */}
+                <div className="space-y-3 pt-2 border-t">
+                  <div className="flex items-start space-x-3">
+                    <Switch
+                      id="use-custom-expiry"
+                      checked={useCustomExpiry}
+                      onCheckedChange={(checked) => {
+                        setUseCustomExpiry(checked);
+                        if (!checked) setCustomExpiryDate(undefined);
+                      }}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <label htmlFor="use-custom-expiry" className="text-base font-medium cursor-pointer">
+                        Override expiry date
+                      </label>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Set a custom expiry date instead of using the membership year configuration
+                      </p>
+                    </div>
+                  </div>
+
+                  {useCustomExpiry && (
+                    <div className="pl-9">
+                      <label className="block text-sm font-medium mb-2">Custom Expiry Date</label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !customExpiryDate && "text-muted-foreground"
+                            )}
+                            type="button"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {customExpiryDate ? format(customExpiryDate, "dd MMM yyyy") : "Pick a date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <CalendarComponent
+                            mode="single"
+                            selected={customExpiryDate}
+                            onSelect={setCustomExpiryDate}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      {calculatedExpiryDate && (
+                        <p className="text-xs text-gray-500 mt-2">
+                          Default would be: {format(calculatedExpiryDate, 'MMM dd, yyyy')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* Notes */}
                 <div className="space-y-3">
                   <label htmlFor="notes" className="text-base font-medium flex items-center gap-2">
@@ -324,7 +417,7 @@ export default function RenewMembershipModal({
                     </div>
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Calendar className="h-4 w-4" />
+                        <CalendarIcon className="h-4 w-4" />
                         New Expiry
                       </div>
                       <div className="font-semibold">
@@ -415,7 +508,7 @@ export default function RenewMembershipModal({
               ) : (
                 <>
                   {createInvoice && <CreditCard className="h-4 w-4" />}
-                  <Calendar className="h-4 w-4" />
+                  <CalendarIcon className="h-4 w-4" />
                   Renew Membership
                 </>
               )}

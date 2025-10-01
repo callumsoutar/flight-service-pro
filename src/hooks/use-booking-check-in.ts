@@ -15,6 +15,7 @@ interface CalculateChargesParams {
   chargingBy: 'hobbs' | 'tacho' | null;
   selectedInstructor: string;
   selectedFlightType: string;
+  instructionType?: 'dual' | 'solo' | 'trial' | null;
   hobbsStart?: number;
   hobbsEnd?: number;
   tachStart?: number;
@@ -127,72 +128,99 @@ export function useBookingCheckIn(bookingId: string) {
         // Create optimistic invoice items based on dual/solo time
         const optimisticItems: InvoiceItem[] = [];
 
-        // Dual time items (aircraft + instructor)
-        if (params.dualTime > 0) {
-          const roundedDualTime = roundToOneDecimal(params.dualTime);
-          const dualAircraftItem: InvoiceItem = {
-            id: 'optimistic-dual-aircraft',
-            invoice_id: 'optimistic-invoice',
-            chargeable_id: null,
-            description: `Dual Flight - Aircraft`,
-            quantity: roundedDualTime,
-            unit_price: params.aircraftRate,
-            rate_inclusive: null,
-            amount: roundedDualTime * params.aircraftRate,
-            tax_rate: currentTaxRate,
-            tax_amount: (roundedDualTime * params.aircraftRate) * currentTaxRate,
-            line_total: roundedDualTime * params.aircraftRate * (1 + currentTaxRate),
-            notes: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
+        // Check if instructor is required based on instruction type
+        const requiresInstructor = params.instructionType === 'dual' || params.instructionType === 'trial';
 
-          const dualInstructorItem: InvoiceItem = {
-            id: 'optimistic-dual-instructor',
-            invoice_id: 'optimistic-invoice',
-            chargeable_id: null,
-            description: `Dual Flight - Instructor`,
-            quantity: roundedDualTime,
-            unit_price: params.instructorRate,
-            rate_inclusive: null,
-            amount: roundedDualTime * params.instructorRate,
-            tax_rate: currentTaxRate,
-            tax_amount: (roundedDualTime * params.instructorRate) * currentTaxRate,
-            line_total: roundedDualTime * params.instructorRate * (1 + currentTaxRate),
-            notes: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-
-          optimisticItems.push(dualAircraftItem, dualInstructorItem);
-        }
-
-        // Solo time item (aircraft only) - use solo aircraft rate if available
-        if (params.soloTime > 0) {
-          const roundedSoloTime = roundToOneDecimal(params.soloTime);
-          const soloRate = params.soloAircraftRate || params.aircraftRate;
+        // Handle different flight types with clear separation
+        if (params.instructionType === 'solo') {
+          // SOLO FLIGHTS: Only create aircraft charge, no instructor charge
+          const roundedChargeTime = roundToOneDecimal(params.chargeTime);
           const soloAircraftItem: InvoiceItem = {
             id: 'optimistic-solo-aircraft',
             invoice_id: 'optimistic-invoice',
             chargeable_id: null,
             description: `Solo Flight - Aircraft`,
-            quantity: roundedSoloTime,
-            unit_price: soloRate,
+            quantity: roundedChargeTime,
+            unit_price: params.aircraftRate,
             rate_inclusive: null,
-            amount: roundedSoloTime * soloRate,
+            amount: roundedChargeTime * params.aircraftRate,
             tax_rate: currentTaxRate,
-            tax_amount: (roundedSoloTime * soloRate) * currentTaxRate,
-            line_total: roundedSoloTime * soloRate * (1 + currentTaxRate),
+            tax_amount: (roundedChargeTime * params.aircraftRate) * currentTaxRate,
+            line_total: roundedChargeTime * params.aircraftRate * (1 + currentTaxRate),
             notes: null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           };
 
           optimisticItems.push(soloAircraftItem);
-        }
+        } else if (params.instructionType === 'dual') {
+          // DUAL FLIGHTS: Handle dual and solo segments separately
 
-        // Fallback for non-dual flights - create standard items
-        if (params.dualTime === 0 && params.soloTime === 0 && params.chargeTime > 0) {
+          // Dual time items (aircraft + instructor)
+          if (params.dualTime > 0) {
+            const roundedDualTime = roundToOneDecimal(params.dualTime);
+            const dualAircraftItem: InvoiceItem = {
+              id: 'optimistic-dual-aircraft',
+              invoice_id: 'optimistic-invoice',
+              chargeable_id: null,
+              description: `Dual Flight - Aircraft`,
+              quantity: roundedDualTime,
+              unit_price: params.aircraftRate,
+              rate_inclusive: null,
+              amount: roundedDualTime * params.aircraftRate,
+              tax_rate: currentTaxRate,
+              tax_amount: (roundedDualTime * params.aircraftRate) * currentTaxRate,
+              line_total: roundedDualTime * params.aircraftRate * (1 + currentTaxRate),
+              notes: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+
+            const dualInstructorItem: InvoiceItem = {
+              id: 'optimistic-dual-instructor',
+              invoice_id: 'optimistic-invoice',
+              chargeable_id: null,
+              description: `Dual Flight - Instructor`,
+              quantity: roundedDualTime,
+              unit_price: params.instructorRate,
+              rate_inclusive: null,
+              amount: roundedDualTime * params.instructorRate,
+              tax_rate: currentTaxRate,
+              tax_amount: (roundedDualTime * params.instructorRate) * currentTaxRate,
+              line_total: roundedDualTime * params.instructorRate * (1 + currentTaxRate),
+              notes: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+
+            optimisticItems.push(dualAircraftItem, dualInstructorItem);
+          }
+
+          // Solo time continuation (aircraft only) - use solo aircraft rate if available
+          if (params.soloTime > 0) {
+            const roundedSoloTime = roundToOneDecimal(params.soloTime);
+            const soloRate = params.soloAircraftRate || params.aircraftRate;
+            const soloAircraftItem: InvoiceItem = {
+              id: 'optimistic-solo-aircraft',
+              invoice_id: 'optimistic-invoice',
+              chargeable_id: null,
+              description: `Solo Flight - Aircraft`,
+              quantity: roundedSoloTime,
+              unit_price: soloRate,
+              rate_inclusive: null,
+              amount: roundedSoloTime * soloRate,
+              tax_rate: currentTaxRate,
+              tax_amount: (roundedSoloTime * soloRate) * currentTaxRate,
+              line_total: roundedSoloTime * soloRate * (1 + currentTaxRate),
+              notes: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+
+            optimisticItems.push(soloAircraftItem);
+          }
+        } else {
+          // TRIAL FLIGHTS and FALLBACK: Create standard items
           const roundedChargeTime = roundToOneDecimal(params.chargeTime);
           const aircraftItem: InvoiceItem = {
             id: 'optimistic-aircraft',
@@ -211,25 +239,31 @@ export function useBookingCheckIn(bookingId: string) {
             updated_at: new Date().toISOString(),
           };
 
-          const instructorItem: InvoiceItem = {
-            id: 'optimistic-instructor',
-            invoice_id: 'optimistic-invoice',
-            chargeable_id: null,
-            description: `Flight - Instructor`,
-            quantity: roundedChargeTime,
-            unit_price: params.instructorRate,
-            rate_inclusive: null,
-            amount: roundedChargeTime * params.instructorRate,
-            tax_rate: currentTaxRate,
-            tax_amount: (roundedChargeTime * params.instructorRate) * currentTaxRate,
-            line_total: roundedChargeTime * params.instructorRate * (1 + currentTaxRate),
-            notes: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
+          optimisticItems.push(aircraftItem);
 
-          optimisticItems.push(aircraftItem, instructorItem);
+          // Only add instructor item for trial flights or when required
+          if (requiresInstructor) {
+            const instructorItem: InvoiceItem = {
+              id: 'optimistic-instructor',
+              invoice_id: 'optimistic-invoice',
+              chargeable_id: null,
+              description: `Flight - Instructor`,
+              quantity: roundedChargeTime,
+              unit_price: params.instructorRate,
+              rate_inclusive: null,
+              amount: roundedChargeTime * params.instructorRate,
+              tax_rate: currentTaxRate,
+              tax_amount: (roundedChargeTime * params.instructorRate) * currentTaxRate,
+              line_total: roundedChargeTime * params.instructorRate * (1 + currentTaxRate),
+              notes: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+
+            optimisticItems.push(instructorItem);
+          }
         }
+
         const subtotal = optimisticItems.reduce((sum, item) => sum + item.amount, 0);
         const totalTax = subtotal * currentTaxRate;
         const total = subtotal + totalTax;

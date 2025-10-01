@@ -22,7 +22,8 @@ export type SettingCategory =
   | 'bookings' 
   | 'training' 
   | 'maintenance'
-  | 'security';
+  | 'security'
+  | 'memberships';
 
 export interface SettingsUpdateRequest {
   setting_value: string | number | boolean | object;
@@ -133,6 +134,18 @@ export interface SecuritySettings {
   lockout_duration_minutes: number;
 }
 
+export interface MembershipYearConfig {
+  start_month: number; // 1-12
+  start_day: number;   // 1-31
+  end_month: number;   // 1-12
+  end_day: number;     // 1-31
+  description: string;
+}
+
+export interface MembershipSettings {
+  membership_year: MembershipYearConfig;
+}
+
 // Helper type for all settings combined
 export interface AllSettings {
   general: GeneralSettings;
@@ -143,6 +156,7 @@ export interface AllSettings {
   training: TrainingSettings;
   maintenance: MaintenanceSettings;
   security: SecuritySettings;
+  memberships: MembershipSettings;
 }
 
 export type SettingValue<T extends SettingCategory, K extends keyof AllSettings[T]> = AllSettings[T][K];

@@ -70,6 +70,9 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status");
     const student_id = searchParams.get("student_id");
     const booking_id = searchParams.get("booking_id");
+    const start_date = searchParams.get("start_date");
+    const end_date = searchParams.get("end_date");
+    const aircraft_id = searchParams.get("aircraft_id");
     const limit = parseInt(searchParams.get("limit") || "50");
     const offset = parseInt(searchParams.get("offset") || "0");
 
@@ -106,6 +109,15 @@ export async function GET(req: NextRequest) {
     }
     if (booking_id) {
       query = query.eq("booking_id", booking_id);
+    }
+    if (aircraft_id) {
+      query = query.eq("aircraft_id", aircraft_id);
+    }
+    if (start_date) {
+      query = query.gte("flight_date", start_date);
+    }
+    if (end_date) {
+      query = query.lte("flight_date", end_date);
     }
 
     // Apply pagination

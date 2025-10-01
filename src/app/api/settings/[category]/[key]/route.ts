@@ -3,9 +3,14 @@ import { createClient } from '@/lib/SupabaseServerClient';
 import { SettingCategory } from '@/types/settings';
 
 interface RouteParams {
-  category: SettingCategory;
+  category: string;
   key: string;
 }
+
+const validCategories: SettingCategory[] = [
+  'general', 'system', 'invoicing', 'notifications',
+  'bookings', 'training', 'maintenance', 'security', 'memberships'
+];
 
 export async function GET(
   request: NextRequest,
@@ -14,6 +19,11 @@ export async function GET(
   try {
     const supabase = await createClient();
     const { category, key } = await params;
+
+    // Validate category
+    if (!validCategories.includes(category as SettingCategory)) {
+      return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+    }
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -70,6 +80,11 @@ export async function PUT(
   try {
     const supabase = await createClient();
     const { category, key } = await params;
+
+    // Validate category
+    if (!validCategories.includes(category as SettingCategory)) {
+      return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+    }
     
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -135,6 +150,11 @@ export async function DELETE(
   try {
     const supabase = await createClient();
     const { category, key } = await params;
+
+    // Validate category
+    if (!validCategories.includes(category as SettingCategory)) {
+      return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+    }
     
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();

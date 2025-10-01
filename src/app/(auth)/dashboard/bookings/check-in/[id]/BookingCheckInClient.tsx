@@ -35,11 +35,21 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
   const { data: invoice, isLoading: invoiceLoading } = useInvoiceData(booking.id);
   const { data: invoiceItems = [] } = useInvoiceItems(invoice?.id || null);
   const { isLoading: flightTypesLoading } = useFlightTypes();
+  // Determine if this is a solo or dual flight based on flight type
+  const instructionType = booking.flight_type?.instruction_type;
+  const isSoloFlight = instructionType === 'solo';
+  const isDualFlight = instructionType === 'dual';
+
   // Use checked_out_aircraft_id from flight_log instead of booking
   const { data: aircraft } = useAircraftData(flightLog?.checked_out_aircraft_id || null);
   // Use checked_out_instructor_id from flight_log instead of booking instructor_id
-  const { data: instructorRate, isLoading: instructorRateLoading } = useInstructorRate(flightLog?.checked_out_instructor_id || null, booking.flight_type_id);
-  
+  // For solo flights, we don't need to fetch instructor rate
+  const shouldFetchInstructorRate = (isDualFlight || instructionType === 'trial') && flightLog?.checked_out_instructor_id;
+  const { data: instructorRate, isLoading: instructorRateLoading } = useInstructorRate(
+    shouldFetchInstructorRate ? flightLog?.checked_out_instructor_id || null : null,
+    shouldFetchInstructorRate ? booking.flight_type_id : null
+  );
+
   // Check-in operations
   const {
     calculateCharges,
@@ -54,7 +64,7 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
     resetCalculate,
     resetComplete,
   } = useBookingCheckIn(booking.id);
-  
+
   // Invoice item management
   const {
     addItem,
@@ -68,11 +78,6 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
   const [chargeableTab, setChargeableTab] = useState<'landing_fee' | 'airways_fees' | 'other'>('landing_fee');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  // Determine if this is a solo or dual flight based on flight type
-  const instructionType = booking.flight_type?.instruction_type;
-  const isSoloFlight = instructionType === 'solo';
-  const isDualFlight = instructionType === 'dual';
-
   const handleCalculateCharges = useCallback(async (details: {
     chargeTime: number;
     aircraftRate: number;
@@ -80,6 +85,7 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
     chargingBy: 'hobbs' | 'tacho' | null;
     selectedInstructor: string;
     selectedFlightType: string;
+    instructionType?: 'dual' | 'solo' | 'trial' | null;
     hobbsStart?: number;
     hobbsEnd?: number;
     tachStart?: number;
@@ -92,11 +98,14 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
     soloFlightType?: string;
     soloAircraftRate?: number;
   }): Promise<void> => {
-    // Prevent calculation if instructor rate is loading or missing
-    if (instructorRateLoading) {
+    // For solo flights, we don't need instructor rate or instructor rate loading to complete
+    const requiresInstructor = isDualFlight || instructionType === 'trial';
+
+    // Prevent calculation if instructor rate is loading or missing (only for flights that require instructor)
+    if (requiresInstructor && instructorRateLoading) {
       return;
     }
-    if (!instructorRate) {
+    if (requiresInstructor && !instructorRate) {
       return;
     }
 
@@ -112,6 +121,7 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
       chargingBy: details.chargingBy,
       selectedInstructor: details.selectedInstructor,
       selectedFlightType: details.selectedFlightType,
+      instructionType: details.instructionType,
       hobbsStart: details.hobbsStart,
       hobbsEnd: details.hobbsEnd,
       tachStart: details.tachStart,
@@ -124,7 +134,7 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
       soloFlightType: details.soloFlightType,
       soloAircraftRate: details.soloAircraftRate,
     });
-  }, [booking.id, instructorRate, instructorRateLoading, calculateCharges, resetCalculate]);
+  }, [booking.id, instructorRate, instructorRateLoading, calculateCharges, resetCalculate, isDualFlight, instructionType]);
 
   const handleAddItem = useCallback(async (item: Chargeable, quantity: number): Promise<void> => {
     if (!invoice) return;
@@ -288,7 +298,7 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
             selectedFlightTypeId={booking?.flight_type_id}
             instructorId={flightLog?.checked_out_instructor_id || undefined}
             instructors={instructors}
-            instructorRate={instructorRate ? { rate: Number(instructorRate.rate), currency: instructorRate.currency } : undefined}
+            instructorRate={instructorRate ? { rate: Number(instructorRate.rate), currency: instructorRate.currency } : (isSoloFlight ? { rate: 0, currency: 'USD' } : undefined)}
             instructorRateLoading={instructorRateLoading}
             onCalculateCharges={handleCalculateCharges}
             bookingStartHobbs={flightLog?.hobbs_start}

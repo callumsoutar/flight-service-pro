@@ -15,24 +15,25 @@ import type { UserResult } from '@/components/invoices/MemberSelect';
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { ObservationStatus, ObservationStage } from '@/types/observations';
+import { ObservationStage } from '@/types/observations';
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle, MessageSquare, Calendar, User, Eye } from "lucide-react";
 
-const OBSERVATION_STATUSES: ObservationStatus[] = ["low", "medium", "high"];
+const OBSERVATION_PRIORITIES = ["low", "medium", "high"];
 const OBSERVATION_STAGES: ObservationStage[] = ["open", "investigation", "resolution", "closed"];
 
-// Helper functions for styling
-const getStatusColor = (status: ObservationStatus): string => {
-  switch (status) {
+// Helper functions for styling  
+const getPriorityColor = (priority: string): string => {
+  switch (priority) {
     case 'low': return 'bg-green-100 text-green-800 border-green-200';
     case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
     case 'high': return 'bg-red-100 text-red-800 border-red-200';
     default: return 'bg-gray-100 text-gray-800 border-gray-200';
   }
 };
+
 
 const getStageColor = (stage: ObservationStage): string => {
   switch (stage) {
@@ -64,7 +65,7 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
   // Editable observation fields
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
-  const [editStatus, setEditStatus] = useState<ObservationStatus>("low");
+  const [editPriority, setEditPriority] = useState<string>("medium");
   const [editStage, setEditStage] = useState<ObservationStage>("open");
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -74,8 +75,8 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
     if (observation) {
       setEditName(observation.name);
       setEditDescription(observation.description || "");
-      setEditStatus(observation.status);
-      setEditStage(observation.observation_stage);
+      setEditPriority(observation.priority || "medium");
+      setEditStage(observation.stage);
     }
   }, [observation]);
 
@@ -115,7 +116,7 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
   useEffect(() => {
     if (!open) return;
     const userIds = [
-      ...(observation ? [observation.user_id] : []),
+      ...(observation ? [observation.reported_by] : []),
       ...comments.map(c => c.user_id)
     ];
     const uniqueIds = Array.from(new Set(userIds)).filter(Boolean);
@@ -164,8 +165,11 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
       toast.success("Comment added.");
     } else {
       const data = await res.json();
-      setError(data.error || "Failed to add comment");
-      toast.error(data.error || "Failed to add comment");
+      const errorMsg = typeof data.error === 'string' 
+        ? data.error 
+        : data.error?.formErrors?.[0] || JSON.stringify(data.error) || "Failed to add comment";
+      setError(errorMsg);
+      toast.error(errorMsg);
     }
     setAddingComment(false);
   };
@@ -174,8 +178,8 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
   async function handleSaveEdit(e: React.FormEvent) {
     e.preventDefault();
     setEditError(null);
-    if (!editName || !editStatus || !editStage) {
-      setEditError("Name, Status, and Stage are required.");
+    if (!editName || !editStage) {
+      setEditError("Name and Stage are required.");
       return;
     }
     setEditLoading(true);
@@ -183,8 +187,8 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
       id: observationId,
       name: editName,
       description: editDescription || null,
-      status: editStatus,
-      observation_stage: editStage,
+      priority: editPriority,
+      stage: editStage,
     };
     const res = await fetch("/api/observations", {
       method: "PATCH",
@@ -199,8 +203,11 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
       toast.success("Observation changes saved.");
     } else {
       const data = await res.json();
-      setEditError(data.error || "Failed to update observation");
-      toast.error(data.error || "Failed to update observation");
+      const errorMsg = typeof data.error === 'string' 
+        ? data.error 
+        : data.error?.formErrors?.[0] || JSON.stringify(data.error) || "Failed to update observation";
+      setEditError(errorMsg);
+      toast.error(errorMsg);
     }
     setEditLoading(false);
   }
@@ -213,55 +220,57 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="w-[900px] max-w-[98vw] mx-auto p-0 bg-white rounded-2xl shadow-xl border-0 overflow-hidden max-h-[90vh]">
-        {/* Header with gradient background */}
-        <div className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200 px-8 py-6">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex items-center justify-center w-10 h-10 bg-orange-100 rounded-lg">
-              <Eye className="w-5 h-5 text-orange-600" />
+      <DialogContent className="w-[750px] max-w-[95vw] mx-auto p-0 bg-white rounded-xl shadow-xl border-0 overflow-hidden max-h-[85vh]">
+        {/* Header */}
+        <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center w-9 h-9 bg-orange-100 rounded-lg">
+              <Eye className="w-4 h-4 text-orange-600" />
             </div>
-            <div>
-              <DialogTitle className="text-2xl font-bold text-slate-900 mb-1">Observation Details</DialogTitle>
-              <DialogDescription className="text-slate-600 text-sm">
+            <div className="flex-1">
+              <DialogTitle className="text-xl font-semibold text-slate-900">Observation Details</DialogTitle>
+              <DialogDescription className="text-slate-600 text-xs">
                 View and manage observation information
               </DialogDescription>
             </div>
+            {observation && (
+              <div className="flex items-center gap-2">
+                <Badge className={`${getStageColor(observation.stage)} border text-xs`}>
+                  {observation.stage}
+                </Badge>
+                <Badge className={`${getPriorityColor(observation.priority || 'medium')} border text-xs`}>
+                  Priority: {observation.priority || 'medium'}
+                </Badge>
+              </div>
+            )}
           </div>
           {observation && (
-            <div className="flex items-center gap-3 mt-4">
-              <Badge className={`${getStageColor(observation.observation_stage)} border font-medium`}>
-                {observation.observation_stage}
-              </Badge>
-              <Badge className={`${getStatusColor(observation.status)} border font-medium`}>
-                {observation.status} priority
-              </Badge>
-              <div className="flex items-center gap-1 text-xs text-slate-500 ml-auto">
-                <Calendar className="w-3 h-3" />
-                Created {format(new Date(observation.created_at), 'dd MMM yyyy')}
-              </div>
+            <div className="flex items-center gap-1 text-xs text-slate-500 mt-2 ml-11">
+              <Calendar className="w-3 h-3" />
+              Created {format(new Date(observation.created_at), 'dd MMM yyyy')}
             </div>
           )}
         </div>
         
         {/* Scrollable content area */}
-        <div className="overflow-y-auto max-h-[calc(90vh-120px)] px-8 py-6">
+        <div className="overflow-y-auto max-h-[calc(85vh-90px)] px-6 py-4">
           {loadingObs ? (
             <div className="space-y-4">
               <Skeleton className="w-full h-32" />
               <Skeleton className="w-full h-48" />
             </div>
           ) : observation ? (
-            <Card className="border-0 shadow-sm bg-white mb-6">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-orange-500" />
+            <Card className="border shadow-sm bg-white mb-4">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-orange-500" />
                   Observation Information
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSaveEdit} className="space-y-6">
+                <form onSubmit={handleSaveEdit} className="space-y-4">
                   {/* Name field - full width */}
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <label className="text-sm font-medium text-slate-700 flex items-center gap-1">
                       Name
                       <span className="text-red-500">*</span>
@@ -271,40 +280,40 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
                       onChange={e => setEditName(e.target.value)} 
                       required 
                       autoFocus 
-                      className="text-base border-slate-200 focus:border-orange-300 focus:ring-orange-200"
+                      className="border-slate-200 focus:border-orange-300 focus:ring-orange-200"
                       placeholder="Enter observation name..."
                     />
                   </div>
 
-                  {/* Status and Stage in a row */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
+                  {/* Priority and Stage in a row */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
                       <label className="text-sm font-medium text-slate-700 flex items-center gap-1">
                         Priority Level
                         <span className="text-red-500">*</span>
                       </label>
-                      <Select value={editStatus} onValueChange={val => setEditStatus(val as ObservationStatus)}>
+                      <Select value={editPriority} onValueChange={val => setEditPriority(val)}>
                         <SelectTrigger className="w-full border-slate-200 focus:border-orange-300 focus:ring-orange-200">
                           <SelectValue placeholder="Select priority" />
                         </SelectTrigger>
                         <SelectContent>
-                          {OBSERVATION_STATUSES.map((s) => (
+                          {OBSERVATION_PRIORITIES.map((s) => (
                             <SelectItem key={s} value={s} className="capitalize">
                               <div className="flex items-center gap-2">
                                 <div className={`w-2 h-2 rounded-full ${
                                   s === 'low' ? 'bg-green-500' : 
                                   s === 'medium' ? 'bg-yellow-500' : 'bg-red-500'
                                 }`} />
-                                {s.charAt(0).toUpperCase() + s.slice(1)} Priority
+                                {s.charAt(0).toUpperCase() + s.slice(1)}
                               </div>
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <label className="text-sm font-medium text-slate-700 flex items-center gap-1">
-                        Current Stage
+                        Stage
                         <span className="text-red-500">*</span>
                       </label>
                       <Select value={editStage} onValueChange={val => setEditStage(val as ObservationStage)}>
@@ -323,29 +332,29 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
                   </div>
 
                   {/* Description field */}
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <label className="text-sm font-medium text-slate-700">Description</label>
                     <Textarea 
                       value={editDescription} 
                       onChange={e => setEditDescription(e.target.value)} 
                       placeholder="Provide additional details about this observation..."
-                      className="min-h-[80px] border-slate-200 focus:border-orange-300 focus:ring-orange-200 resize-none"
+                      className="min-h-[70px] border-slate-200 focus:border-orange-300 focus:ring-orange-200 resize-none"
                     />
                   </div>
 
                   {/* Error display */}
                   {editError && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
                       <div className="text-red-800 text-sm font-medium">{editError}</div>
                     </div>
                   )}
 
                   {/* Save button */}
-                  <div className="flex justify-end pt-4 border-t border-slate-100">
+                  <div className="flex justify-end pt-3 border-t border-slate-100">
                     <Button
                       type="submit"
-                      disabled={editLoading || !editName || !editStatus || !editStage}
-                      className="min-w-[120px] bg-orange-600 hover:bg-orange-700 text-white font-medium px-6 py-2.5 rounded-lg shadow-sm transition-colors"
+                      disabled={editLoading || !editName || !editStage}
+                      className="bg-orange-600 hover:bg-orange-700 text-white font-medium px-5 py-2 rounded-lg shadow-sm transition-colors"
                     >
                       {editLoading ? "Saving..." : "Save Changes"}
                     </Button>
@@ -360,13 +369,13 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
             </div>
           )}
           {/* Comments Section */}
-          <Card className="border-0 shadow-sm bg-white">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-blue-500" />
+          <Card className="border shadow-sm bg-white">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-blue-500" />
                 Comments
                 {comments.length > 0 && (
-                  <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
+                  <Badge variant="secondary" className="ml-1.5 bg-blue-100 text-blue-700 text-xs px-2 py-0">
                     {comments.length}
                   </Badge>
                 )}
@@ -374,36 +383,34 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
             </CardHeader>
             <CardContent>
               {loadingComments ? (
-                <div className="space-y-3">
-                  <Skeleton className="w-full h-16" />
-                  <Skeleton className="w-full h-16" />
+                <div className="space-y-2">
+                  <Skeleton className="w-full h-14" />
+                  <Skeleton className="w-full h-14" />
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {/* Existing comments */}
                   {comments.length === 0 ? (
-                    <div className="text-center py-8 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
-                      <MessageSquare className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                      <div className="text-slate-600 font-medium">No comments yet</div>
-                      <div className="text-slate-500 text-sm">Be the first to add a comment</div>
+                    <div className="text-center py-3 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="text-slate-500 text-sm">No comments yet</div>
                     </div>
                   ) : (
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                    <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
                       {comments.map((c) => (
-                        <div key={c.id} className="bg-slate-50 border border-slate-200 rounded-lg p-4 hover:bg-slate-100 transition-colors">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
-                              <User className="w-4 h-4 text-blue-600" />
+                        <div key={c.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 hover:bg-slate-100 transition-colors">
+                          <div className="flex items-start gap-2 mb-1.5">
+                            <div className="flex items-center justify-center w-7 h-7 bg-blue-100 rounded-full flex-shrink-0">
+                              <User className="w-3.5 h-3.5 text-blue-600" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-slate-900 truncate">{getUserName(c.user_id)}</div>
+                              <div className="font-medium text-slate-900 text-sm truncate">{getUserName(c.user_id)}</div>
                               <div className="flex items-center gap-1 text-xs text-slate-500">
                                 <Calendar className="w-3 h-3" />
                                 {format(new Date(c.created_at), 'dd MMM yyyy · HH:mm')}
                               </div>
                             </div>
                           </div>
-                          <div className="text-slate-700 whitespace-pre-line leading-relaxed pl-10">
+                          <div className="text-slate-700 text-sm whitespace-pre-line leading-relaxed pl-9">
                             {c.comment}
                           </div>
                         </div>
@@ -412,21 +419,21 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
                   )}
 
                   {/* Add new comment form */}
-                  <div className="pt-4 border-t border-slate-200">
-                    <form onSubmit={handleAddComment} className="space-y-3">
-                      <div className="space-y-2">
+                  <div className="pt-3 border-t border-slate-200">
+                    <form onSubmit={handleAddComment} className="space-y-2.5">
+                      <div className="space-y-1.5">
                         <label className="text-sm font-medium text-slate-700">Add a comment</label>
                         <Textarea
                           value={commentText}
                           onChange={e => setCommentText(e.target.value)}
                           placeholder="Share your thoughts about this observation..."
-                          className="min-h-[80px] border-slate-200 focus:border-blue-300 focus:ring-blue-200 resize-none"
+                          className="min-h-[60px] border-slate-200 focus:border-blue-300 focus:ring-blue-200 resize-none text-sm"
                           disabled={addingComment}
                         />
                       </div>
                       
                       {error && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
                           <div className="text-red-800 text-sm font-medium">{error}</div>
                         </div>
                       )}
@@ -435,7 +442,7 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
                         <Button
                           type="submit"
                           disabled={addingComment || !commentText.trim()}
-                          className="min-w-[120px] bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded-lg shadow-sm transition-colors"
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2 rounded-lg shadow-sm transition-colors"
                         >
                           {addingComment ? "Adding..." : "Add Comment"}
                         </Button>

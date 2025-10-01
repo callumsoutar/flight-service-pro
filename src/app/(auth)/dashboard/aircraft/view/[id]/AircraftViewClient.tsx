@@ -106,17 +106,6 @@ export default function AircraftViewClient({ aircraft, components: _components, 
               </div>
             </Card>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Aircraft Observations */}
-            <Card className="p-6 flex flex-col gap-2 shadow-sm border border-gray-200 bg-white">
-              <div className="font-semibold text-lg flex items-center gap-2 mb-2">
-                <AlertCircle className="w-5 h-5 text-yellow-500" /> Aircraft Observations
-              </div>
-              <div className="flex flex-col gap-1 text-sm">
-                <span className="text-muted-foreground">No open defects</span>
-              </div>
-            </Card>
-          </div>
         </Tabs.Content>
         <Tabs.Content value="flight" className="h-full w-full">
           <AircraftFlightHistoryTab aircraftId={aircraftId} />

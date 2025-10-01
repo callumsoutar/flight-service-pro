@@ -122,16 +122,15 @@ export default function BookingResources({ member, instructor, aircraft, booking
                   {activeObservations.length} Active Observation{activeObservations.length !== 1 ? 's' : ''}
                 </span>
               </div>
-              <div className="space-y-1 pl-2">
+              <div className="space-y-1.5 pl-6">
                 {activeObservations.map((obs) => (
-                  <div key={obs.id}>
-                    <button
-                      onClick={() => setSelectedObservationId(obs.id)}
-                      className="text-left text-orange-800 hover:text-orange-900 underline decoration-dotted hover:decoration-solid transition-all text-sm"
-                    >
-                      {obs.name}
-                    </button>
-                  </div>
+                  <button
+                    key={obs.id}
+                    onClick={() => setSelectedObservationId(obs.id)}
+                    className="block text-left text-sm text-orange-800 hover:text-orange-600 transition-colors cursor-pointer"
+                  >
+                    {obs.name}
+                  </button>
                 ))}
               </div>
             </div>

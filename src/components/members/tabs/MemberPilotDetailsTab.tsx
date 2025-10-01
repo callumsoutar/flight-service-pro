@@ -483,24 +483,27 @@ export default function MemberPilotDetailsTab({ memberId }: PilotDetailsTabProps
         <div className="p-4">
           {/* Add New Endorsement - Inline Form */}
           {showAddEndorsement && (
-            <div className="mb-4 p-3 bg-white rounded-lg border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-gray-700">Add New Endorsement</span>
+            <div className="mb-4 p-4 bg-white rounded-lg border border-gray-300 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-sm font-semibold text-gray-900">Add New Endorsement</span>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={resetAddEndorsementForm}
-                  className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600"
+                  className="h-7 w-7 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
                 >
                   <X className="w-4 h-4" />
                 </Button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                <div className="md:col-span-2">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+                <div className="lg:col-span-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                    Endorsement Type
+                  </label>
                   <Select value={selectedEndorsement} onValueChange={setSelectedEndorsement}>
-                    <SelectTrigger className="h-8">
+                    <SelectTrigger className="h-9 bg-white">
                       <SelectValue placeholder="Select endorsement" />
                     </SelectTrigger>
                     <SelectContent>
@@ -515,12 +518,15 @@ export default function MemberPilotDetailsTab({ memberId }: PilotDetailsTabProps
                   </Select>
                 </div>
 
-                <div>
+                <div className="lg:col-span-3">
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                    Expiry Date (Optional)
+                  </label>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full h-8 text-xs justify-start">
-                        <CalendarIcon className="mr-1 h-3 w-3" />
-                        {endorsementExpiryDate ? format(endorsementExpiryDate, 'MMM dd') : 'Expiry'}
+                      <Button variant="outline" className="w-full h-9 justify-start text-sm font-normal bg-white">
+                        <CalendarIcon className="mr-2 h-4 w-4 text-gray-500" />
+                        {endorsementExpiryDate ? format(endorsementExpiryDate, 'MMM dd, yyyy') : 'Select date'}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -528,39 +534,42 @@ export default function MemberPilotDetailsTab({ memberId }: PilotDetailsTabProps
                         mode="single"
                         selected={endorsementExpiryDate}
                         onSelect={setEndorsementExpiryDate}
-                        autoFocus
+                        initialFocus
                       />
                     </PopoverContent>
                   </Popover>
                 </div>
 
-                <div>
+                <div className="lg:col-span-3">
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                    Notes (Optional)
+                  </label>
                   <Input
                     value={endorsementNotes}
                     onChange={(e) => setEndorsementNotes(e.target.value)}
-                    placeholder="Notes..."
-                    className="h-8 text-xs"
+                    placeholder="Additional notes..."
+                    className="h-9 text-sm bg-white"
                   />
                 </div>
 
-                <div className="flex gap-1">
+                <div className="lg:col-span-2 flex gap-2">
                   <Button
                     type="button"
                     onClick={addEndorsement}
                     disabled={!selectedEndorsement || endorsementsLoading}
                     size="sm"
-                    className="h-8 px-3"
+                    className="h-9 flex-1 font-semibold"
                   >
-                    {endorsementsLoading ? "..." : "Add"}
+                    {endorsementsLoading ? "Adding..." : "Add"}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={resetAddEndorsementForm}
-                    className="h-8 px-2"
+                    className="h-9 px-3"
                   >
-                    <X className="w-3 h-3" />
+                    <X className="w-4 h-4" />
                   </Button>
                 </div>
               </div>

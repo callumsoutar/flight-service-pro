@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   if (visitError) return NextResponse.json({ error: visitError.message }, { status: 400 });
 
   // If this visit is for a component, update the component's scheduling fields
-  if (visit.component_id) {
+  if (visit.component_id && visit.hours_at_visit) {
     // Fetch the component
     const { data: component, error: compError } = await supabase.from('aircraft_components').select('*').eq('id', visit.component_id).single();
     if (compError) return NextResponse.json({ error: compError.message }, { status: 400 });
@@ -58,23 +58,37 @@ export async function POST(req: NextRequest) {
     const intervalType = component.interval_type;
     const intervalHours = component.interval_hours || 0;
     const intervalDays = component.interval_days || 0;
-    const prevScheduledDue = component.scheduled_due_hours || component.current_due_hours || 0;
-    const newScheduledDue = prevScheduledDue + intervalHours;
-    let newDueDate = component.current_due_date;
-    if (intervalType === 'CALENDAR' || intervalType === 'BOTH') {
-      // Use visit.visit_date as base
+    
+    // Use override values from payload if provided, otherwise calculate
+    // This allows users to manually adjust next due values if needed
+    let newDueHours: number;
+    if (body.next_due_hours !== undefined && body.next_due_hours !== null) {
+      // User provided override
+      newDueHours = Number(body.next_due_hours);
+    } else {
+      // Calculate from component's CURRENT base due (no extension)
+      // This ensures extensions NEVER become cumulative
+      const baseDueHours = Number(component.current_due_hours);
+      newDueHours = baseDueHours + intervalHours;
+    }
+    
+    let newDueDate: string | null = component.current_due_date;
+    if (body.next_due_date) {
+      // User provided override
+      newDueDate = body.next_due_date;
+    } else if (intervalType === 'CALENDAR' || intervalType === 'BOTH') {
+      // Calculate from visit date
       const baseDate = new Date(visit.visit_date);
       newDueDate = new Date(baseDate.getTime() + intervalDays * 24 * 60 * 60 * 1000).toISOString();
     }
+    
     // Update the component
     const { error: updateError } = await supabase.from('aircraft_components').update({
       last_completed_hours: visit.hours_at_visit,
       last_completed_date: visit.visit_date,
-      scheduled_due_hours: newScheduledDue,
-      current_due_hours: newScheduledDue,
+      current_due_hours: newDueHours,
       extension_limit_hours: null, // Clear extension after maintenance
       current_due_date: newDueDate,
-      // Optionally: scheduled_due_date: newScheduledDueDate,
     }).eq('id', visit.component_id);
     if (updateError) return NextResponse.json({ error: updateError.message }, { status: 400 });
   }
@@ -103,34 +117,51 @@ export async function PATCH(req: NextRequest) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // If this visit is for a component and status is 'Completed', update the component's scheduling fields
-  if (visit && visit.component_id && visit.status === 'Completed') {
+  // Only update component due dates if relevant fields were actually changed
+  // This prevents automatic recalculation when just editing technician names, notes, etc.
+  const relevantFieldsChanged = body.visit_date || body.hours_at_visit || body.next_due_hours || body.next_due_date;
+
+  if (visit && visit.component_id && visit.hours_at_visit && relevantFieldsChanged) {
     // Fetch the component
     const { data: component, error: compError } = await supabase.from('aircraft_components').select('*').eq('id', visit.component_id).single();
     if (compError) return NextResponse.json({ error: compError.message }, { status: 400 });
-    // Calculate new due values
-    const intervalType = component.interval_type;
-    const intervalHours = component.interval_hours || 0;
-    const intervalDays = component.interval_days || 0;
-    const prevScheduledDue = component.scheduled_due_hours || component.current_due_hours || 0;
-    const newScheduledDue = prevScheduledDue + intervalHours;
-    let newDueDate = component.current_due_date;
-    if (intervalType === 'CALENDAR' || intervalType === 'BOTH') {
-      // Use visit.visit_date as base
-      const baseDate = new Date(visit.visit_date);
-      newDueDate = new Date(baseDate.getTime() + intervalDays * 24 * 60 * 60 * 1000).toISOString();
+
+    // Only update component if specific override fields are provided
+    // This prevents automatic recalculation on every edit
+    if (body.next_due_hours !== undefined || body.next_due_date !== undefined) {
+      const intervalType = component.interval_type;
+      const intervalHours = component.interval_hours || 0;
+      const intervalDays = component.interval_days || 0;
+
+      let newDueHours: number = component.current_due_hours;
+      if (body.next_due_hours !== undefined && body.next_due_hours !== null) {
+        // User provided override
+        newDueHours = Number(body.next_due_hours);
+      } else if (body.hours_at_visit && body.hours_at_visit !== component.last_completed_hours) {
+        // Only recalculate if hours_at_visit actually changed
+        const baseDueHours = Number(component.current_due_hours);
+        newDueHours = baseDueHours + intervalHours;
+      }
+
+      let newDueDate: string | null = component.current_due_date;
+      if (body.next_due_date !== undefined) {
+        newDueDate = body.next_due_date;
+      } else if (body.visit_date && (intervalType === 'CALENDAR' || intervalType === 'BOTH')) {
+        // Only recalculate if visit_date actually changed
+        const baseDate = new Date(visit.visit_date);
+        newDueDate = new Date(baseDate.getTime() + intervalDays * 24 * 60 * 60 * 1000).toISOString();
+      }
+
+      // Update the component
+      const { error: updateError } = await supabase.from('aircraft_components').update({
+        last_completed_hours: visit.hours_at_visit,
+        last_completed_date: visit.visit_date,
+        current_due_hours: newDueHours,
+        extension_limit_hours: null, // Clear extension after maintenance
+        current_due_date: newDueDate,
+      }).eq('id', visit.component_id);
+      if (updateError) return NextResponse.json({ error: updateError.message }, { status: 400 });
     }
-    // Update the component
-    const { error: updateError } = await supabase.from('aircraft_components').update({
-      last_completed_hours: visit.hours_at_visit,
-      last_completed_date: visit.visit_date,
-      scheduled_due_hours: newScheduledDue,
-      current_due_hours: newScheduledDue,
-      extension_limit_hours: null, // Clear extension after maintenance
-      current_due_date: newDueDate,
-      // Optionally: scheduled_due_date: newScheduledDueDate,
-    }).eq('id', visit.component_id);
-    if (updateError) return NextResponse.json({ error: updateError.message }, { status: 400 });
   }
 
   return NextResponse.json(visit as MaintenanceVisit, { status: 200 });

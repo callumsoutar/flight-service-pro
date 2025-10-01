@@ -2,6 +2,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plane, CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -42,19 +43,34 @@ export function FlightAuthorizationClient({
   // Approval mutations
   const approveMutation = useApproveFlightAuthorization({
     onSuccess: () => {
-      router.push(`/dashboard/bookings/view/${booking.id}?authorized=approved`);
+      toast.success('Flight authorization approved successfully!', {
+        description: 'Redirecting to booking details...',
+      });
+      // Small delay to show the success message before redirect
+      setTimeout(() => {
+        router.push(`/dashboard/bookings/view/${booking.id}?authorized=approved`);
+      }, 1000);
     },
     onError: (error) => {
       console.error('Error approving authorization:', error);
+      toast.error('Failed to approve authorization', {
+        description: error.message,
+      });
     },
   });
 
   const rejectMutation = useRejectFlightAuthorization({
     onSuccess: () => {
+      toast.success('Flight authorization rejected', {
+        description: 'The student has been notified of the rejection.',
+      });
       router.refresh();
     },
     onError: (error) => {
       console.error('Error rejecting authorization:', error);
+      toast.error('Failed to reject authorization', {
+        description: error.message,
+      });
     },
   });
 
@@ -105,7 +121,21 @@ export function FlightAuthorizationClient({
   };
 
   return (
-    <div className="bg-gray-50">
+    <div className={`bg-gray-50 ${(approveMutation.isPending || rejectMutation.isPending) ? 'relative' : ''}`}>
+      {/* Loading Overlay */}
+      {(approveMutation.isPending || rejectMutation.isPending) && (
+        <div className="fixed inset-0 bg-black bg-opacity-20 z-40 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 shadow-xl flex items-center gap-4 max-w-sm mx-4">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <div>
+              <h3 className="font-semibold text-gray-900">
+                {approveMutation.isPending ? 'Approving Authorization' : 'Processing Rejection'}
+              </h3>
+              <p className="text-sm text-gray-600">Please wait while we process your request...</p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -225,32 +255,60 @@ export function FlightAuthorizationClient({
 
         {/* Instructor Approval Actions */}
         {showApprovalActions && (
-          <Card className="mt-4 border-orange-200 bg-orange-50">
+          <Card className={`mt-4 transition-all duration-300 ${
+            approveMutation.isPending || rejectMutation.isPending
+              ? 'border-blue-200 bg-blue-50'
+              : 'border-orange-200 bg-orange-50'
+          }`}>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-orange-800">
-                <CheckCircle className="w-5 h-5" />
+              <CardTitle className={`flex items-center gap-2 transition-colors duration-300 ${
+                approveMutation.isPending || rejectMutation.isPending
+                  ? 'text-blue-800'
+                  : 'text-orange-800'
+              }`}>
+                {approveMutation.isPending || rejectMutation.isPending ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <CheckCircle className="w-5 h-5" />
+                )}
                 Instructor Review & Approval
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <Alert>
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    This flight authorization is pending your review. Please review all sections carefully before making a decision.
-                  </AlertDescription>
-                </Alert>
+                {approveMutation.isPending ? (
+                  <Alert className="border-blue-200 bg-blue-100">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <AlertDescription className="text-blue-800">
+                      <strong>Processing approval...</strong> This may take a few moments. Please do not refresh the page.
+                    </AlertDescription>
+                  </Alert>
+                ) : rejectMutation.isPending ? (
+                  <Alert className="border-red-200 bg-red-100">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <AlertDescription className="text-red-800">
+                      <strong>Processing rejection...</strong> This may take a few moments. Please do not refresh the page.
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      This flight authorization is pending your review. Please review all sections carefully before making a decision.
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 <div className="flex flex-col sm:flex-row gap-3">
                   <Button
                     onClick={handleApprove}
-                    disabled={approveMutation.isPending}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white h-12 text-lg font-semibold"
+                    disabled={approveMutation.isPending || rejectMutation.isPending}
+                    className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white h-12 text-lg font-semibold transition-all duration-200"
                   >
                     {approveMutation.isPending ? (
                       <>
                         <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                        Approving...
+                        Approving Authorization...
                       </>
                     ) : (
                       <>
@@ -262,14 +320,14 @@ export function FlightAuthorizationClient({
 
                   <Button
                     onClick={handleReject}
-                    disabled={rejectMutation.isPending}
+                    disabled={approveMutation.isPending || rejectMutation.isPending}
                     variant="destructive"
-                    className="flex-1 h-12 text-lg font-semibold"
+                    className="flex-1 h-12 text-lg font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200"
                   >
                     {rejectMutation.isPending ? (
                       <>
                         <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                        Rejecting...
+                        Rejecting Authorization...
                       </>
                     ) : (
                       <>
@@ -284,7 +342,9 @@ export function FlightAuthorizationClient({
                   <Alert variant="destructive">
                     <XCircle className="h-4 w-4" />
                     <AlertDescription>
-                      {approveMutation.error?.message || rejectMutation.error?.message}
+                      <strong>Error:</strong> {approveMutation.error?.message || rejectMutation.error?.message}
+                      <br />
+                      <span className="text-sm">Please try again or contact support if the problem persists.</span>
                     </AlertDescription>
                   </Alert>
                 )}

@@ -20,6 +20,7 @@ interface CheckInDetailsProps {
     chargingBy: 'hobbs' | 'tacho' | null;
     selectedInstructor: string;
     selectedFlightType: string;
+    instructionType?: 'dual' | 'solo' | 'trial' | null;
     hobbsStart?: number;
     hobbsEnd?: number;
     tachStart?: number;
@@ -106,14 +107,24 @@ export default function CheckInDetails({
     setStartTacho(bookingStartTacho !== undefined && bookingStartTacho !== null ? String(bookingStartTacho) : "");
   }, [bookingStartTacho]);
 
-  // Initialize end values from props
+  // Initialize end values from props, or fallback to start values if no initial end values
   useEffect(() => {
-    setEndHobbs(initialEndHobbs !== undefined && initialEndHobbs !== null ? String(initialEndHobbs) : "");
-  }, [initialEndHobbs]);
+    if (initialEndHobbs !== undefined && initialEndHobbs !== null) {
+      setEndHobbs(String(initialEndHobbs));
+    } else if (startHobbs && !endHobbs) {
+      // Pre-fill with start value if no initial end value and field is empty
+      setEndHobbs(startHobbs);
+    }
+  }, [initialEndHobbs, startHobbs, endHobbs]);
 
   useEffect(() => {
-    setEndTacho(initialEndTacho !== undefined && initialEndTacho !== null ? String(initialEndTacho) : "");
-  }, [initialEndTacho]);
+    if (initialEndTacho !== undefined && initialEndTacho !== null) {
+      setEndTacho(String(initialEndTacho));
+    } else if (startTacho && !endTacho) {
+      // Pre-fill with start value if no initial end value and field is empty
+      setEndTacho(startTacho);
+    }
+  }, [initialEndTacho, startTacho, endTacho]);
 
   useEffect(() => {
     setSoloEndHobbs(initialSoloEndHobbs !== undefined && initialSoloEndHobbs !== null ? String(initialSoloEndHobbs) : "");
@@ -255,8 +266,12 @@ export default function CheckInDetails({
     fetchSoloChargeRate();
   }, [aircraftId, selectedSoloFlightType]);
 
-  // Determine if this is a dual instruction flight that can have solo time
+  // Determine flight type for conditional rendering and logic
   const isDualInstructionFlight = flightType?.instruction_type === 'dual';
+  const isTrialFlight = flightType?.instruction_type === 'trial';
+
+  // Only dual and trial flights require instructors
+  const requiresInstructor = isDualInstructionFlight || isTrialFlight;
 
   // Show solo input field when:
   // 1. Flight type is 'dual'
@@ -343,14 +358,18 @@ export default function CheckInDetails({
     const needsSoloRate = soloTime > 0;
     const hasSoloRate = !needsSoloRate || (selectedSoloFlightType && soloAircraftRateExclusive);
 
-    if (chargeTime > 0 && aircraftRateExclusive && instructorRateExclusive && selectedInstructor && selectedFlightType && hasSoloRate) {
+    // For solo flights, instructor rate and selection are not required
+    const hasValidInstructor = !requiresInstructor || (instructorRateExclusive && selectedInstructor);
+
+    if (chargeTime > 0 && aircraftRateExclusive && hasValidInstructor && selectedFlightType && hasSoloRate) {
       onCalculateCharges({
         chargeTime,
         aircraftRate: aircraftRateExclusive,
-        instructorRate: instructorRateExclusive,
+        instructorRate: requiresInstructor ? (instructorRateExclusive || 0) : 0, // Set to 0 for solo flights
         chargingBy,
-        selectedInstructor,
+        selectedInstructor: requiresInstructor ? selectedInstructor : '', // Empty for solo flights
         selectedFlightType,
+        instructionType: flightType?.instruction_type,
         hobbsStart,
         hobbsEnd,
         tachStart,
@@ -383,7 +402,9 @@ export default function CheckInDetails({
     dualTime,
     soloTime,
     selectedSoloFlightType,
-    soloAircraftRateExclusive
+    soloAircraftRateExclusive,
+    requiresInstructor,
+    flightType?.instruction_type
   ]);
 
   // Memoized input handlers to prevent unnecessary re-renders
@@ -457,29 +478,31 @@ export default function CheckInDetails({
               </div>
             )}
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">Instructor</label>
-            <Select value={selectedInstructor} onValueChange={handleInstructorChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select instructor" />
-              </SelectTrigger>
-              <SelectContent>
-                {allInstructors.length === 0 && (
-                  <SelectItem value="placeholder" disabled>
-                    --
-                  </SelectItem>
-                )}
-                {allInstructors.map((inst) => (
-                  <SelectItem key={inst.id} value={inst.id}>{inst.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {instructorRateInclusive != null && (
-              <div className="text-xs text-gray-600 mt-1">
-                Rate: <span className="font-medium">${instructorRateInclusive.toFixed(2)}/hour</span> (incl. tax)
-              </div>
-            )}
-          </div>
+          {requiresInstructor && (
+            <div>
+              <label className="block text-sm font-medium mb-2">Instructor</label>
+              <Select value={selectedInstructor} onValueChange={handleInstructorChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select instructor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allInstructors.length === 0 && (
+                    <SelectItem value="placeholder" disabled>
+                      --
+                    </SelectItem>
+                  )}
+                  {allInstructors.map((inst) => (
+                    <SelectItem key={inst.id} value={inst.id}>{inst.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {instructorRateInclusive != null && (
+                <div className="text-xs text-gray-600 mt-1">
+                  Rate: <span className="font-medium">${instructorRateInclusive.toFixed(2)}/hour</span> (incl. tax)
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       {/* Flight Time Recording */}
@@ -515,7 +538,7 @@ export default function CheckInDetails({
                 value={endTacho}
                 onChange={handleEndTachoChange}
                 className={`w-full rounded border px-3 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 no-spinner ${chargingBy === "tacho" ? 'border-green-300' : 'border-gray-300'}`}
-                placeholder="0.0"
+                placeholder=""
                 step="0.1"
               />
             </div>
@@ -553,7 +576,7 @@ export default function CheckInDetails({
                 value={endHobbs}
                 onChange={handleEndHobbsChange}
                 className={`w-full rounded border px-3 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 no-spinner ${chargingBy === "hobbs" ? 'border-blue-300' : 'border-gray-300'}`}
-                placeholder="0.0"
+                placeholder=""
                 step="0.1"
               />
             </div>
@@ -626,12 +649,12 @@ export default function CheckInDetails({
       {/* Calculate Charges */}
       <div className="pt-6 border-t">
         {/* Validation Messages */}
-        {(!aircraftRateExclusive || !instructorRateExclusive || !selectedInstructor || !selectedFlightType || (soloEndHobbs !== "" && parseFloat(soloEndHobbs) <= parseFloat(endHobbs)) || (soloTime > 0 && (!selectedSoloFlightType || !soloAircraftRateExclusive))) && (
+        {(!aircraftRateExclusive || (requiresInstructor && (!instructorRateExclusive || !selectedInstructor)) || !selectedFlightType || (soloEndHobbs !== "" && parseFloat(soloEndHobbs) <= parseFloat(endHobbs)) || (soloTime > 0 && (!selectedSoloFlightType || !soloAircraftRateExclusive))) && (
           <div className="mb-4 text-sm text-red-600">
             {!selectedFlightType && <div>• Please select a flight type</div>}
-            {!selectedInstructor && <div>• Please select an instructor</div>}
+            {requiresInstructor && !selectedInstructor && <div>• Please select an instructor</div>}
             {!aircraftRateExclusive && selectedFlightType && <div>• Aircraft rate not found</div>}
-            {!instructorRateExclusive && selectedInstructor && selectedFlightType && <div>• Instructor rate not found</div>}
+            {requiresInstructor && !instructorRateExclusive && selectedInstructor && selectedFlightType && <div>• Instructor rate not found</div>}
             {soloEndHobbs !== "" && parseFloat(soloEndHobbs) <= parseFloat(endHobbs) && <div>• Solo end hobbs must be greater than dual end hobbs</div>}
             {soloTime > 0 && !selectedSoloFlightType && <div>• Please select a solo flight type</div>}
             {soloTime > 0 && selectedSoloFlightType && !soloAircraftRateExclusive && <div>• Solo aircraft rate not found</div>}
@@ -641,7 +664,7 @@ export default function CheckInDetails({
         <Button
           className="w-full bg-purple-600 hover:bg-purple-700 text-white"
           onClick={handleCalculateCharges}
-          disabled={!aircraftRateExclusive || !instructorRateExclusive || !selectedInstructor || !selectedFlightType || (soloEndHobbs !== "" && parseFloat(soloEndHobbs) <= parseFloat(endHobbs)) || (soloTime > 0 && (!selectedSoloFlightType || !soloAircraftRateExclusive))}
+          disabled={!aircraftRateExclusive || (requiresInstructor && (!instructorRateExclusive || !selectedInstructor)) || !selectedFlightType || (soloEndHobbs !== "" && parseFloat(soloEndHobbs) <= parseFloat(endHobbs)) || (soloTime > 0 && (!selectedSoloFlightType || !soloAircraftRateExclusive))}
         >
           <ClipboardList className="w-4 h-4 mr-2" />
           Calculate Flight Charges

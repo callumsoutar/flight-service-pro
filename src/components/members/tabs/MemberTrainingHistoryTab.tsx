@@ -12,6 +12,7 @@ import type { Instructor } from "@/types/instructors";
 import type { Syllabus } from "@/types/syllabus";
 import type { StudentSyllabusEnrollment } from "@/types/student_syllabus_enrollment";
 import type { AircraftType } from "@/types/aircraft_types";
+import type { FlightExperience } from "@/types/flight_experience";
 
 import {
   Target,
@@ -20,7 +21,9 @@ import {
   BookOpen,
   GraduationCap,
   Plus,
-  UserPlus
+  UserPlus,
+  MessageSquare,
+  Plane
 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay, differenceInDays } from "date-fns";
 
@@ -66,8 +69,17 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
   const [instructors, setInstructors] = useState<Record<string, User>>({});
   const [allInstructors, setAllInstructors] = useState<Instructor[]>([]);
   const [aircraftTypes, setAircraftTypes] = useState<AircraftType[]>([]);
+  const [bookings, setBookings] = useState<Record<string, { purpose: string | null; aircraft_id: string | null; aircraft_registration: string | null; start_time: string | null }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [bookingsLoaded, setBookingsLoaded] = useState(false);
+  const [examsLoaded, setExamsLoaded] = useState(false);
+  const [flightExperiencesLoaded, setFlightExperiencesLoaded] = useState(false);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [examsLoading, setExamsLoading] = useState(false);
+  const [flightExperiencesLoading, setFlightExperiencesLoading] = useState(false);
+  const [flightExperiences, setFlightExperiences] = useState<FlightExperience[]>([]);
+  const [experienceTypes, setExperienceTypes] = useState<Record<string, { name: string }>>({});
   const [editingInstructor, setEditingInstructor] = useState(false);
   const [updatingInstructor, setUpdatingInstructor] = useState(false);
   const [editingAircraftType, setEditingAircraftType] = useState(false);
@@ -104,6 +116,10 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
     if (!memberId) return;
     setLoading(true);
     setError(null);
+    // Reset lazy load flags when member changes
+    setBookingsLoaded(false);
+    setExamsLoaded(false);
+    setFlightExperiencesLoaded(false);
 
     Promise.all([
       fetch(`/api/lesson_progress?user_id=${memberId}`)
@@ -114,10 +130,8 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
       fetch(`/api/student_syllabus_enrollment?user_id=${memberId}`).then(res => res.json()).then(data => Array.isArray(data.data) ? data.data : []),
       fetch(`/api/instructors`).then(res => res.json()).then(data => Array.isArray(data.instructors) ? data.instructors : []),
       fetch(`/api/aircraft-types`).then(res => res.json()).then(data => Array.isArray(data.aircraft_types) ? data.aircraft_types : []),
-      fetch(`/api/exam_results?user_id=${memberId}`).then(res => res.json()).then(data => Array.isArray(data.exam_results) ? data.exam_results : []),
-      fetch(`/api/exams`).then(res => res.json()).then(data => Array.isArray(data.exams) ? data.exams : []),
     ])
-      .then(async ([progressData, lessonsData, syllabiData, enrollmentData, instructorsData, aircraftTypesData, examResultsData]) => {
+      .then(async ([progressData, lessonsData, syllabiData, enrollmentData, instructorsData, aircraftTypesData]) => {
         // Sort records by date, most recent first
         const sortedRecords = progressData.sort((a: LessonProgress, b: LessonProgress) =>
           new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime()
@@ -128,7 +142,6 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
         setSyllabi(syllabiData);
         setEnrollments(enrollmentData);
         setAircraftTypes(aircraftTypesData);
-        setExamResults(examResultsData);
 
         // Filter syllabi to only show enrolled ones
         const enrolledSyllabusIds = enrollmentData.map((enrollment: { syllabus_id: string }) => enrollment.syllabus_id);
@@ -187,6 +200,155 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
       .catch((e) => setError(e.message || "Failed to load training history"))
       .finally(() => setLoading(false));
   }, [memberId, selectedSyllabusId]);
+
+  // Lazy load bookings when instructor comments tab is selected
+  useEffect(() => {
+    if (!memberId || selectedTab !== 'notes' || bookingsLoaded) return;
+    
+    const loadBookings = async () => {
+      setBookingsLoading(true);
+      try {
+        // Get unique booking IDs from lesson progress records that have instructor comments
+        const bookingIds = Array.from(new Set(
+          records
+            .filter((record: LessonProgress) => record.booking_id && record.instructor_comments && record.instructor_comments.trim() !== "")
+            .map((record: LessonProgress) => record.booking_id)
+            .filter(Boolean)
+        )) as string[];
+
+        // Fetch bookings for those IDs
+        if (bookingIds.length > 0) {
+          const bookingsPromises = bookingIds.map(id => 
+            fetch(`/api/bookings?id=${id}`)
+              .then(res => res.ok ? res.json() : null)
+              .then(data => data?.booking || null)
+              .catch(() => null)
+          );
+          
+          const fetchedBookings = await Promise.all(bookingsPromises);
+          const bookingsMap: Record<string, { purpose: string | null; aircraft_id: string | null; aircraft_registration: string | null; start_time: string | null }> = {};
+          
+          fetchedBookings.forEach((booking) => {
+            if (booking && booking.id) {
+              bookingsMap[booking.id] = { 
+                purpose: booking.purpose || null, 
+                aircraft_id: booking.aircraft_id || null,
+                aircraft_registration: booking.aircraft?.registration || null,
+                start_time: booking.start_time || null
+              };
+            }
+          });
+          
+          setBookings(bookingsMap);
+        } else {
+          setBookings({});
+        }
+        
+        setBookingsLoaded(true);
+      } finally {
+        setBookingsLoading(false);
+      }
+    };
+    
+    loadBookings();
+  }, [selectedTab, memberId, records, bookingsLoaded]);
+
+  // Lazy load exam results when exams tab is selected
+  useEffect(() => {
+    if (!memberId || selectedTab !== 'exams' || examsLoaded) return;
+    
+    const loadExamResults = async () => {
+      setExamsLoading(true);
+      try {
+        const [examResultsData] = await Promise.all([
+          fetch(`/api/exam_results?user_id=${memberId}`)
+            .then(res => res.json())
+            .then(data => Array.isArray(data.exam_results) ? data.exam_results : []),
+          fetch(`/api/exams`)
+            .then(res => res.json())
+            .then(data => Array.isArray(data.exams) ? data.exams : []),
+        ]);
+        
+        setExamResults(examResultsData);
+        setExamsLoaded(true);
+      } catch (error) {
+        console.error('Failed to load exam results:', error);
+      } finally {
+        setExamsLoading(false);
+      }
+    };
+    
+    loadExamResults();
+  }, [selectedTab, memberId, examsLoaded]);
+
+  // Lazy load flight experiences when flight experience tab is selected
+  useEffect(() => {
+    if (!memberId || selectedTab !== 'experience' || flightExperiencesLoaded) return;
+    
+    const loadFlightExperiences = async () => {
+      setFlightExperiencesLoading(true);
+      try {
+        const [experiencesData, experienceTypesData] = await Promise.all([
+          fetch(`/api/flight-experience?user_id=${memberId}`)
+            .then(res => res.json())
+            .then(data => Array.isArray(data.data) ? data.data : []),
+          fetch(`/api/experience-types`)
+            .then(res => res.json())
+            .then(data => Array.isArray(data.experience_types) ? data.experience_types : []),
+        ]);
+        
+        // Create experience types map
+        const typesMap: Record<string, { name: string }> = {};
+        experienceTypesData.forEach((type: { id: string; name: string }) => {
+          typesMap[type.id] = { name: type.name };
+        });
+        setExperienceTypes(typesMap);
+        
+        // Get unique booking IDs from flight experiences
+        const experienceBookingIds = Array.from(new Set(
+          experiencesData
+            .filter((exp: FlightExperience) => exp.booking_id)
+            .map((exp: FlightExperience) => exp.booking_id)
+            .filter(Boolean)
+        )) as string[];
+
+        // Fetch bookings for those IDs (reusing the same bookings state)
+        if (experienceBookingIds.length > 0) {
+          const bookingsPromises = experienceBookingIds.map(id => 
+            fetch(`/api/bookings?id=${id}`)
+              .then(res => res.ok ? res.json() : null)
+              .then(data => data?.booking || null)
+              .catch(() => null)
+          );
+          
+          const fetchedBookings = await Promise.all(bookingsPromises);
+          const bookingsMap: Record<string, { purpose: string | null; aircraft_id: string | null; aircraft_registration: string | null; start_time: string | null }> = { ...bookings };
+          
+          fetchedBookings.forEach((booking) => {
+            if (booking && booking.id) {
+              bookingsMap[booking.id] = { 
+                purpose: booking.purpose || null, 
+                aircraft_id: booking.aircraft_id || null,
+                aircraft_registration: booking.aircraft?.registration || null,
+                start_time: booking.start_time || null
+              };
+            }
+          });
+          
+          setBookings(bookingsMap);
+        }
+        
+        setFlightExperiences(experiencesData);
+        setFlightExperiencesLoaded(true);
+      } catch (error) {
+        console.error('Failed to load flight experiences:', error);
+      } finally {
+        setFlightExperiencesLoading(false);
+      }
+    };
+    
+    loadFlightExperiences();
+  }, [selectedTab, memberId, flightExperiencesLoaded, bookings]);
 
   // Helper functions
   const getProgressStats = () => {
@@ -304,8 +466,65 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
 
   const progressStats = getProgressStats();
 
+  // Get instructor name helper
+  const getInstructorName = (instructorId: string | null): string => {
+    if (!instructorId) return "Unknown";
+    const instructor = instructors[instructorId];
+    if (!instructor) return "Unknown";
+    return `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.email || "Unknown";
+  };
+
+  // Get instructor initials helper
+  const getInstructorInitials = (instructorId: string | null): string => {
+    if (!instructorId) return "?";
+    const instructor = instructors[instructorId];
+    if (!instructor) return "?";
+    const firstName = instructor.first_name || "";
+    const lastName = instructor.last_name || "";
+    return `${firstName[0] || ""}${lastName[0] || ""}`.toUpperCase() || "?";
+  };
+
+  // Filter lesson progress records that have instructor comments
+  const instructorNotes = records
+    .filter(record => record.instructor_comments && record.instructor_comments.trim() !== "")
+    .sort((a, b) => new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime())
+    .map(record => {
+      const booking = record.booking_id ? bookings[record.booking_id] : null;
+      const aircraftReg = booking?.aircraft_registration || "-";
+      
+      return {
+        id: record.id,
+        date: record.date || record.created_at,
+        instructorId: record.instructor_id,
+        instructorName: getInstructorName(record.instructor_id),
+        instructorInitials: getInstructorInitials(record.instructor_id),
+        comment: record.instructor_comments || "",
+        description: booking?.purpose || "-",
+        aircraftRegistration: aircraftReg
+      };
+    });
+
+  // Map flight experiences with booking data
+  const mappedFlightExperiences = flightExperiences
+    .sort((a: FlightExperience, b: FlightExperience) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .map((exp: FlightExperience) => {
+      const booking = exp.booking_id ? bookings[exp.booking_id] : null;
+      const durationFormatted = exp.duration_hours
+        ? exp.duration_hours.toFixed(1)
+        : "-";
+      return {
+        id: exp.id,
+        experienceType: exp.experience_type_id ? (experienceTypes[exp.experience_type_id]?.name || "Unknown") : "Unknown",
+        durationHours: durationFormatted,
+        bookingStartTime: booking?.start_time || null,
+        aircraftRegistration: booking?.aircraft_registration || "-"
+      };
+    });
+
   const tabs = [
     { id: "lessons", label: "Lesson Progress", icon: BookOpen },
+    { id: "notes", label: "Instructor Comments", icon: MessageSquare },
+    { id: "experience", label: "Flight Experience", icon: Plane },
     { id: "exams", label: "Exam History", icon: GraduationCap },
   ];
 
@@ -607,16 +826,173 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
               )}
             </Tabs.Content>
 
+            <Tabs.Content value="notes" className="h-full w-full">
+              {selectedTab === "notes" && (
+                <Card className="rounded-md border-t-0 rounded-t-none">
+                  <CardContent className="p-6">
+                    {bookingsLoading ? (
+                      <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                        <p className="mt-4 text-gray-600">Loading instructor comments...</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-slate-200">
+                              <th className="text-left py-2 px-3 text-sm font-semibold text-slate-700 w-[140px]">Date</th>
+                              <th className="text-left py-2 px-3 text-sm font-semibold text-slate-700 w-[180px]">Instructor</th>
+                              <th className="text-left py-2 px-3 text-sm font-semibold text-slate-700 w-[120px]">Aircraft</th>
+                              <th className="text-left py-2 px-3 text-sm font-semibold text-slate-700 w-[200px]">Description</th>
+                              <th className="text-left py-2 px-3 text-sm font-semibold text-slate-700">Comment</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {instructorNotes.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="text-center py-12">
+                                <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                                <p className="text-slate-600 font-medium">No instructor comments yet</p>
+                                <p className="text-slate-500 text-sm mt-1">Comments from instructors will appear here</p>
+                              </td>
+                            </tr>
+                          ) : (
+                            instructorNotes.map((note) => (
+                              <tr key={note.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                <td className="py-2.5 px-3">
+                                  <div className="flex flex-col">
+                                    <span className="text-sm font-medium text-slate-900">
+                                      {format(new Date(note.date), 'MMM d, yyyy')}
+                                    </span>
+                                    <span className="text-xs text-slate-500">
+                                      {format(new Date(note.date), 'h:mm a')}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                      <span className="text-xs font-semibold text-indigo-700">
+                                        {note.instructorInitials}
+                                      </span>
+                                    </div>
+                                    <span className="text-sm font-medium text-slate-900">{note.instructorName}</span>
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <span className="text-sm font-medium text-slate-900">{note.aircraftRegistration}</span>
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <span className="text-sm text-slate-700">{note.description}</span>
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <div
+                                    className="text-sm text-slate-700 leading-relaxed"
+                                    dangerouslySetInnerHTML={{
+                                      __html: note.comment
+                                    }}
+                                  />
+                                </td>
+                              </tr>
+                            ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </Tabs.Content>
+
+            <Tabs.Content value="experience" className="h-full w-full">
+              {selectedTab === "experience" && (
+                <Card className="rounded-md border-t-0 rounded-t-none">
+                  <CardContent className="p-6">
+                    {flightExperiencesLoading ? (
+                      <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                        <p className="mt-4 text-gray-600">Loading flight experience...</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-slate-200">
+                              <th className="text-left py-2 px-3 text-sm font-semibold text-slate-700 w-[200px]">Experience Type</th>
+                              <th className="text-left py-2 px-3 text-sm font-semibold text-slate-700 w-[120px]">Duration (hrs)</th>
+                              <th className="text-left py-2 px-3 text-sm font-semibold text-slate-700 w-[160px]">Flight Date</th>
+                              <th className="text-left py-2 px-3 text-sm font-semibold text-slate-700 w-[120px]">Aircraft</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {mappedFlightExperiences.length === 0 ? (
+                              <tr>
+                                <td colSpan={4} className="text-center py-12">
+                                  <Plane className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                                  <p className="text-slate-600 font-medium">No flight experience yet</p>
+                                  <p className="text-slate-500 text-sm mt-1">Flight experience records will appear here</p>
+                                </td>
+                              </tr>
+                            ) : (
+                              mappedFlightExperiences.map((exp) => (
+                                <tr key={exp.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                  <td className="py-2.5 px-3">
+                                    <span className="text-sm font-medium text-slate-900">{exp.experienceType}</span>
+                                  </td>
+                                  <td className="py-2.5 px-3">
+                                    <span className="text-sm text-slate-700">{exp.durationHours}</span>
+                                  </td>
+                                  <td className="py-2.5 px-3">
+                                    {exp.bookingStartTime ? (
+                                      <div className="flex flex-col">
+                                        <span className="text-sm font-medium text-slate-900">
+                                          {format(new Date(exp.bookingStartTime), 'MMM d, yyyy')}
+                                        </span>
+                                        <span className="text-xs text-slate-500">
+                                          {format(new Date(exp.bookingStartTime), 'h:mm a')}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-sm text-slate-500">-</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2.5 px-3">
+                                    <span className="text-sm font-medium text-slate-900">{exp.aircraftRegistration}</span>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </Tabs.Content>
+
             <Tabs.Content value="exams" className="h-full w-full">
               {selectedTab === "exams" && (
-                <ExamHistoryTab
-                  memberId={memberId}
-                  syllabi={syllabi}
-                  examResults={examResults}
-                  setExamResults={setExamResults}
-                  examExpanded={examExpanded}
-                  setExamExpanded={setExamExpanded}
-                />
+                examsLoading ? (
+                  <Card className="rounded-md border-t-0 rounded-t-none">
+                    <CardContent className="p-6">
+                      <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                        <p className="mt-4 text-gray-600">Loading exam history...</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <ExamHistoryTab
+                    memberId={memberId}
+                    syllabi={syllabi}
+                    examResults={examResults}
+                    setExamResults={setExamResults}
+                    examExpanded={examExpanded}
+                    setExamExpanded={setExamExpanded}
+                  />
+                )
               )}
             </Tabs.Content>
           </div>

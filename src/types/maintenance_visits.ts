@@ -9,7 +9,6 @@ export interface MaintenanceVisit {
   technician_name?: string | null;
   hours_at_visit?: number | null;
   total_cost?: number | null;
-  status: string; // 'Scheduled', 'In Progress', 'Completed'
   notes?: string | null;
   created_at: string;
   updated_at: string;
@@ -17,4 +16,11 @@ export interface MaintenanceVisit {
   scheduled_for?: string | null;
   scheduled_end?: string | null;
   scheduled_by?: string | null;
+  performed_by?: string | null;
+  hours_before?: number | null;
+  hours_after?: number | null;
+  next_due_hours?: number | null;
+  next_due_date?: string | null;
+  component_due_hours?: number | null; // Component's due hours at time of maintenance (with extension if applied)
+  component_due_date?: string | null; // Component's due date at time of maintenance
 } 

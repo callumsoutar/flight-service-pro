@@ -1,11 +1,13 @@
 "use client";
 import { useState } from "react";
-import { Users, DollarSign, Gift } from "lucide-react";
+import { Users, DollarSign, Gift, Calendar } from "lucide-react";
 import * as Tabs from "@radix-ui/react-tabs";
 import MembershipTypesConfig from "./MembershipTypesConfig";
+import { MembershipYearConfig } from "./MembershipYearConfig";
 
 const membershipTabs = [
   { id: "membership-types", label: "Membership Types", icon: Users },
+  { id: "membership-year", label: "Membership Year", icon: Calendar },
   { id: "invoicing", label: "Invoicing", icon: DollarSign },
   { id: "benefits", label: "Benefits", icon: Gift },
 ];
@@ -42,6 +44,10 @@ export default function MembershipsTab() {
         <div className="flex-1 overflow-auto">
           <Tabs.Content value="membership-types" className="outline-none">
             <MembershipTypesConfig />
+          </Tabs.Content>
+
+          <Tabs.Content value="membership-year" className="outline-none">
+            <MembershipYearConfig />
           </Tabs.Content>
 
           <Tabs.Content value="invoicing" className="outline-none">

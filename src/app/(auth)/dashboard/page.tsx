@@ -1,71 +1,87 @@
 import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
+import { createClient } from "@/lib/SupabaseServerClient";
+import DashboardTabbedSection from "@/components/dashboard/DashboardTabbedSection";
+import { SettingsProvider } from "@/contexts/SettingsContext";
+import type { Booking } from "@/types/bookings";
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function DashboardPage({ user: _user, userRole: _userRole }: ProtectedPageProps) {
+async function DashboardPage({ userRole }: ProtectedPageProps) {
+  const supabase = await createClient();
+
+  // Fetch today's confirmed bookings and currently flying bookings
+  const { data: bookingsData } = await supabase
+    .from("bookings")
+    .select(`
+      id,
+      aircraft_id,
+      user_id,
+      instructor_id,
+      start_time,
+      end_time,
+      status,
+      purpose,
+      remarks,
+      lesson_id,
+      flight_type_id,
+      booking_type,
+      created_at,
+      updated_at
+    `)
+    .in('status', ['confirmed', 'flying'])
+    .order("start_time", { ascending: true });
+
+  const bookings: Booking[] = bookingsData || [];
+
+  // Fetch related data for today's bookings
+  const uniqueMemberIds = Array.from(new Set(bookings.map(b => b.user_id).filter(Boolean)));
+  const uniqueInstructorIds = Array.from(new Set(bookings.map(b => b.instructor_id).filter(Boolean)));
+  const uniqueAircraftIds = Array.from(new Set(bookings.map(b => b.aircraft_id).filter(Boolean)));
+
+  const [memberUsersResponse, instructorDataResponse, aircraftResponse] = await Promise.all([
+    uniqueMemberIds.length > 0
+      ? supabase.from("users").select("id, first_name, last_name").in("id", uniqueMemberIds)
+      : { data: [] },
+    uniqueInstructorIds.length > 0
+      ? supabase.from("instructors").select("id, first_name, last_name").in("id", uniqueInstructorIds)
+      : { data: [] },
+    uniqueAircraftIds.length > 0
+      ? supabase.from("aircraft").select("id, registration, type").in("id", uniqueAircraftIds)
+      : { data: [] }
+  ]);
+
+  const members = (memberUsersResponse.data || []).map(user => ({
+    id: user.id,
+    name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.id,
+  }));
+
+  const instructors = (instructorDataResponse.data || []).map(instructor => ({
+    id: instructor.id,
+    name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.id,
+  }));
+
+  const aircraftList = (aircraftResponse.data || []).map(a => ({
+    id: a.id,
+    registration: a.registration,
+    type: a.type || "Unknown",
+  }));
   return (
-    <div className="flex flex-col gap-8">
-      {/* Heading */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-1">Dashboard</h1>
-        <p className="text-gray-500">Overview of your flight school operations</p>
+    <SettingsProvider>
+      <div className="flex flex-col gap-8">
+        {/* Heading */}
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-1">Dashboard</h1>
+          <p className="text-gray-500">Overview of your flight school operations</p>
+        </div>
+
+        {/* Main Dashboard Content */}
+        <DashboardTabbedSection
+          bookings={bookings}
+          members={members}
+          instructors={instructors}
+          aircraftList={aircraftList}
+          userRole={userRole}
+        />
       </div>
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow border p-6 flex flex-col items-start">
-          <span className="text-gray-500 text-sm mb-2">Total Bookings</span>
-          <span className="text-3xl font-bold text-violet-700">124</span>
-        </div>
-        <div className="bg-white rounded-xl shadow border p-6 flex flex-col items-start">
-          <span className="text-gray-500 text-sm mb-2">Active Members</span>
-          <span className="text-3xl font-bold text-green-600">87</span>
-        </div>
-        <div className="bg-white rounded-xl shadow border p-6 flex flex-col items-start">
-          <span className="text-gray-500 text-sm mb-2">Aircraft Available</span>
-          <span className="text-3xl font-bold text-violet-500">12</span>
-        </div>
-        <div className="bg-white rounded-xl shadow border p-6 flex flex-col items-start">
-          <span className="text-gray-500 text-sm mb-2">Pending Invoices</span>
-          <span className="text-3xl font-bold text-orange-500">23</span>
-        </div>
-      </div>
-      {/* Main content grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Activity */}
-        <div className="bg-white rounded-xl shadow border p-6 col-span-2">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Recent Activity</h2>
-          <p className="text-gray-500 mb-4">Latest updates from your flight school</p>
-          <ul className="space-y-4">
-            <li>
-              <div className="font-semibold text-gray-900">Flight booking created</div>
-              <div className="text-gray-500 text-sm">by John Smith &middot; 2 hours ago</div>
-            </li>
-            <li>
-              <div className="font-semibold text-gray-900">Member added</div>
-              <div className="text-gray-500 text-sm">by Sarah Johnson &middot; 4 hours ago</div>
-            </li>
-            <li>
-              <div className="font-semibold text-gray-900">Training session completed</div>
-              <div className="text-gray-500 text-sm">by Mike Wilson &middot; 1 day ago</div>
-            </li>
-            <li>
-              <div className="font-semibold text-gray-900">Invoice generated</div>
-              <div className="text-gray-500 text-sm">by Lisa Brown &middot; 2 days ago</div>
-            </li>
-          </ul>
-        </div>
-        {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow border p-6 flex flex-col">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Quick Actions</h2>
-          <p className="text-gray-500 mb-4">Common tasks and shortcuts</p>
-          <div className="grid grid-cols-1 gap-3">
-            <button className="w-full bg-violet-50 border border-violet-200 text-violet-700 font-semibold rounded-lg py-3 hover:bg-violet-100 transition">New Booking</button>
-            <button className="w-full bg-violet-50 border border-violet-200 text-violet-700 font-semibold rounded-lg py-3 hover:bg-violet-100 transition">Add Member</button>
-            <button className="w-full bg-orange-50 border border-orange-200 text-orange-600 font-semibold rounded-lg py-3 hover:bg-orange-100 transition">Create Invoice</button>
-            <button className="w-full bg-gray-50 border border-gray-200 text-gray-700 font-semibold rounded-lg py-3 hover:bg-gray-100 transition">Safety Report</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    </SettingsProvider>
   );
 }
 

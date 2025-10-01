@@ -32,6 +32,6 @@ export interface AircraftComponent {
   notes?: string | null;
   created_at: string;
   updated_at: string;
-  scheduled_due_hours?: number | null;
   extension_limit_hours?: number | null;
+  voided_at?: string | null; // ISO timestamp for soft deletion
 } 

@@ -13,12 +13,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { getCurrentUserClient } from "@/lib/SupabaseBrowserClient";
 import type { Observation } from '@/types/observations';
 import type { UserResult } from '@/components/invoices/MemberSelect';
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { User as UserIcon, Clock as ClockIcon } from "lucide-react";
+import { User as UserIcon, Clock as ClockIcon, Calendar as CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ResolveObservationModalProps {
   open: boolean;
@@ -36,7 +39,7 @@ type ZodApiError = {
 export const ResolveObservationModal: React.FC<ResolveObservationModalProps> = ({ open, onClose, observationId, refresh }) => {
   const [observation, setObservation] = useState<Observation | null>(null);
   const [loadingObs, setLoadingObs] = useState(false);
-  const [resolvedAt, setResolvedAt] = useState("");
+  const [resolvedAt, setResolvedAt] = useState<Date | null>(null);
   const [resolutionComments, setResolutionComments] = useState("");
   const [closedBy, setClosedBy] = useState<string>("");
   const [userMap, setUserMap] = useState<Record<string, UserResult>>({});
@@ -68,7 +71,7 @@ export const ResolveObservationModal: React.FC<ResolveObservationModalProps> = (
   useEffect(() => {
     if (!open) return;
     const userIds = [
-      ...(observation ? [observation.user_id] : []),
+      ...(observation ? [observation.reported_by] : []),
       closedBy
     ];
     const uniqueIds = Array.from(new Set(userIds)).filter(Boolean);
@@ -87,7 +90,7 @@ export const ResolveObservationModal: React.FC<ResolveObservationModalProps> = (
   // Set default resolvedAt to today when modal opens
   useEffect(() => {
     if (open) {
-      setResolvedAt(new Date().toISOString().slice(0, 10));
+      setResolvedAt(new Date());
     }
   }, [open]);
 
@@ -106,14 +109,14 @@ export const ResolveObservationModal: React.FC<ResolveObservationModalProps> = (
       return;
     }
     setLoading(true);
-    // Convert resolvedAt (YYYY-MM-DD) to ISO string (Z) for Zod .datetime()
-    const resolvedAtIso = resolvedAt ? new Date(resolvedAt + 'T00:00:00Z').toISOString() : null;
+    // Convert resolvedAt Date to ISO string (Z) for Zod .datetime()
+    const resolvedAtIso = new Date(resolvedAt.toISOString().split('T')[0] + 'T00:00:00Z').toISOString();
     const payload = {
       id: observationId,
       resolved_at: resolvedAtIso,
       resolution_comments: resolutionComments || null,
       closed_by: closedBy, // always logged-in user
-      observation_stage: 'closed',
+      stage: 'closed',
     };
     const res = await fetch("/api/observations", {
       method: "PATCH",
@@ -138,86 +141,138 @@ export const ResolveObservationModal: React.FC<ResolveObservationModalProps> = (
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="w-[700px] max-w-[98vw] mx-auto p-8 bg-white rounded-2xl shadow-xl border border-muted overflow-y-auto max-h-[90vh]">
-        <DialogHeader className="mb-2">
-          <DialogTitle className="text-2xl font-bold mb-1 tracking-tight">Resolve Observation</DialogTitle>
-          <DialogDescription className="mb-2 text-base text-muted-foreground font-normal">Close out this observation with resolution details.</DialogDescription>
+      <DialogContent className="w-[650px] max-w-[95vw] mx-auto p-6 bg-white rounded-xl shadow-xl border-0 overflow-y-auto max-h-[85vh]">
+        <DialogHeader className="mb-4">
+          <DialogTitle className="text-xl font-semibold">Resolve Observation</DialogTitle>
+          <DialogDescription className="text-sm text-slate-600">Close out this observation with resolution details.</DialogDescription>
         </DialogHeader>
         {loadingObs ? (
           <Skeleton className="w-full h-32" />
         ) : observation ? (
-          <div className="mb-6">
-            <div className="bg-white/90 rounded-3xl p-8 flex flex-col gap-1 shadow border border-gray-100">
-              <div className="text-xs text-gray-500 font-medium mb-0">Observation</div>
-              <div className="text-lg font-semibold leading-tight mb-1 tracking-tight text-gray-900">{observation.name}</div>
-              <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-                <UserIcon className="w-4 h-4 text-gray-400" />
-                <span className="font-semibold text-gray-700">{getUserName(observation.user_id)}</span>
-                <span className="mx-1">·</span>
-                <ClockIcon className="w-4 h-4 text-gray-400" />
-                <span>{format(new Date(observation.created_at), 'dd MMM yyyy · HH:mm')}</span>
-              </div>
-              <div className="flex flex-row items-center gap-6 mt-3 mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 font-medium">Stage</span>
-                  <Badge className="text-xs px-4 py-1 rounded-full font-semibold bg-gray-100 border border-gray-200 text-gray-900" variant="outline">{observation.observation_stage}</Badge>
+          <div className="mb-5">
+            <div className="bg-slate-50 rounded-lg p-5 border border-slate-200">
+              {/* Header with name and badges */}
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-semibold text-slate-900 mb-1">{observation.name}</h3>
+                  <div className="flex items-center gap-2 text-xs text-slate-600">
+                    <UserIcon className="w-3.5 h-3.5" />
+                    <span>{getUserName(observation.reported_by)}</span>
+                    <span>•</span>
+                    <ClockIcon className="w-3.5 h-3.5" />
+                    <span>{format(new Date(observation.created_at), 'dd MMM yyyy')}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 font-medium">Status</span>
-                  <Badge className="text-xs px-4 py-1 rounded-full font-semibold bg-gray-100 border border-gray-200 text-gray-900" variant="outline">{observation.status}</Badge>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Badge className={`text-xs px-2.5 py-0.5 ${
+                    observation.stage === 'open' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                    observation.stage === 'investigation' ? 'bg-orange-100 text-orange-800 border-orange-200' :
+                    observation.stage === 'resolution' ? 'bg-purple-100 text-purple-800 border-purple-200' :
+                    'bg-gray-100 text-gray-800 border-gray-200'
+                  } border`}>
+                    {observation.stage}
+                  </Badge>
+                  <Badge className={`text-xs px-2.5 py-0.5 ${
+                    observation.priority === 'low' ? 'bg-green-100 text-green-800 border-green-200' :
+                    observation.priority === 'medium' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                    'bg-red-100 text-red-800 border-red-200'
+                  } border`}>
+                    {observation.priority || 'medium'}
+                  </Badge>
                 </div>
               </div>
+              
+              {/* Description */}
               {observation.description && (
-                <>
-                  <div className="h-px bg-gray-200 my-3" />
-                  <div className="text-xs text-gray-500 font-medium mb-1 mt-2 text-left">Description</div>
-                  <div className="text-base text-gray-700 whitespace-pre-line mt-1 text-left">{observation.description}</div>
-                </>
+                <div className="mt-3 pt-3 border-t border-slate-200">
+                  <p className="text-sm text-slate-700 whitespace-pre-line">{observation.description}</p>
+                </div>
               )}
             </div>
           </div>
         ) : (
           <div className="text-red-600">Observation not found.</div>
         )}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label className="text-sm font-medium mb-1">Resolved At *</label>
-            <Input type="date" value={resolvedAt} onChange={e => setResolvedAt(e.target.value)} required />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Resolved At <span className="text-red-500">*</span></label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal border-slate-200",
+                    !resolvedAt && "text-muted-foreground"
+                  )}
+                  type="button"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {resolvedAt ? format(resolvedAt, "dd MMM yyyy") : "Pick a date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={resolvedAt ?? undefined}
+                  onSelect={(date) => setResolvedAt(date ?? null)}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
           </div>
-          <div>
-            <label className="text-sm font-medium mb-1">Resolution Comments</label>
-            <Textarea value={resolutionComments} onChange={e => setResolutionComments(e.target.value)} placeholder="Describe how this was resolved..." className="min-h-[60px]" />
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Resolution Comments</label>
+            <Textarea 
+              value={resolutionComments} 
+              onChange={e => setResolutionComments(e.target.value)} 
+              placeholder="Describe how this was resolved..." 
+              className="min-h-[70px] border-slate-200 resize-none" 
+            />
           </div>
-          <div>
-            <label className="text-sm font-medium mb-1">Closed By *</label>
-            <Input value={getUserName(closedBy)} disabled className="bg-gray-100" />
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Closed By <span className="text-red-500">*</span></label>
+            <Input 
+              value={getUserName(closedBy)} 
+              disabled 
+              className="bg-slate-100 text-slate-600 border-slate-200" 
+            />
           </div>
           {/* Error rendering: support string or object (Zod/API) errors */}
           {error && typeof error === 'string' && (
-            <div className="text-red-600 text-sm text-center">{error}</div>
-          )}
-          {error && typeof error === 'object' && error !== null && (
-            <div className="text-red-600 text-sm text-center">
-              {/* Render formErrors */}
-              {('formErrors' in error) && Array.isArray((error as ZodApiError).formErrors) &&
-                (error as ZodApiError).formErrors!.map((msg, i) => (
-                  <div key={i}>{msg}</div>
-                ))}
-              {/* Render fieldErrors */}
-              {('fieldErrors' in error) && typeof (error as ZodApiError).fieldErrors === 'object' &&
-                Object.entries((error as ZodApiError).fieldErrors!).map(([field, messages]) =>
-                  Array.isArray(messages) ? messages.map((msg, i) => (
-                    <div key={field + i}>{field}: {msg}</div>
-                  )) : null
-                )
-              }
+            <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
+              <div className="text-red-800 text-sm font-medium">{error}</div>
             </div>
           )}
-          <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2 sm:gap-4 w-full">
+          {error && typeof error === 'object' && error !== null && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
+              <div className="text-red-800 text-sm font-medium">
+                {/* Render formErrors */}
+                {('formErrors' in error) && Array.isArray((error as ZodApiError).formErrors) &&
+                  (error as ZodApiError).formErrors!.map((msg, i) => (
+                    <div key={i}>{msg}</div>
+                  ))}
+                {/* Render fieldErrors */}
+                {('fieldErrors' in error) && typeof (error as ZodApiError).fieldErrors === 'object' &&
+                  Object.entries((error as ZodApiError).fieldErrors!).map(([field, messages]) =>
+                    Array.isArray(messages) ? messages.map((msg, i) => (
+                      <div key={field + i}>{field}: {msg}</div>
+                    )) : null
+                  )
+                }
+              </div>
+            </div>
+          )}
+          <DialogFooter className="pt-4 flex gap-2">
             <DialogClose asChild>
-              <Button variant="outline" type="button" className="w-full sm:w-auto border border-muted hover:border-indigo-400" disabled={loading}>Cancel</Button>
+              <Button variant="outline" type="button" className="border-slate-200" disabled={loading}>Cancel</Button>
             </DialogClose>
-            <Button type="submit" className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-md" disabled={loading}>{loading ? "Resolving..." : "Resolve & Close"}</Button>
+            <Button 
+              type="submit" 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm" 
+              disabled={loading}
+            >
+              {loading ? "Resolving..." : "Resolve & Close"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

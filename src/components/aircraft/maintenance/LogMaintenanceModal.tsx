@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { getCurrentUserClient } from "@/lib/SupabaseBrowserClient";
 import { toast } from "sonner";
+import { AircraftComponent } from "@/types/aircraft_components";
 
 interface LogMaintenanceModalProps {
   open: boolean;
@@ -40,6 +41,17 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
   const [hoursAtVisit, setHoursAtVisit] = useState("");
   const [notes, setNotes] = useState("");
   const [dateOutOfMaintenance, setDateOutOfMaintenance] = useState<string>("");
+  
+  // Component due tracking
+  const [componentDueHours, setComponentDueHours] = useState<string>("");
+  const [componentDueDate, setComponentDueDate] = useState<string>("");
+  
+  // Next due values (calculated, but user can override)
+  const [nextDueHours, setNextDueHours] = useState<string>("");
+  const [nextDueDate, setNextDueDate] = useState<string>("");
+  
+  // Store component data for calculations
+  const [componentData, setComponentData] = useState<AircraftComponent | null>(null);
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -52,6 +64,11 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
       setHoursAtVisit("");
       setNotes("");
       setDateOutOfMaintenance("");
+      setComponentDueHours("");
+      setComponentDueDate("");
+      setNextDueHours("");
+      setNextDueDate("");
+      setComponentData(null);
       setError(null);
       
       // Get current user
@@ -62,6 +79,61 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
       })();
     }
   }, [open]);
+
+  // Fetch component details and set due values when component_id is provided
+  useEffect(() => {
+    if (open && component_id) {
+      (async () => {
+        try {
+          const res = await fetch(`/api/aircraft_components?component_id=${component_id}`);
+          if (res.ok) {
+            const component: AircraftComponent = await res.json();
+            setComponentData(component);
+            
+            // Display the effective due hours (WITH extension if applied)
+            // This is for reporting purposes - to show how early/late maintenance was performed
+            // relative to the extended deadline
+            if (component.current_due_hours !== null && component.current_due_hours !== undefined) {
+              let effectiveDueHours = Number(component.current_due_hours);
+              
+              // Add extension if applicable
+              if (component.extension_limit_hours && component.interval_hours) {
+                const extensionHours = (Number(component.interval_hours) * Number(component.extension_limit_hours)) / 100;
+                effectiveDueHours = effectiveDueHours + extensionHours;
+              }
+              
+              setComponentDueHours(String(effectiveDueHours));
+            }
+            
+            // Store the due date
+            if (component.current_due_date) {
+              setComponentDueDate(component.current_due_date.split('T')[0]);
+            }
+            
+            // Calculate next due hours (base + interval, no extension)
+            if (component.current_due_hours !== null && component.interval_hours) {
+              const nextDue = Number(component.current_due_hours) + Number(component.interval_hours);
+              setNextDueHours(String(nextDue));
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch component details:', err);
+        }
+      })();
+    }
+  }, [open, component_id]);
+  
+  // Calculate next due date when visitDate changes
+  useEffect(() => {
+    if (componentData && visitDate && componentData.interval_days) {
+      const intervalType = componentData.interval_type;
+      if (intervalType === 'CALENDAR' || intervalType === 'BOTH') {
+        const baseDate = new Date(visitDate);
+        const nextDue = new Date(baseDate.getTime() + Number(componentData.interval_days) * 24 * 60 * 60 * 1000);
+        setNextDueDate(nextDue.toISOString().split('T')[0]);
+      }
+    }
+  }, [visitDate, componentData]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,8 +154,11 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
       hours_at_visit: hoursAtVisit ? parseFloat(hoursAtVisit) : null,
       notes: notes.trim() || null,
       date_out_of_maintenance: dateOutOfMaintenance ? new Date(dateOutOfMaintenance).toISOString() : null,
-      status: 'Completed',
       performed_by: userId,
+      component_due_hours: componentDueHours ? parseFloat(componentDueHours) : null,
+      component_due_date: componentDueDate || null,
+      next_due_hours: nextDueHours ? parseFloat(nextDueHours) : null,
+      next_due_date: nextDueDate || null,
     };
     const res = await fetch("/api/maintenance_visits", {
       method: "POST",
@@ -167,6 +242,63 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
               />
             </div>
           </div>
+          
+          {/* Component Due Tracking - Only show if logging maintenance for a component */}
+          {component_id && (
+            <>
+              <div className="border-t pt-4 mt-2">
+                <h3 className="text-sm font-semibold mb-3 text-muted-foreground">Component Due At Maintenance</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium mb-1">Component Due Hours</label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={componentDueHours}
+                      onChange={e => setComponentDueHours(e.target.value)}
+                      placeholder="Component due hours"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Hours component was due (including extension)</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1">Component Due Date</label>
+                    <Input
+                      type="date"
+                      value={componentDueDate}
+                      onChange={e => setComponentDueDate(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Date component was due</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="border-t pt-4 mt-4">
+                <h3 className="text-sm font-semibold mb-3 text-green-600">Next Due Values (After This Maintenance)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium mb-1">Next Due Hours</label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={nextDueHours}
+                      onChange={e => setNextDueHours(e.target.value)}
+                      placeholder="Next due hours"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Calculated: current due + interval (editable)</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1">Next Due Date</label>
+                    <Input
+                      type="date"
+                      value={nextDueDate}
+                      onChange={e => setNextDueDate(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Calculated: visit date + interval (editable)</p>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
           <div>
             <label className="text-sm font-medium mb-1">Date Out of Maintenance</label>
             <Input

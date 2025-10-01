@@ -15,6 +15,7 @@ interface CalculateChargesRequest {
   chargingBy: 'hobbs' | 'tacho' | null;
   selectedInstructor: string;
   selectedFlightType: string;
+  instructionType?: 'dual' | 'solo' | 'trial' | null;
   hobbsStart?: number;
   hobbsEnd?: number;
   tachStart?: number;
@@ -68,6 +69,7 @@ export async function POST(
       instructorRate,
       selectedInstructor,
       selectedFlightType,
+      instructionType,
       hobbsStart,
       hobbsEnd,
       tachStart,
@@ -138,9 +140,21 @@ export async function POST(
     meterUpdates.flight_time = roundToOneDecimal(chargeTime);
     meterUpdates.flight_time_hobbs = roundToOneDecimal(flightTimeHobbs);
     meterUpdates.flight_time_tach = roundToOneDecimal(flightTimeTach);
-    // Store dual/solo time breakdown with proper rounding
-    meterUpdates.dual_time = dualTime > 0 ? roundToOneDecimal(dualTime) : null;
-    meterUpdates.solo_time = soloTime > 0 ? roundToOneDecimal(soloTime) : null;
+
+    // Store dual/solo time breakdown based on instruction type
+    if (instructionType === 'solo') {
+      // For pure solo flights, store all flight time as solo_time
+      meterUpdates.dual_time = null;
+      meterUpdates.solo_time = roundToOneDecimal(chargeTime);
+    } else if (instructionType === 'dual') {
+      // For dual flights, use the calculated dual/solo breakdown
+      meterUpdates.dual_time = dualTime > 0 ? roundToOneDecimal(dualTime) : null;
+      meterUpdates.solo_time = soloTime > 0 ? roundToOneDecimal(soloTime) : null;
+    } else {
+      // For trial flights or other types, store as dual_time
+      meterUpdates.dual_time = roundToOneDecimal(chargeTime);
+      meterUpdates.solo_time = null;
+    }
 
     if (Object.keys(meterUpdates).length > 0) {
       if (flightLog) {
@@ -248,10 +262,10 @@ export async function POST(
     // Use checked_out_aircraft from flight_log instead of booking aircraft
     const aircraftReg = flightLog?.checked_out_aircraft?.registration || booking.aircraft?.registration || 'Aircraft';
 
-    // Create descriptions based on dual/solo time breakdown
-    const isDualSoloFlight = dualTime > 0 && soloTime > 0;
-    const isDualOnlyFlight = dualTime > 0 && soloTime === 0;
-    const isSoloOnlyFlight = dualTime === 0 && soloTime > 0;
+    // Use instruction type to determine flight category (more reliable than dual/solo time calculations)
+    const isSoloFlight = instructionType === 'solo';
+    const isDualFlight = instructionType === 'dual';
+    const isTrialFlight = instructionType === 'trial';
 
     // 5. Get current invoice items
     const { data: currentItems } = await supabase
@@ -266,354 +280,184 @@ export async function POST(
     const standardAircraftDesc = `${flightTypeName} - ${aircraftReg}`;
     const standardInstructorDesc = `${flightTypeName} - ${instructorName}`;
 
-    // Find existing items
-    const existingDualAircraft = currentItems?.find(item => item.description === dualAircraftDesc);
-    const existingDualInstructor = currentItems?.find(item => item.description === dualInstructorDesc);
-    const existingSoloAircraft = currentItems?.find(item => item.description === soloAircraftDesc);
-    const existingStandardAircraft = currentItems?.find(item => item.description === standardAircraftDesc);
-    const existingStandardInstructor = currentItems?.find(item => item.description === standardInstructorDesc);
+    // Since we're clearing all items and recreating them, we don't need to find existing items
 
-    // 6. Create or update line items based on dual/solo time breakdown
+    // 6. Create or update line items based on flight instruction type
     const itemOperations = [];
 
-    if (isDualSoloFlight || isDualOnlyFlight) {
-      // Handle dual time - aircraft item
-      if (existingDualAircraft) {
-        const calculatedAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(dualTime),
-          unit_price: aircraftRate,
-          tax_rate: invoice.tax_rate
-        });
-        
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .update({
-              quantity: roundToOneDecimal(dualTime),
-              unit_price: aircraftRate,
-              description: dualAircraftDesc,
-              amount: calculatedAmounts.amount,
-              tax_amount: calculatedAmounts.tax_amount,
-              line_total: calculatedAmounts.line_total,
-              rate_inclusive: calculatedAmounts.rate_inclusive,
-            })
-            .eq("id", existingDualAircraft.id)
-            .select("*")
-            .single()
-        );
-      } else {
-        const calculatedAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(dualTime),
-          unit_price: aircraftRate,
-          tax_rate: invoice.tax_rate
-        });
-        
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .insert({
-              invoice_id: invoice.id,
-              description: dualAircraftDesc,
-              quantity: roundToOneDecimal(dualTime),
-              unit_price: aircraftRate,
-              tax_rate: invoice.tax_rate,
-              amount: calculatedAmounts.amount,
-              tax_amount: calculatedAmounts.tax_amount,
-              line_total: calculatedAmounts.line_total,
-              rate_inclusive: calculatedAmounts.rate_inclusive,
-            })
-            .select("*")
-            .single()
-        );
-      }
-
-      // Handle dual time - instructor item
-      if (existingDualInstructor) {
-        const calculatedAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(dualTime),
-          unit_price: instructorRate,
-          tax_rate: invoice.tax_rate
-        });
-        
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .update({
-              quantity: roundToOneDecimal(dualTime),
-              unit_price: instructorRate,
-              description: dualInstructorDesc,
-              amount: calculatedAmounts.amount,
-              tax_amount: calculatedAmounts.tax_amount,
-              line_total: calculatedAmounts.line_total,
-              rate_inclusive: calculatedAmounts.rate_inclusive,
-            })
-            .eq("id", existingDualInstructor.id)
-            .select("*")
-            .single()
-        );
-      } else {
-        const calculatedAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(dualTime),
-          unit_price: instructorRate,
-          tax_rate: invoice.tax_rate
-        });
-        
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .insert({
-              invoice_id: invoice.id,
-              description: dualInstructorDesc,
-              quantity: roundToOneDecimal(dualTime),
-              unit_price: instructorRate,
-              tax_rate: invoice.tax_rate,
-              amount: calculatedAmounts.amount,
-              tax_amount: calculatedAmounts.tax_amount,
-              line_total: calculatedAmounts.line_total,
-              rate_inclusive: calculatedAmounts.rate_inclusive,
-            })
-            .select("*")
-            .single()
-        );
-      }
-    }
-
-    if (isDualSoloFlight) {
-      // Handle solo time - aircraft only (use solo rate if provided)
-      const soloRate = soloAircraftRate || aircraftRate;
-      if (existingSoloAircraft) {
-        const calculatedAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(soloTime),
-          unit_price: soloRate,
-          tax_rate: invoice.tax_rate
-        });
-        
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .update({
-              quantity: roundToOneDecimal(soloTime),
-              unit_price: soloRate,
-              description: soloAircraftDesc,
-              amount: calculatedAmounts.amount,
-              tax_amount: calculatedAmounts.tax_amount,
-              line_total: calculatedAmounts.line_total,
-              rate_inclusive: calculatedAmounts.rate_inclusive,
-            })
-            .eq("id", existingSoloAircraft.id)
-            .select("*")
-            .single()
-        );
-      } else {
-        const calculatedAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(soloTime),
-          unit_price: soloRate,
-          tax_rate: invoice.tax_rate
-        });
-        
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .insert({
-              invoice_id: invoice.id,
-              description: soloAircraftDesc,
-              quantity: roundToOneDecimal(soloTime),
-              unit_price: soloRate,
-              tax_rate: invoice.tax_rate,
-              amount: calculatedAmounts.amount,
-              tax_amount: calculatedAmounts.tax_amount,
-              line_total: calculatedAmounts.line_total,
-              rate_inclusive: calculatedAmounts.rate_inclusive,
-            })
-            .select("*")
-            .single()
-        );
-      }
-    } else if (isSoloOnlyFlight) {
-      // Pure solo flight - aircraft only (use solo rate if provided)
-      const soloRate = soloAircraftRate || aircraftRate;
-      if (existingSoloAircraft) {
-        const calculatedAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(soloTime),
-          unit_price: soloRate,
-          tax_rate: invoice.tax_rate
-        });
-        
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .update({
-              quantity: roundToOneDecimal(soloTime),
-              unit_price: soloRate,
-              description: soloAircraftDesc,
-              amount: calculatedAmounts.amount,
-              tax_amount: calculatedAmounts.tax_amount,
-              line_total: calculatedAmounts.line_total,
-              rate_inclusive: calculatedAmounts.rate_inclusive,
-            })
-            .eq("id", existingSoloAircraft.id)
-            .select("*")
-            .single()
-        );
-      } else {
-        const calculatedAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(soloTime),
-          unit_price: soloRate,
-          tax_rate: invoice.tax_rate
-        });
-        
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .insert({
-              invoice_id: invoice.id,
-              description: soloAircraftDesc,
-              quantity: roundToOneDecimal(soloTime),
-              unit_price: soloRate,
-              tax_rate: invoice.tax_rate,
-              amount: calculatedAmounts.amount,
-              tax_amount: calculatedAmounts.tax_amount,
-              line_total: calculatedAmounts.line_total,
-              rate_inclusive: calculatedAmounts.rate_inclusive,
-            })
-            .select("*")
-            .single()
-        );
-      }
-    } else {
-      // Standard flight (non-dual/solo breakdown) - fallback to original logic
-      if (existingStandardAircraft) {
-        const calculatedAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(chargeTime),
-          unit_price: aircraftRate,
-          tax_rate: invoice.tax_rate
-        });
-        
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .update({
-              quantity: roundToOneDecimal(chargeTime),
-              unit_price: aircraftRate,
-              description: standardAircraftDesc,
-              amount: calculatedAmounts.amount,
-              tax_amount: calculatedAmounts.tax_amount,
-              line_total: calculatedAmounts.line_total,
-              rate_inclusive: calculatedAmounts.rate_inclusive,
-            })
-            .eq("id", existingStandardAircraft.id)
-            .select("*")
-            .single()
-        );
-      } else {
-        const calculatedAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(chargeTime),
-          unit_price: aircraftRate,
-          tax_rate: invoice.tax_rate
-        });
-        
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .insert({
-              invoice_id: invoice.id,
-              description: standardAircraftDesc,
-              quantity: roundToOneDecimal(chargeTime),
-              unit_price: aircraftRate,
-              tax_rate: invoice.tax_rate,
-              amount: calculatedAmounts.amount,
-              tax_amount: calculatedAmounts.tax_amount,
-              line_total: calculatedAmounts.line_total,
-              rate_inclusive: calculatedAmounts.rate_inclusive,
-            })
-            .select("*")
-            .single()
-        );
-      }
-
-      // Standard instructor item
-      if (existingStandardInstructor) {
-        const calculatedAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(chargeTime),
-          unit_price: instructorRate,
-          tax_rate: invoice.tax_rate
-        });
-        
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .update({
-              quantity: roundToOneDecimal(chargeTime),
-              unit_price: instructorRate,
-              description: standardInstructorDesc,
-              amount: calculatedAmounts.amount,
-              tax_amount: calculatedAmounts.tax_amount,
-              line_total: calculatedAmounts.line_total,
-              rate_inclusive: calculatedAmounts.rate_inclusive,
-            })
-            .eq("id", existingStandardInstructor.id)
-            .select("*")
-            .single()
-        );
-      } else {
-        const calculatedAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(chargeTime),
-          unit_price: instructorRate,
-          tax_rate: invoice.tax_rate
-        });
-        
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .insert({
-              invoice_id: invoice.id,
-              description: standardInstructorDesc,
-              quantity: roundToOneDecimal(chargeTime),
-              unit_price: instructorRate,
-              tax_rate: invoice.tax_rate,
-              amount: calculatedAmounts.amount,
-              tax_amount: calculatedAmounts.tax_amount,
-              line_total: calculatedAmounts.line_total,
-              rate_inclusive: calculatedAmounts.rate_inclusive,
-            })
-            .select("*")
-            .single()
-        );
-      }
-    }
-
-    // Clean up old line items that are no longer relevant
-    const itemsToDelete = [];
-
-    if (isDualSoloFlight || isDualOnlyFlight) {
-      // Remove standard items if they exist (switching from standard to dual/solo)
-      if (existingStandardAircraft) itemsToDelete.push(existingStandardAircraft.id);
-      if (existingStandardInstructor) itemsToDelete.push(existingStandardInstructor.id);
-    } else if (isSoloOnlyFlight) {
-      // Remove dual items if they exist (switching from dual to solo only)
-      if (existingDualAircraft) itemsToDelete.push(existingDualAircraft.id);
-      if (existingDualInstructor) itemsToDelete.push(existingDualInstructor.id);
-      if (existingStandardAircraft) itemsToDelete.push(existingStandardAircraft.id);
-      if (existingStandardInstructor) itemsToDelete.push(existingStandardInstructor.id);
-    } else {
-      // Remove dual/solo items if they exist (switching from dual/solo to standard)
-      if (existingDualAircraft) itemsToDelete.push(existingDualAircraft.id);
-      if (existingDualInstructor) itemsToDelete.push(existingDualInstructor.id);
-      if (existingSoloAircraft) itemsToDelete.push(existingSoloAircraft.id);
-    }
-
-    // For dual/solo flights, also remove solo items if no longer needed
-    if (isDualOnlyFlight && existingSoloAircraft) {
-      itemsToDelete.push(existingSoloAircraft.id);
-    }
-
-    // Delete old items
-    if (itemsToDelete.length > 0) {
+    // First, clear ALL existing items to start fresh (prevents duplicates)
+    if (currentItems && currentItems.length > 0) {
       await supabase
         .from("invoice_items")
         .delete()
-        .in("id", itemsToDelete);
+        .eq("invoice_id", invoice.id);
     }
+
+    if (isSoloFlight) {
+      // SOLO FLIGHTS: Only create aircraft charge, no instructor charge
+      const calculatedAmounts = InvoiceService.calculateItemAmounts({
+        quantity: roundToOneDecimal(chargeTime),
+        unit_price: aircraftRate,
+        tax_rate: invoice.tax_rate
+      });
+
+      itemOperations.push(
+        supabase
+          .from("invoice_items")
+          .insert({
+            invoice_id: invoice.id,
+            description: soloAircraftDesc,
+            quantity: roundToOneDecimal(chargeTime),
+            unit_price: aircraftRate,
+            tax_rate: invoice.tax_rate,
+            amount: calculatedAmounts.amount,
+            tax_amount: calculatedAmounts.tax_amount,
+            line_total: calculatedAmounts.line_total,
+            rate_inclusive: calculatedAmounts.rate_inclusive,
+          })
+          .select("*")
+          .single()
+      );
+    } else if (isDualFlight) {
+      // DUAL FLIGHTS: Handle dual and solo segments separately
+
+      // Dual time items (aircraft + instructor)
+      if (dualTime > 0) {
+        // Dual aircraft
+        const dualAircraftAmounts = InvoiceService.calculateItemAmounts({
+          quantity: roundToOneDecimal(dualTime),
+          unit_price: aircraftRate,
+          tax_rate: invoice.tax_rate
+        });
+
+        itemOperations.push(
+          supabase
+            .from("invoice_items")
+            .insert({
+              invoice_id: invoice.id,
+              description: dualAircraftDesc,
+              quantity: roundToOneDecimal(dualTime),
+              unit_price: aircraftRate,
+              tax_rate: invoice.tax_rate,
+              amount: dualAircraftAmounts.amount,
+              tax_amount: dualAircraftAmounts.tax_amount,
+              line_total: dualAircraftAmounts.line_total,
+              rate_inclusive: dualAircraftAmounts.rate_inclusive,
+            })
+            .select("*")
+            .single()
+        );
+
+        // Dual instructor
+        const dualInstructorAmounts = InvoiceService.calculateItemAmounts({
+          quantity: roundToOneDecimal(dualTime),
+          unit_price: instructorRate,
+          tax_rate: invoice.tax_rate
+        });
+
+        itemOperations.push(
+          supabase
+            .from("invoice_items")
+            .insert({
+              invoice_id: invoice.id,
+              description: dualInstructorDesc,
+              quantity: roundToOneDecimal(dualTime),
+              unit_price: instructorRate,
+              tax_rate: invoice.tax_rate,
+              amount: dualInstructorAmounts.amount,
+              tax_amount: dualInstructorAmounts.tax_amount,
+              line_total: dualInstructorAmounts.line_total,
+              rate_inclusive: dualInstructorAmounts.rate_inclusive,
+            })
+            .select("*")
+            .single()
+        );
+      }
+
+      // Solo time continuation (aircraft only)
+      if (soloTime > 0) {
+        const soloRate = soloAircraftRate || aircraftRate;
+        const soloAircraftAmounts = InvoiceService.calculateItemAmounts({
+          quantity: roundToOneDecimal(soloTime),
+          unit_price: soloRate,
+          tax_rate: invoice.tax_rate
+        });
+
+        itemOperations.push(
+          supabase
+            .from("invoice_items")
+            .insert({
+              invoice_id: invoice.id,
+              description: soloAircraftDesc,
+              quantity: roundToOneDecimal(soloTime),
+              unit_price: soloRate,
+              tax_rate: invoice.tax_rate,
+              amount: soloAircraftAmounts.amount,
+              tax_amount: soloAircraftAmounts.tax_amount,
+              line_total: soloAircraftAmounts.line_total,
+              rate_inclusive: soloAircraftAmounts.rate_inclusive,
+            })
+            .select("*")
+            .single()
+        );
+      }
+    } else {
+      // TRIAL FLIGHTS or FALLBACK: Create standard items
+
+      // Aircraft item
+      const aircraftAmounts = InvoiceService.calculateItemAmounts({
+        quantity: roundToOneDecimal(chargeTime),
+        unit_price: aircraftRate,
+        tax_rate: invoice.tax_rate
+      });
+
+      itemOperations.push(
+        supabase
+          .from("invoice_items")
+          .insert({
+            invoice_id: invoice.id,
+            description: standardAircraftDesc,
+            quantity: roundToOneDecimal(chargeTime),
+            unit_price: aircraftRate,
+            tax_rate: invoice.tax_rate,
+            amount: aircraftAmounts.amount,
+            tax_amount: aircraftAmounts.tax_amount,
+            line_total: aircraftAmounts.line_total,
+            rate_inclusive: aircraftAmounts.rate_inclusive,
+          })
+          .select("*")
+          .single()
+      );
+
+      // Instructor item (only for trial flights or when needed)
+      if (isTrialFlight || instructorRate > 0) {
+        const instructorAmounts = InvoiceService.calculateItemAmounts({
+          quantity: roundToOneDecimal(chargeTime),
+          unit_price: instructorRate,
+          tax_rate: invoice.tax_rate
+        });
+
+        itemOperations.push(
+          supabase
+            .from("invoice_items")
+            .insert({
+              invoice_id: invoice.id,
+              description: standardInstructorDesc,
+              quantity: roundToOneDecimal(chargeTime),
+              unit_price: instructorRate,
+              tax_rate: invoice.tax_rate,
+              amount: instructorAmounts.amount,
+              tax_amount: instructorAmounts.tax_amount,
+              line_total: instructorAmounts.line_total,
+              rate_inclusive: instructorAmounts.rate_inclusive,
+            })
+            .select("*")
+            .single()
+        );
+      }
+    }
+
+    // Items are already cleared above, no need for complex cleanup logic
 
     // Execute line item operations in parallel
     const itemResults = await Promise.allSettled(itemOperations);

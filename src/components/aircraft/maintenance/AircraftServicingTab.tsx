@@ -19,21 +19,66 @@ import ComponentNewModal from "@/components/aircraft/maintenance/ComponentNewMod
 import { toast } from "sonner";
 import { format } from 'date-fns';
 
-function getDueIn(comp: AircraftComponent, currentHours: number | null) {
-  if (currentHours === null) return "N/A";
-  // Use extension limit if in effect
+// Calculate extended due hours when extension_limit_hours is set
+function getExtendedDueHours(comp: AircraftComponent): number | null {
   if (
     comp.extension_limit_hours !== null &&
     comp.extension_limit_hours !== undefined &&
-    comp.extension_limit_hours > (comp.current_due_hours ?? 0)
+    comp.current_due_hours !== null &&
+    comp.current_due_hours !== undefined &&
+    comp.interval_hours !== null &&
+    comp.interval_hours !== undefined
   ) {
-    const hoursLeft = comp.extension_limit_hours - currentHours;
+    // Explicitly convert to numbers to avoid string concatenation
+    const currentDue = Number(comp.current_due_hours);
+    const intervalHours = Number(comp.interval_hours);
+    const extensionPercent = Number(comp.extension_limit_hours);
+    
+    return currentDue + (intervalHours * (extensionPercent / 100));
+  }
+  return null;
+}
+
+// Calculate extended due date when extension_limit_hours is set
+function getExtendedDueDate(comp: AircraftComponent): Date | null {
+  if (
+    comp.extension_limit_hours !== null &&
+    comp.extension_limit_hours !== undefined &&
+    comp.current_due_date &&
+    comp.interval_days !== null &&
+    comp.interval_days !== undefined
+  ) {
+    const baseDate = new Date(comp.current_due_date);
+    // Explicitly convert to numbers to avoid type issues
+    const intervalDays = Number(comp.interval_days);
+    const extensionPercent = Number(comp.extension_limit_hours);
+    const extensionDays = intervalDays * (extensionPercent / 100);
+    
+    return new Date(baseDate.getTime() + extensionDays * 24 * 60 * 60 * 1000);
+  }
+  return null;
+}
+
+function getDueIn(comp: AircraftComponent, currentHours: number | null) {
+  if (currentHours === null) return "N/A";
+  
+  // Check if extension is in effect
+  const extendedHours = getExtendedDueHours(comp);
+  const extendedDate = getExtendedDueDate(comp);
+  
+  // Use extended hours if available
+  if (extendedHours !== null) {
+    const hoursLeft = extendedHours - currentHours;
     if (Math.abs(hoursLeft) < 0.01) return "Due now";
     return `${Number(hoursLeft.toFixed(2))} hours`;
   } else if (comp.current_due_hours !== null && comp.current_due_hours !== undefined) {
     const hoursLeft = comp.current_due_hours - currentHours;
     if (Math.abs(hoursLeft) < 0.01) return "Due now";
     return `${Number(hoursLeft.toFixed(2))} hours`;
+  } else if (extendedDate) {
+    const now = new Date();
+    const daysLeft = Math.ceil((extendedDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return daysLeft > 0 ? `${daysLeft} days` : "Due now";
   } else if (comp.current_due_date) {
     const now = new Date();
     const due = new Date(comp.current_due_date);
@@ -146,7 +191,7 @@ export default function AircraftServicingTab() {
               </th>
               <th className="px-3 py-2 text-center font-semibold text-sm w-40">Due At (date)</th>
               <th className="px-3 py-2 text-center font-semibold text-sm w-40">Days Until Service</th>
-              <th className="px-3 py-2 text-center font-semibold text-sm w-40">Due In</th>
+              <th className="px-3 py-2 text-center font-semibold text-sm w-40">Due In (hrs)</th>
               <th className="px-3 py-2 text-center font-semibold text-sm w-32">Status</th>
               <th className="px-3 py-2 text-center font-semibold text-sm w-20">Actions</th>
             </tr>
@@ -160,24 +205,30 @@ export default function AircraftServicingTab() {
               <tr><td colSpan={8} className="text-center py-6">No scheduled inspections found.</td></tr>
             ) : (
               components.map((comp) => {
+                const extendedHours = getExtendedDueHours(comp);
+                const extendedDate = getExtendedDueDate(comp);
+                const effectiveDueHours = extendedHours ?? comp.current_due_hours;
+                const effectiveDueDate = extendedDate ?? (comp.current_due_date ? new Date(comp.current_due_date) : null);
+                
                 let status = "Upcoming";
                 if (
-                  typeof comp.current_due_hours === "number" && currentHours !== null && comp.current_due_hours - currentHours <= 0
+                  typeof effectiveDueHours === "number" && currentHours !== null && effectiveDueHours - currentHours <= 0
                 ) {
+                  // If we have an extension and we're past the original due but within extension
                   if (
-                    typeof comp.extension_limit_hours === "number" && currentHours !== null && currentHours <= comp.extension_limit_hours
+                    extendedHours !== null && 
+                    comp.current_due_hours !== null &&
+                    comp.current_due_hours !== undefined &&
+                    currentHours > comp.current_due_hours &&
+                    currentHours <= extendedHours
                   ) {
                     status = "Within Extension";
-                  } else if (
-                    typeof comp.extension_limit_hours === "number" && currentHours !== null && currentHours > comp.extension_limit_hours
-                  ) {
-                    status = "Overdue (after extension)";
                   } else {
                     status = "Overdue";
                   }
                 } else if (
-                  typeof comp.current_due_hours === "number" && currentHours !== null && comp.current_due_hours - currentHours <= 10 ||
-                  (comp.current_due_date && (new Date(comp.current_due_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24) <= 30)
+                  typeof effectiveDueHours === "number" && currentHours !== null && effectiveDueHours - currentHours <= 10 ||
+                  (effectiveDueDate && (effectiveDueDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24) <= 30)
                 ) {
                   status = "Due Soon";
                 }
@@ -198,8 +249,6 @@ export default function AircraftServicingTab() {
                         ? "bg-yellow-50 border-l-4 border-yellow-400"
                         : status === "Within Extension"
                         ? "bg-orange-50 border-l-4 border-orange-400"
-                        : status === "Overdue (after extension)"
-                        ? "bg-red-100 border-l-4 border-red-500"
                         : status === "Overdue"
                         ? "bg-red-50 border-l-4 border-red-400"
                         : "hover:bg-muted/40 transition-colors") +
@@ -214,12 +263,27 @@ export default function AircraftServicingTab() {
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-center font-semibold align-middle w-32 text-sm">{comp.current_due_hours !== null && comp.current_due_hours !== undefined ? `${comp.current_due_hours}h` : "N/A"}</td>
-                    <td className="px-3 py-2 text-center font-semibold align-middle w-40 text-sm">{comp.extension_limit_hours !== null && comp.extension_limit_hours !== undefined ? `${comp.extension_limit_hours}h` : <span className="text-muted-foreground">N/A</span>}</td>
-                    <td className="px-3 py-2 text-center font-semibold align-middle w-40 text-sm">{comp.current_due_date ? format(new Date(comp.current_due_date), 'yyyy-MM-dd') : "N/A"}</td>
+                    <td className="px-3 py-2 text-center font-semibold align-middle w-32 text-sm">
+                      {comp.current_due_hours !== null && comp.current_due_hours !== undefined ? `${comp.current_due_hours}h` : "N/A"}
+                    </td>
+                    <td className="px-3 py-2 text-center font-semibold align-middle w-40 text-sm">
+                      {extendedHours !== null ? (
+                        `${Number(extendedHours.toFixed(2))}h`
+                      ) : <span className="text-muted-foreground">N/A</span>}
+                    </td>
+                    <td className="px-3 py-2 text-center font-semibold align-middle w-40 text-sm">
+                      {comp.current_due_date ? format(new Date(comp.current_due_date), 'yyyy-MM-dd') : "N/A"}
+                    </td>
                     <td className="px-3 py-2 text-center font-semibold align-middle w-40 text-sm">{daysUntilService}</td>
                     <td className="px-3 py-2 text-center font-semibold align-middle w-40 text-sm">
-                      {getDueIn(comp, currentHours)}
+                      {extendedHours !== null ? (
+                        <div className="flex flex-col items-center">
+                          <span>{getDueIn(comp, currentHours)}</span>
+                          <span className="text-[10px] text-muted-foreground">(extension applied)</span>
+                        </div>
+                      ) : (
+                        getDueIn(comp, currentHours)
+                      )}
                     </td>
                     <td className="px-3 py-2 text-center align-middle w-32 text-sm">
                       <span className="flex items-center justify-center gap-2">
@@ -228,9 +292,6 @@ export default function AircraftServicingTab() {
                         )}
                         {status === "Overdue" && (
                           <Badge variant="destructive" className="capitalize px-2 py-0.5 text-[10px] font-medium">Overdue</Badge>
-                        )}
-                        {status === "Overdue (after extension)" && (
-                          <Badge variant="destructive" className="capitalize px-2 py-0.5 text-[10px] font-medium">Overdue (after extension)</Badge>
                         )}
                         {status === "Within Extension" && (
                           <Badge variant="secondary" className="capitalize px-2 py-0.5 text-[10px] font-medium">Extension</Badge>

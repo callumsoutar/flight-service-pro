@@ -16,7 +16,7 @@ interface ObservationsTableProps {
   aircraftId: string;
 }
 
-const statusColor: Record<string, string> = {
+const priorityColor: Record<string, string> = {
   low: 'bg-green-100 text-green-800',
   medium: 'bg-yellow-100 text-yellow-800',
   high: 'bg-red-100 text-red-800',
@@ -51,7 +51,7 @@ export function ObservationsTable({ aircraftId }: ObservationsTableProps) {
 
   // Fetch users for the displayed observations
   const userIds = React.useMemo(() =>
-    observations ? Array.from(new Set(observations.map(o => o.user_id))) : [],
+    observations ? Array.from(new Set(observations.map(o => o.reported_by))) : [],
     [observations]
   );
 
@@ -88,7 +88,7 @@ export function ObservationsTable({ aircraftId }: ObservationsTableProps) {
   // Filter observations based on view
   const filteredObservations = observations && observations.length > 0
     ? (view === 'open'
-        ? observations.filter(o => o.observation_stage !== 'closed')
+        ? observations.filter(o => o.stage !== 'closed')
         : observations)
     : [];
 
@@ -135,13 +135,13 @@ export function ObservationsTable({ aircraftId }: ObservationsTableProps) {
               <TableRow key={obs.id} className="hover:bg-gray-50">
                 <TableCell className="font-medium">{obs.name}</TableCell>
                 <TableCell>
-                  <Badge className={stageColor[obs.observation_stage] || ''} variant="outline">{obs.observation_stage}</Badge>
+                  <Badge className={stageColor[obs.stage] || ''} variant="outline">{obs.stage}</Badge>
                 </TableCell>
                 <TableCell>
-                  <Badge className={statusColor[obs.status] || ''} variant="outline">{obs.status}</Badge>
+                  <Badge className={priorityColor[obs.priority || 'medium'] || ''} variant="outline">{obs.priority || 'medium'}</Badge>
                 </TableCell>
                 <TableCell>{format(new Date(obs.created_at), 'dd MMM yyyy · HH:mm')}</TableCell>
-                <TableCell>{getUserName(obs.user_id)}</TableCell>
+                <TableCell>{getUserName(obs.reported_by)}</TableCell>
                 <TableCell className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => setResolveObservationId(obs.id)}>Resolve</Button>
                   <Button size="sm" onClick={() => setSelectedObservationId(obs.id)}>Edit</Button>

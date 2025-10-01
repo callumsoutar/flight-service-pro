@@ -14,6 +14,7 @@ import {
   GraduationCap as LucideGraduationCap,
   Wrench as LucideWrench,
   CheckSquare as LucideCheckSquare,
+  BarChart3 as LucideBarChart3,
   Settings as LucideSettings,
   ChevronRight as LucideChevronRight,
 } from "lucide-react";
@@ -39,6 +40,7 @@ const mainNavOptions: NavOption[] = [
   { label: "Training", icon: LucideGraduationCap, href: "/dashboard/training", tab: "training" },
   { label: "Equipment", icon: LucideWrench, href: "/dashboard/equipment", tab: "equipment" },
   { label: "Tasks", icon: LucideCheckSquare, href: "/dashboard/tasks", tab: "tasks" },
+  { label: "Reports", icon: LucideBarChart3, href: "/dashboard/reports", tab: "reports" },
 ];
 
 const staffSubmenuOptions = [
@@ -63,7 +65,7 @@ export function SidebarComponent() {
   }
 
   // Define restricted items for member and student roles
-  const restrictedTabs = ['aircraft', 'invoices', 'staff', 'training', 'equipment', 'tasks'];
+  const restrictedTabs = ['aircraft', 'invoices', 'staff', 'training', 'equipment', 'tasks', 'reports'];
 
   // Filter navigation items based on user role
   const filteredNavOptions = mainNavOptions.filter(item => {
@@ -162,7 +164,7 @@ export function SidebarComponent() {
               >
                 <div className="flex items-center gap-3">
                   <item.icon className="w-5 h-5" />
-                  <span className="sidebar-link-label" style={{ fontSize: '1.25rem', fontWeight: 500 }}>
+                  <span className="sidebar-link-label" style={{ fontSize: '1.375rem', fontWeight: 500 }}>
                     {item.label}
                   </span>
                 </div>
@@ -189,7 +191,7 @@ export function SidebarComponent() {
             }}
           >
             <LucideSettings className="w-5 h-5" />
-            <span className="sidebar-link-label" style={{ fontSize: '1.25rem', fontWeight: 500 }}>
+            <span className="sidebar-link-label" style={{ fontSize: '1.375rem', fontWeight: 500 }}>
               Settings
             </span>
           </Link>
@@ -227,7 +229,7 @@ export function SidebarComponent() {
                 className="block px-4 py-2 text-white/90 hover:bg-white/10 transition-all duration-200 font-medium tracking-wide rounded-md"
                 style={{
                   fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
-                  fontSize: '1.1rem',
+                  fontSize: '1.21rem',
                   fontWeight: 500,
                   letterSpacing: '0.02em',
                 }}

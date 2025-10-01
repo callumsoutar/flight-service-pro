@@ -77,11 +77,16 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
 
   // Fetch aircraft observations if aircraft exists
   if (booking.aircraft_id) {
-    const { data: observationsData } = await supabase
+    const { data: observationsData, error: observationsError } = await supabase
       .from("observations")
       .select("*")
       .eq("aircraft_id", booking.aircraft_id)
-      .in("observation_stage", ["open", "investigation"]);
+      .in("stage", ["open", "investigation"]);
+    
+    if (observationsError) {
+      console.error('Failed to fetch aircraft observations:', observationsError);
+    }
+    
     aircraftObservations = observationsData || [];
   }
 

@@ -33,6 +33,7 @@ const EditMaintenanceModal: React.FC<EditMaintenanceModalProps> = ({
 }) => {
   // Visit fields
   const [visit, setVisit] = useState<MaintenanceVisit | null>(null);
+  const [componentName, setComponentName] = useState<string | null>(null);
   // Form state
   const [visitDate, setVisitDate] = useState<Date | undefined>(undefined);
   const [dateOutOfMaintenance, setDateOutOfMaintenance] = useState<Date | undefined>(undefined);
@@ -40,10 +41,12 @@ const EditMaintenanceModal: React.FC<EditMaintenanceModalProps> = ({
   const [description, setDescription] = useState("");
   const [technician, setTechnician] = useState("");
   const [hoursAtVisit, setHoursAtVisit] = useState("");
-  const [status, setStatus] = useState("");
   const [notes, setNotes] = useState("");
   // Total Cost
   const [totalCost, setTotalCost] = useState("");
+  // Component due tracking
+  const [componentDueHours, setComponentDueHours] = useState<string>("");
+  const [componentDueDate, setComponentDueDate] = useState<string>("");
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,9 +68,25 @@ const EditMaintenanceModal: React.FC<EditMaintenanceModalProps> = ({
         setDescription(visitData?.description || "");
         setTechnician(visitData?.technician_name || "");
         setHoursAtVisit(visitData?.hours_at_visit !== null && visitData?.hours_at_visit !== undefined ? String(visitData.hours_at_visit) : "");
-        setStatus(visitData?.status || "");
         setNotes(visitData?.notes || "");
         setTotalCost(visitData?.total_cost !== null && visitData?.total_cost !== undefined ? String(visitData.total_cost) : "");
+        setComponentDueHours(visitData?.component_due_hours !== null && visitData?.component_due_hours !== undefined ? String(visitData.component_due_hours) : "");
+        setComponentDueDate(visitData?.component_due_date ? visitData.component_due_date.split('T')[0] : "");
+
+        // Fetch component name if component_id exists
+        if (visitData?.component_id) {
+          fetch(`/api/aircraft_components?component_id=${visitData.component_id}`)
+            .then(res => res.json())
+            .then(componentData => {
+              if (componentData?.name) {
+                setComponentName(componentData.name);
+              }
+            })
+            .catch(() => {
+              // Silently fail - component name is not critical
+            });
+        }
+
         setInitialLoaded(true);
       })
       .catch((e) => setError(e.message))
@@ -89,9 +108,10 @@ const EditMaintenanceModal: React.FC<EditMaintenanceModalProps> = ({
         description,
         technician_name: technician,
         hours_at_visit: hoursAtVisit ? Number(hoursAtVisit) : null,
-        status: status || "Completed",
         notes,
         total_cost: totalCost ? Number(totalCost) : null,
+        component_due_hours: componentDueHours ? Number(componentDueHours) : null,
+        component_due_date: componentDueDate || null,
       };
       const visitRes = await fetch("/api/maintenance_visits", {
         method: "PATCH",
@@ -121,6 +141,12 @@ const EditMaintenanceModal: React.FC<EditMaintenanceModalProps> = ({
         <DialogHeader className="mb-4">
           <DialogTitle className="mt-4 text-3xl font-extrabold mb-1 tracking-tight">View/Edit Maintenance Visit & Cost</DialogTitle>
           <DialogDescription className="mb-4 text-base text-muted-foreground font-normal">Edit the details for this maintenance event and associated cost.</DialogDescription>
+          {visit?.component_id && componentName && (
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-2">
+              <div className="text-sm font-medium text-blue-800">Component Maintenance</div>
+              <div className="text-base text-blue-700">{componentName}</div>
+            </div>
+          )}
         </DialogHeader>
         {!initialLoaded ? (
           <div className="text-center py-12">Loading...</div>
@@ -217,6 +243,37 @@ const EditMaintenanceModal: React.FC<EditMaintenanceModalProps> = ({
                 <label className="block text-base font-medium">Total Cost</label>
                 <Input type="number" value={totalCost} onChange={e => setTotalCost(e.target.value)} placeholder="e.g. 1000" className="h-12 text-base w-full" />
               </div>
+              
+              {/* Component Due Tracking - Only show if this visit was for a component */}
+              {visit?.component_id && (
+                <div className="col-span-1 md:col-span-2 border-t pt-4 mt-2">
+                  <h3 className="text-sm font-semibold mb-3 text-muted-foreground">Component Due At Maintenance</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-base font-medium mb-1">Component Due Hours</label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={componentDueHours}
+                        onChange={e => setComponentDueHours(e.target.value)}
+                        placeholder="Component due hours"
+                        className="h-12 text-base w-full"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Hours component was due (including extension)</p>
+                    </div>
+                    <div>
+                      <label className="block text-base font-medium mb-1">Component Due Date</label>
+                      <Input
+                        type="date"
+                        value={componentDueDate}
+                        onChange={e => setComponentDueDate(e.target.value)}
+                        className="h-12 text-base w-full"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Date component was due</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="h-1" />

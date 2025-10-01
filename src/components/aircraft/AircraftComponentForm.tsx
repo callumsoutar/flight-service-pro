@@ -7,6 +7,7 @@ import { AircraftComponent, ComponentType, IntervalType, ComponentStatus } from 
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { Info, Repeat, Calendar, Settings2, StickyNote } from "lucide-react";
 
 const PRIORITY_OPTIONS = ["LOW", "MEDIUM", "HIGH"];
@@ -25,6 +26,7 @@ const componentSchema = z.object({
   status: z.string(),
   priority: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  extension_limit_hours: z.number().optional().nullable(),
 });
 
 type FormValues = z.infer<typeof componentSchema>;
@@ -66,6 +68,7 @@ const AircraftComponentForm = forwardRef<HTMLFormElement, AircraftComponentFormP
       status: "active",
       priority: "MEDIUM",
       notes: "",
+      extension_limit_hours: null,
     },
   });
 
@@ -92,6 +95,7 @@ const AircraftComponentForm = forwardRef<HTMLFormElement, AircraftComponentFormP
             status: comp.status,
             priority: comp.priority ?? "",
             notes: comp.notes ?? "",
+            extension_limit_hours: comp.extension_limit_hours ?? null,
           };
           reset(mapped);
           setValue("component_type", mapped.component_type);
@@ -138,6 +142,41 @@ const AircraftComponentForm = forwardRef<HTMLFormElement, AircraftComponentFormP
         const data = await res.json();
         throw new Error(data.error || "Failed to save component");
       }
+      
+      if (onSuccess) onSuccess();
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        setError(e.message);
+      } else {
+        setError("An unknown error occurred");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExtend10 = async () => {
+    if (!isEdit || !componentId) return;
+    
+    setError(null);
+    setLoading(true);
+    
+    try {
+      const res = await fetch(`/api/aircraft_components`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          id: componentId, 
+          extension_limit_hours: 10,
+        }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to extend component");
+      }
+      
+      setValue("extension_limit_hours", 10);
       
       if (onSuccess) onSuccess();
     } catch (e: unknown) {
@@ -210,6 +249,20 @@ const AircraftComponentForm = forwardRef<HTMLFormElement, AircraftComponentFormP
                 <label className="block font-semibold mb-1">Current Due Hours</label>
                 <Input type="number" {...register("current_due_hours", { valueAsNumber: true })} disabled={loading} />
               </div>
+              {/* Extend by 10% Button */}
+              {isEdit && (
+                <div>
+                  <Button 
+                    type="button"
+                    onClick={handleExtend10}
+                    disabled={loading}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    Extend by 10%
+                  </Button>
+                </div>
+              )}
               {/* Last Completed Date */}
               <div>
                 <label className="block font-semibold mb-1">Last Completed Date</label>

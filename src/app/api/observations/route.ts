@@ -3,15 +3,20 @@ import { z } from 'zod';
 import { createClient } from '@/lib/SupabaseServerClient';
 
 const ObservationSchema = z.object({
-  user_id: z.string().uuid(),
+  reported_by: z.string().uuid().optional(),
+  user_id: z.string().uuid().optional(), // Legacy support
   name: z.string().min(1),
   description: z.string().nullable().optional(),
-  status: z.enum(['low', 'medium', 'high']).default('low'),
+  priority: z.string().optional(),
   aircraft_id: z.string().uuid(),
-  observation_stage: z.enum(['open', 'investigation', 'resolution', 'closed']).default('open'),
+  stage: z.enum(['open', 'investigation', 'resolution', 'closed']).default('open'),
+  observation_stage: z.enum(['open', 'investigation', 'resolution', 'closed']).optional(), // Legacy support
   resolution_comments: z.string().nullable().optional(),
   closed_by: z.string().uuid().nullable().optional(),
   resolved_at: z.string().datetime().nullable().optional(),
+  reported_date: z.string().optional(),
+  assigned_to: z.string().uuid().nullable().optional(),
+  notes: z.string().nullable().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -143,18 +148,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
   }
   
-  // Map frontend fields to database fields
+  // Map frontend fields to database fields (support both old and new field names)
   const dbData = {
     aircraft_id: parse.data.aircraft_id,
     name: parse.data.name,
     description: parse.data.description,
-    stage: parse.data.observation_stage,
-    reported_by: parse.data.user_id,
-    priority: parse.data.status, // Map frontend status to database priority
-    status: 'active', // Default observation status
+    stage: parse.data.stage || parse.data.observation_stage || 'open',
+    reported_by: parse.data.reported_by || parse.data.user_id!,
+    priority: parse.data.priority || 'medium', // Default priority
     resolution_comments: parse.data.resolution_comments,
     closed_by: parse.data.closed_by,
-    resolved_at: parse.data.resolved_at
+    resolved_at: parse.data.resolved_at,
+    assigned_to: parse.data.assigned_to,
+    notes: parse.data.notes
   };
   
   const { data, error } = await supabase
@@ -217,13 +223,13 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
   }
   
-  // Map frontend fields to database fields
+  // Map frontend fields to database fields (support both old and new field names)
   const dbUpdate: Record<string, string | number | boolean | null> = {};
-  if (parse.data.observation_stage !== undefined) {
-    dbUpdate.stage = parse.data.observation_stage;
+  if (parse.data.stage !== undefined || parse.data.observation_stage !== undefined) {
+    dbUpdate.stage = parse.data.stage || parse.data.observation_stage!;
   }
-  if (parse.data.user_id !== undefined) {
-    dbUpdate.reported_by = parse.data.user_id;
+  if (parse.data.reported_by !== undefined || parse.data.user_id !== undefined) {
+    dbUpdate.reported_by = parse.data.reported_by || parse.data.user_id!;
   }
   if (parse.data.name !== undefined) {
     dbUpdate.name = parse.data.name;
@@ -231,8 +237,8 @@ export async function PATCH(req: NextRequest) {
   if (parse.data.description !== undefined) {
     dbUpdate.description = parse.data.description;
   }
-  if (parse.data.status !== undefined) {
-    dbUpdate.priority = parse.data.status; // Map frontend status to database priority
+  if (parse.data.priority !== undefined) {
+    dbUpdate.priority = parse.data.priority;
   }
   if (parse.data.resolution_comments !== undefined) {
     dbUpdate.resolution_comments = parse.data.resolution_comments;
@@ -242,6 +248,12 @@ export async function PATCH(req: NextRequest) {
   }
   if (parse.data.resolved_at !== undefined) {
     dbUpdate.resolved_at = parse.data.resolved_at;
+  }
+  if (parse.data.assigned_to !== undefined) {
+    dbUpdate.assigned_to = parse.data.assigned_to;
+  }
+  if (parse.data.notes !== undefined) {
+    dbUpdate.notes = parse.data.notes;
   }
   
   const { data, error } = await supabase

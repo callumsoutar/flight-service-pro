@@ -64,11 +64,11 @@ export const AddObservationModal: React.FC<AddObservationModalProps> = ({ open, 
     setLoading(true);
     const payload = {
       aircraft_id: aircraftId,
-      user_id: userId,
+      reported_by: userId,
       name: name.trim(),
       description: description.trim() || null,
-      status,
-      observation_stage: 'open' as const,
+      priority: status, // Priority level (low/medium/high)
+      stage: 'open' as const,
     };
     const res = await fetch("/api/observations", {
       method: "POST",

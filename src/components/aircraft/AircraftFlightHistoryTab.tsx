@@ -49,8 +49,11 @@ export default function AircraftFlightHistoryTab({ aircraftId }: AircraftFlightH
     void loadFlightHistory();
   }, [aircraftId]);
 
-  // Filter flights by date range
+  // Filter flights by date range and ensure they have meter readings
   const flights = allFlights.filter((flight) => {
+    // Only show flights with at least one meter reading (tach_end or hobbs_end)
+    if (flight.tach_end == null && flight.hobbs_end == null) return false;
+
     // Use booking end time as the primary date for filtering
     const dateToCheck = flight.booking?.end_time || flight.created_at;
     if (!dateToCheck) return false;

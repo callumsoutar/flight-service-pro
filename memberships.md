@@ -89,18 +89,15 @@ CREATE TABLE IF NOT EXISTS "public"."membership_types" (
 );
 ```
 
-#### `membership_renewals` Table
-```sql
-CREATE TABLE IF NOT EXISTS "public"."membership_renewals" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "old_membership_id" "uuid" NOT NULL,
-    "new_membership_id" "uuid" NOT NULL,
-    "renewed_by" "uuid" NOT NULL,
-    "renewal_date" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "notes" "text",
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
-);
-```
+#### Renewal Tracking
+
+**Note:** The system no longer uses a separate `membership_renewals` table. Renewals are tracked directly through the `memberships` table using the `renewal_of` field, which creates a self-referencing relationship between the new and old membership records.
+
+**Audit Trail for Renewals:**
+- `renewal_of` - Links to the previous membership (self-referencing FK)
+- `updated_by` - Tracks who created/renewed the membership
+- `created_at` - Serves as the renewal date
+- `notes` - Contains renewal-specific notes
 
 ## Types and Interfaces
 
@@ -154,6 +151,9 @@ export interface MembershipSummary {
   can_renew: boolean;
   membership_history: Membership[];
 }
+
+// Note: MembershipRenewal interface has been removed.
+// Renewals are now tracked through the memberships.renewal_of field.
 ```
 
 ### Constants
@@ -420,20 +420,22 @@ createMembershipInvoiceData(
 
 1. **User Interface**: Click "Renew Membership" in `MemberMembershipsTab`
 2. **Modal Opens**: `RenewMembershipModal` displays with current membership info
-3. **User Selection**:
+3. **Membership Year Config**: System fetches configured membership year from settings
+4. **User Selection**:
    - Optionally change membership type
    - Configure auto-renewal settings
    - Choose invoice creation
    - Add renewal notes
-4. **Preview**: Shows new membership details and expiry date
-5. **Submission**:
+5. **Preview**: Shows new membership details with expiry date calculated from membership year config
+6. **Submission**:
    - API call to `POST /api/memberships` with `action: "renew"`
-   - Server creates new membership record
+   - Server fetches membership year configuration
+   - Creates new membership with `start_date` = today
+   - Calculates `expiry_date` using membership year config (e.g., Oct 1, 2025 → April 1, 2026)
    - Links to old membership via `renewal_of`
-   - Creates renewal tracking record
    - Deactivates old membership
    - Optionally creates invoice
-6. **Response**: Modal closes, membership data refreshes
+7. **Response**: Modal closes, membership data refreshes
 
 **API Data Flow:**
 ```typescript
@@ -447,8 +449,11 @@ createMembershipInvoiceData(
   create_invoice: boolean
 }
 
-// Server creates new membership + renewal record
-// Deactivates old membership
+// Server:
+// 1. Fetches membership year config (e.g., April 1 - March 31)
+// 2. Creates new membership with calculated expiry date
+// 3. Links via renewal_of field
+// 4. Deactivates old membership
 ```
 
 ### 3. Viewing Membership Status
@@ -546,9 +551,9 @@ When `create_invoice: true` is selected:
 
 ### 2. Renewal Strategy
 - Creates new membership records rather than extending existing ones
-- Maintains full history and audit trail
-- Links renewals via `renewal_of` field
-- Tracks renewals in separate `membership_renewals` table
+- Maintains full history and audit trail via `renewal_of` self-referencing field
+- No separate renewals table needed - all data tracked in `memberships` table
+- Expiry dates calculated using configurable membership year (not duration_months)
 
 ### 3. Status Calculation
 - Real-time calculation based on dates and payment status
@@ -564,6 +569,13 @@ When `create_invoice: true` is selected:
 - Support for predefined enum types (current) or dynamic types (future)
 - Benefits stored as array for flexibility
 - Duration configurable per type (monthly, annual, etc.)
+
+### 6. Membership Year Configuration
+- Expiry dates calculated using configurable membership year from settings
+- Default: April 1 - March 31 (configurable via Settings > Memberships)
+- Example: Membership created Oct 1, 2025 → Expires April 1, 2026 (end of membership year)
+- Uses `calculateDefaultMembershipExpiry()` from `membership-year-utils.ts`
+- Falls back to DEFAULT_MEMBERSHIP_YEAR_CONFIG if settings not configured
 
 ## Future Enhancements
 

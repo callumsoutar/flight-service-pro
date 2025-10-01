@@ -244,38 +244,40 @@ export default function BookingActions({
       {mounted && actualStatus === "confirmed" && !hideCheckOutButton && (!mode || mode === 'check-out') && !isRestrictedUser && (
         <>
           {isSoloFlight ? (
-            // Solo flight: show dropdown if flight authorization is required OR authorization exists OR is overridden, AND user can see authorization, otherwise simple button
+            // Solo flight: show split button if flight authorization is required OR authorization exists OR is overridden, AND user can see authorization, otherwise simple button
             (requireFlightAuthorization || authorization || booking.authorization_override) && canSeeAuthorization ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <div className="relative">
-                    <Button className="h-10 px-6 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-blue-300">
-                      <Plane className="w-5 h-5 mr-1" />
-                      Check Flight Out
-                      <ChevronDown className="w-4 h-4 ml-1" />
+              <div className="relative flex gap-1">
+                {/* Main Button - Check Flight Out */}
+                <Button asChild className="h-10 px-6 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-l-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-blue-300 border-r border-blue-500">
+                  <Link href={`/dashboard/bookings/check-out/${actualBookingId}`}>
+                    <Plane className="w-5 h-5 mr-1" />
+                    Check Flight Out
+                  </Link>
+                </Button>
+
+                {/* Dropdown Button */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="h-10 w-10 bg-blue-600 hover:bg-blue-700 text-white rounded-r-xl shadow transition-all flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-blue-300">
+                      <ChevronDown className="w-4 h-4" />
                     </Button>
-                    {renderAuthorizationIndicator()}
-                  </div>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-72">
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem asChild>
-                      <Link href={`/dashboard/bookings/check-out/${actualBookingId}`}>
-                        <Plane className="w-4 h-4 mr-2" />
-                        Check Flight Out
-                      </Link>
-                    </DropdownMenuItem>
-                    {/* Show flight authorization for solo flights when setting is enabled, any flight that has an authorization, or when overridden, AND user can see authorization */}
-                    {mounted && ((isSoloFlight && requireFlightAuthorization) || authorization || booking.authorization_override) && canSeeAuthorization && (
-                      <DropdownMenuItem onClick={handleAuthorizationNavigation} className="flex items-center">
-                        {React.createElement(getAuthorizationStatusIcon(), { className: "w-4 h-4 mr-2" })}
-                        <span className="flex-1">{getAuthorizationStatusText()}</span>
-                        {getAuthorizationStatusBadge()}
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-72">
+                    <DropdownMenuGroup>
+                      {/* Show flight authorization for solo flights when setting is enabled, any flight that has an authorization, or when overridden, AND user can see authorization */}
+                      {mounted && ((isSoloFlight && requireFlightAuthorization) || authorization || booking.authorization_override) && canSeeAuthorization && (
+                        <DropdownMenuItem onClick={handleAuthorizationNavigation} className="flex items-center">
+                          {React.createElement(getAuthorizationStatusIcon(), { className: "w-4 h-4 mr-2" })}
+                          <span className="flex-1">{getAuthorizationStatusText()}</span>
+                          {getAuthorizationStatusBadge()}
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {renderAuthorizationIndicator()}
+              </div>
             ) : (
               // Simple button for solo flights when authorization is not required and no existing authorization
               <div className="relative">
@@ -345,8 +347,8 @@ export default function BookingActions({
         </Button>
       )}
 
-      {/* Debrief Button */}
-      {mode === 'check-in' && actualStatus === 'flying' && (
+      {/* Debrief Button - Only show for dual flights (solo flights don't need debrief) */}
+      {mode === 'check-in' && actualStatus === 'flying' && !isSoloFlight && (
         <Button asChild className="h-10 px-6 text-base font-bold bg-green-600 hover:bg-green-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-green-300">
           <Link href={`/dashboard/bookings/debrief/${actualBookingId}`}>
             Debrief

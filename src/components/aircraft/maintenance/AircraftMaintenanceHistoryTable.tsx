@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
+import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal, Pencil } from "lucide-react";
 import {
@@ -15,7 +14,6 @@ import EditMaintenanceModal from "@/components/aircraft/maintenance/EditMaintena
 
 export default function AircraftMaintenanceHistoryTable() {
   const { id: aircraft_id } = useParams<{ id: string }>();
-  const router = useRouter();
   const [visits, setVisits] = useState<MaintenanceVisit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,18 +57,17 @@ export default function AircraftMaintenanceHistoryTable() {
               <th className="px-4 py-2 text-left font-semibold">Technician</th>
               <th className="px-4 py-2 text-left font-semibold">Hours at Visit</th>
               <th className="px-4 py-2 text-left font-semibold">Total Cost</th>
-              <th className="px-4 py-2 text-left font-semibold">Status</th>
               <th className="px-4 py-2 text-left font-semibold">Date Out of Maintenance</th>
               <th className="px-4 py-2 text-left font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} className="text-center py-8">Loading...</td></tr>
+              <tr><td colSpan={8} className="text-center py-8">Loading...</td></tr>
             ) : error ? (
-              <tr><td colSpan={9} className="text-center text-red-500 py-8">{error}</td></tr>
+              <tr><td colSpan={8} className="text-center text-red-500 py-8">{error}</td></tr>
             ) : visits.length === 0 ? (
-              <tr><td colSpan={9} className="text-center py-8">No maintenance visits found.</td></tr>
+              <tr><td colSpan={8} className="text-center py-8">No maintenance visits found.</td></tr>
             ) : (
               visits.map((visit) => (
                 <tr key={visit.id} className="hover:bg-muted/50 transition-colors">
@@ -80,9 +77,6 @@ export default function AircraftMaintenanceHistoryTable() {
                   <td className="px-4 py-2">{visit.technician_name || "-"}</td>
                   <td className="px-4 py-2">{visit.hours_at_visit !== null && visit.hours_at_visit !== undefined ? visit.hours_at_visit : "-"}</td>
                   <td className="px-4 py-2">{visit.total_cost !== null && visit.total_cost !== undefined ? `$${visit.total_cost.toFixed(2)}` : "-"}</td>
-                  <td className="px-4 py-2">
-                    <Badge variant={visit.status === "Completed" ? "secondary" : visit.status === "In Progress" ? "outline" : "default"} className="capitalize px-2 py-0.5 text-xs font-medium">{visit.status}</Badge>
-                  </td>
                   <td className="px-4 py-2">{visit.date_out_of_maintenance ? visit.date_out_of_maintenance.split("T")[0] : "-"}</td>
                   <td className="px-4 py-2">
                     <DropdownMenu>
@@ -91,7 +85,6 @@ export default function AircraftMaintenanceHistoryTable() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => {
-                          router.push(`/dashboard/aircraft/view/${aircraft_id}/maintenance/${visit.id}`);
                           setSelectedVisitId(visit.id);
                           setEditModalOpen(true);
                         }}>

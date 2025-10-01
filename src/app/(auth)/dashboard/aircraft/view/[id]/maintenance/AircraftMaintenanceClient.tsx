@@ -21,15 +21,15 @@ export default function AircraftMaintenanceClient({
 }: AircraftMaintenanceClientProps) {
   /* eslint-enable @typescript-eslint/no-unused-vars */
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="flex flex-col gap-8">
       {/* Maintenance Items */}
-      <div className="space-y-4">
+      <div className="w-full space-y-4">
         <h2 className="text-xl font-semibold text-gray-900">Maintenance Items</h2>
         <AircraftMaintenanceTab />
       </div>
 
       {/* Maintenance History */}
-      <div className="space-y-4">
+      <div className="w-full space-y-4">
         <h2 className="text-xl font-semibold text-gray-900">Maintenance History</h2>
         <AircraftMaintenanceHistoryTable />
       </div>

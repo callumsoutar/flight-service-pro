@@ -57,10 +57,31 @@ async function FlightAuthorizationsPage({ userRole }: ProtectedPageProps) {
     .order('updated_at', { ascending: false })
     .limit(10);
 
+  // Fetch students/members for search filters
+  const { data: students } = await supabase
+    .from("users")
+    .select("id, first_name, last_name, email")
+    .in('role', ['student', 'member'])
+    .order('first_name', { ascending: true });
+
+  // Fetch aircraft for search filters
+  const { data: aircraftList } = await supabase
+    .from("aircraft")
+    .select("id, registration, type")
+    .order('registration', { ascending: true });
+
+  // Format students for dropdown
+  const formattedStudents = (students || []).map(student => ({
+    id: student.id,
+    name: `${student.first_name || ''} ${student.last_name || ''}`.trim() || student.email || student.id
+  }));
+
   return (
     <FlightAuthorizationsClient
       pendingAuthorizations={pendingAuthorizations || []}
       recentAuthorizations={recentAuthorizations || []}
+      students={formattedStudents}
+      aircraftList={aircraftList || []}
       userRole={userRole}
     />
   );

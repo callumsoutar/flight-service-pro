@@ -74,7 +74,7 @@ async function AircraftMaintenancePage({ params, user: _user, userRole: _userRol
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-0">
         <div>
           <div className="flex items-center gap-2 text-lg font-semibold text-muted-foreground">
-            <a href="/dashboard/aircraft" className="text-indigo-600 hover:underline text-base flex items-center gap-1">
+            <a href={`/dashboard/aircraft/view/${id}`} className="text-indigo-600 hover:underline text-base flex items-center gap-1">
               <ArrowLeft className="w-4 h-4" /> Back to Aircraft
             </a>
           </div>

@@ -2,20 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { z } from "zod";
 import { Membership } from "@/types/memberships";
+import { calculateDefaultMembershipExpiry } from '@/lib/membership-year-utils';
+import { DEFAULT_MEMBERSHIP_YEAR_CONFIG } from '@/lib/membership-defaults';
+import { MembershipYearConfig } from '@/types/settings';
 
 const CreateMembershipSchema = z.object({
   user_id: z.string().uuid(),
   membership_type_id: z.string().uuid(),
   start_date: z.string().optional(),
+  custom_expiry_date: z.string().optional(), // Override calculated expiry date
   auto_renew: z.boolean().default(false),
   notes: z.string().optional(),
+  create_invoice: z.boolean().default(false),
 });
 
 const RenewMembershipSchema = z.object({
   membership_id: z.string().uuid(),
   membership_type_id: z.string().uuid().optional(),
+  custom_expiry_date: z.string().optional(), // Override calculated expiry date
   auto_renew: z.boolean().optional(),
   notes: z.string().optional(),
+  create_invoice: z.boolean().default(false),
 });
 
 // Helper function to calculate membership status
@@ -154,21 +161,33 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Membership type not found" }, { status: 404 });
       }
 
-      // Calculate new dates
+      // Get membership year configuration from settings
+      const { data: settingsData } = await supabase
+        .from("settings")
+        .select("setting_value")
+        .eq("category", "memberships")
+        .eq("setting_key", "membership_year")
+        .single();
+
+      const membershipYearConfig: MembershipYearConfig = settingsData?.setting_value as MembershipYearConfig || DEFAULT_MEMBERSHIP_YEAR_CONFIG;
+
+      // Calculate new dates using membership year configuration or custom override
       const startDate = new Date();
-      const expiryDate = new Date();
-      expiryDate.setMonth(expiryDate.getMonth() + membershipType.duration_months);
+      const expiryDate = validatedData.custom_expiry_date 
+        ? new Date(validatedData.custom_expiry_date)
+        : calculateDefaultMembershipExpiry(membershipYearConfig, startDate);
 
       // Create new membership record
       const newMembershipData = {
         user_id: currentMembership.user_id,
-        membership_type_id: membershipTypeId, // Use UUID foreign key
+        membership_type_id: membershipTypeId,
         start_date: startDate.toISOString(),
         expiry_date: expiryDate.toISOString().split('T')[0], // Date only
         purchased_date: startDate.toISOString(),
-        renewal_of: currentMembership.id,
+        renewal_of: currentMembership.id, // Link to previous membership
         auto_renew: validatedData.auto_renew ?? currentMembership.auto_renew,
         grace_period_days: currentMembership.grace_period_days,
+        fee_paid: false, // New membership starts unpaid
         notes: validatedData.notes,
         updated_by: user.id,
       };
@@ -183,21 +202,17 @@ export async function POST(req: NextRequest) {
         throw createError;
       }
 
-      // Create renewal record
-      await supabase
-        .from("membership_renewals")
-        .insert([{
-          old_membership_id: currentMembership.id,
-          new_membership_id: newMembership.id,
-          renewed_by: user.id,
-          notes: validatedData.notes,
-        }]);
-
       // Deactivate old membership
       await supabase
         .from("memberships")
         .update({ is_active: false })
         .eq("id", currentMembership.id);
+
+      // TODO: Create invoice if requested (will be implemented in future phase)
+      if (validatedData.create_invoice && membershipType.price > 0) {
+        // Invoice creation will be implemented here
+        console.log('Invoice creation for renewal not yet implemented');
+      }
 
       return NextResponse.json({ membership: newMembership }, { status: 201 });
 
@@ -205,7 +220,7 @@ export async function POST(req: NextRequest) {
       // Create new membership
       const validatedData = CreateMembershipSchema.parse(body);
 
-      // Get membership type for duration calculation
+      // Get membership type
       const { data: membershipType, error: typeError } = await supabase
         .from("membership_types")
         .select("*")
@@ -216,18 +231,30 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Membership type not found" }, { status: 404 });
       }
 
-      // Calculate dates
+      // Get membership year configuration from settings
+      const { data: settingsData } = await supabase
+        .from("settings")
+        .select("setting_value")
+        .eq("category", "memberships")
+        .eq("setting_key", "membership_year")
+        .single();
+
+      const membershipYearConfig: MembershipYearConfig = settingsData?.setting_value as MembershipYearConfig || DEFAULT_MEMBERSHIP_YEAR_CONFIG;
+
+      // Calculate dates using membership year configuration or custom override
       const startDate = validatedData.start_date ? new Date(validatedData.start_date) : new Date();
-      const expiryDate = new Date(startDate);
-      expiryDate.setMonth(expiryDate.getMonth() + membershipType.duration_months);
+      const expiryDate = validatedData.custom_expiry_date
+        ? new Date(validatedData.custom_expiry_date)
+        : calculateDefaultMembershipExpiry(membershipYearConfig, startDate);
 
       const membershipData = {
         user_id: validatedData.user_id,
-        membership_type_id: validatedData.membership_type_id, // Use UUID foreign key
+        membership_type_id: validatedData.membership_type_id,
         start_date: startDate.toISOString(),
         expiry_date: expiryDate.toISOString().split('T')[0], // Date only
         purchased_date: new Date().toISOString(),
         auto_renew: validatedData.auto_renew,
+        fee_paid: false, // Starts unpaid
         notes: validatedData.notes,
         updated_by: user.id,
       };
@@ -240,6 +267,12 @@ export async function POST(req: NextRequest) {
 
       if (error) {
         throw error;
+      }
+
+      // TODO: Create invoice if requested (will be implemented in future phase)
+      if (validatedData.create_invoice && membershipType.price > 0) {
+        // Invoice creation will be implemented here
+        console.log('Invoice creation for new membership not yet implemented');
       }
 
       return NextResponse.json({ membership: data }, { status: 201 });

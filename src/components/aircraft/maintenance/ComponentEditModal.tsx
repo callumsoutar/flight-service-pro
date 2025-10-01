@@ -12,11 +12,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import React, { useState, useEffect } from "react";
 import { AircraftComponent, ComponentType, IntervalType, ComponentStatus } from "@/types/aircraft_components";
-import { Info, Repeat, Calendar, Settings2, StickyNote, ArrowUpRight, Loader2 } from "lucide-react";
+import { Info, Repeat, Calendar, Settings2, StickyNote, ArrowUpRight, Loader2, CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/SupabaseBrowserClient";
+import { format } from "date-fns";
 
 interface ComponentEditModalProps {
   open: boolean;
@@ -40,9 +42,9 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
   const [intervalType, setIntervalType] = useState<IntervalType>("HOURS");
   const [intervalHours, setIntervalHours] = useState<number | null>(null);
   const [intervalDays, setIntervalDays] = useState<number | null>(null);
-  const [currentDueDate, setCurrentDueDate] = useState<string>("");
+  const [currentDueDate, setCurrentDueDate] = useState<Date | null>(null);
   const [currentDueHours, setCurrentDueHours] = useState<number | null>(null);
-  const [lastCompletedDate, setLastCompletedDate] = useState<string>("");
+  const [lastCompletedDate, setLastCompletedDate] = useState<Date | null>(null);
   const [lastCompletedHours, setLastCompletedHours] = useState<number | null>(null);
   const [status, setStatus] = useState<ComponentStatus>("active");
   const [priority, setPriority] = useState<string | null>("MEDIUM");
@@ -59,9 +61,9 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
       setIntervalType(component.interval_type || "HOURS");
       setIntervalHours(component.interval_hours ?? null);
       setIntervalDays(component.interval_days ?? null);
-      setCurrentDueDate(component.current_due_date ? component.current_due_date.split("T")[0] : "");
+      setCurrentDueDate(component.current_due_date ? new Date(component.current_due_date) : null);
       setCurrentDueHours(component.current_due_hours ?? null);
-      setLastCompletedDate(component.last_completed_date ? component.last_completed_date.split("T")[0] : "");
+      setLastCompletedDate(component.last_completed_date ? new Date(component.last_completed_date) : null);
       setLastCompletedHours(component.last_completed_hours ?? null);
       setStatus(component.status || "active");
       setPriority(component.priority || "MEDIUM");
@@ -78,9 +80,9 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
       interval_type: intervalType,
       interval_hours: intervalHours,
       interval_days: intervalDays,
-      current_due_date: currentDueDate,
+      current_due_date: currentDueDate ? currentDueDate.toISOString().split('T')[0] : null,
       current_due_hours: currentDueHours,
-      last_completed_date: lastCompletedDate,
+      last_completed_date: lastCompletedDate ? lastCompletedDate.toISOString().split('T')[0] : null,
       last_completed_hours: lastCompletedHours,
       status: status as ComponentStatus,
       priority,
@@ -96,14 +98,18 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
     if (!component) return;
     setLoadingExtend(true);
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase.functions.invoke('extend_component_due_10_percent', {
-        body: { component_id: component.id },
+      const res = await fetch("/api/aircraft_components", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: component.id, extension_limit_hours: 10 }),
       });
-      if (error || !data?.success) {
-        throw new Error(error?.message || data?.error || "Failed to extend component");
+      if (!res.ok) {
+        const errorData = await res.json();
+        toast.error(errorData.error || "Failed to extend component");
+        setLoadingExtend(false);
+        return;
       }
-      toast.success("Component extension applied!", { description: `New extension limit: ${data.new_extension_limit} hours` });
+      toast.success("Component extension applied!", { description: "Extension limit set to 10 hours" });
       setTimeout(() => {
         if (typeof window !== 'undefined') window.location.reload();
       }, 1200); // Give time for toast to show
@@ -201,7 +207,28 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
               </div>
               <div>
                 <label className="block font-medium mb-1">Last Completed Date</label>
-                <Input type="date" value={lastCompletedDate || ""} onChange={e => setLastCompletedDate(e.target.value)} />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={
+                        "w-full justify-start text-left font-normal " +
+                        (!lastCompletedDate ? "text-muted-foreground" : "")
+                      }
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {lastCompletedDate ? format(lastCompletedDate, "dd MMM yyyy") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={lastCompletedDate ?? undefined}
+                      onSelect={date => setLastCompletedDate(date ?? null)}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               {/* Separated section for current due and extension */}
               <div className="bg-gray-100 rounded-xl p-4 flex flex-col gap-4">
@@ -211,7 +238,28 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                 </div>
                 <div>
                   <label className="block font-medium mb-1">Current Due Date</label>
-                  <Input type="date" value={currentDueDate || ""} onChange={e => setCurrentDueDate(e.target.value)} className="bg-white" />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={
+                          "w-full justify-start text-left font-normal bg-white " +
+                          (!currentDueDate ? "text-muted-foreground" : "")
+                        }
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {currentDueDate ? format(currentDueDate, "dd MMM yyyy") : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={currentDueDate ?? undefined}
+                        onSelect={date => setCurrentDueDate(date ?? null)}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <Button

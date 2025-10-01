@@ -63,9 +63,13 @@ export default function PrivilegedBookingTabs({
     });
   }
 
+  const handleTabChange = (value: string) => {
+    onTabChange(value as BookingTabType);
+  };
+
   return (
     <div className="border-b border-gray-200">
-      <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="inline-flex bg-transparent border-0 rounded-none p-0 h-auto space-x-8">
           {tabs.map((tab) => {
             const Icon = tab.icon;
