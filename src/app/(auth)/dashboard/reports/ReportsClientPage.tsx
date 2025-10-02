@@ -99,10 +99,18 @@ export default function ReportsClientPage({ aircraft }: ReportsClientPageProps) 
     setError(null);
 
     try {
+      // Convert local date selections to UTC timestamp range
+      // This ensures we get all records for the selected dates in the user's local timezone
+      const startOfDayLocal = new Date(startDate);
+      startOfDayLocal.setHours(0, 0, 0, 0);
+
+      const endOfDayLocal = new Date(endDate);
+      endOfDayLocal.setHours(23, 59, 59, 999);
+
       const { data, error: rpcError } = await supabase.rpc("get_tech_log_reports", {
         p_aircraft_id: selectedAircraft === "all" ? null : selectedAircraft,
-        p_start_date: format(startDate, "yyyy-MM-dd"),
-        p_end_date: format(endDate, "yyyy-MM-dd"),
+        p_start_date: startOfDayLocal.toISOString(),
+        p_end_date: endOfDayLocal.toISOString(),
       });
 
       if (rpcError) {

@@ -15,6 +15,7 @@ export interface Booking {
   lesson_id: string | null;
   flight_type_id: string | null;
   booking_type: BookingType | null;
+  voucher_number: string | null;
   created_at: string;
   updated_at: string;
   // Flight authorization override fields

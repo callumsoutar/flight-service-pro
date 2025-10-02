@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import type { Aircraft } from "@/types/aircraft";
 import type { AircraftType } from "@/types/aircraft_types";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,6 @@ const aircraftSchema = z.object({
   registration: z.string().min(1, "Required"),
   status: z.string().optional(),
   capacity: z.coerce.number().min(1).nullable().optional(),
-  engine_count: z.coerce.number().min(1).nullable().optional(),
   on_line: z.boolean().optional(),
   for_ato: z.boolean().optional(),
   prioritise_scheduling: z.boolean().optional(),
@@ -53,38 +52,19 @@ const aircraftSchema = z.object({
 
 type AircraftFormValues = z.infer<typeof aircraftSchema>;
 
-// Cache aircraft types globally to avoid refetching
-let cachedAircraftTypes: AircraftType[] | null = null;
-let cachePromise: Promise<AircraftType[]> | null = null;
-
-async function fetchAircraftTypes(): Promise<AircraftType[]> {
-  if (cachedAircraftTypes) {
-    return cachedAircraftTypes;
+const fetchAircraftTypes = async (): Promise<AircraftType[]> => {
+  const response = await fetch("/api/aircraft-types");
+  if (!response.ok) {
+    throw new Error("Failed to fetch aircraft types");
   }
-
-  if (cachePromise) {
-    return cachePromise;
-  }
-
-  cachePromise = fetch("/api/aircraft-types")
-    .then(res => res.json())
-    .then(data => {
-      cachedAircraftTypes = data.aircraft_types || [];
-      cachePromise = null;
-      return cachedAircraftTypes;
-    })
-    .catch(err => {
-      cachePromise = null;
-      throw err;
-    });
-
-  return cachePromise;
-}
+  const data = await response.json();
+  return data.aircraft_types || [];
+};
 
 export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: Aircraft, onSave: (updated: Aircraft) => void }) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [aircraftTypes, setAircraftTypes] = useState<AircraftType[]>(cachedAircraftTypes || []);
+  const [aircraftTypes, setAircraftTypes] = useState<AircraftType[]>([]);
   const [isAddTypeDialogOpen, setIsAddTypeDialogOpen] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
   const [newTypeCategory, setNewTypeCategory] = useState("");
@@ -107,7 +87,6 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
       registration: aircraft.registration,
       status: aircraft.status || "available",
       capacity: aircraft.capacity ?? undefined,
-      engine_count: aircraft.engine_count ?? undefined,
       on_line: aircraft.on_line ?? true,
       for_ato: aircraft.for_ato ?? false,
       prioritise_scheduling: aircraft.prioritise_scheduling ?? false,
@@ -125,9 +104,16 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
   });
 
   useEffect(() => {
-    fetchAircraftTypes()
-      .then(data => setAircraftTypes(data))
-      .catch(() => toast.error("Failed to load aircraft types"));
+    const loadAircraftTypes = async () => {
+      try {
+        const types = await fetchAircraftTypes();
+        setAircraftTypes(types);
+      } catch (error) {
+        toast.error("Failed to load aircraft types");
+      }
+    };
+
+    loadAircraftTypes();
   }, []);
 
   const handleCreateAircraftType = async () => {
@@ -152,9 +138,7 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
         toast.error(result.error || "Failed to create aircraft type");
       } else {
         toast.success("Aircraft type created!");
-        const updatedTypes = [...aircraftTypes, result.aircraft_type];
-        setAircraftTypes(updatedTypes);
-        cachedAircraftTypes = updatedTypes; // Update cache
+        setAircraftTypes([...aircraftTypes, result.aircraft_type]);
         setValue("aircraft_type_id", result.aircraft_type.id, { shouldDirty: true });
         setIsAddTypeDialogOpen(false);
         setNewTypeName("");

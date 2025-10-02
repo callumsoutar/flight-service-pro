@@ -27,6 +27,10 @@ interface BookingActionsProps {
   bookingId?: string;
   // Current user ID for ownership validation
   currentUserId?: string;
+  // Server-provided data to avoid client-side queries
+  flightAuthorization?: unknown;
+  requireFlightAuthorization?: boolean;
+  isRestrictedUser?: boolean;
 }
 
 export default function BookingActions({
@@ -36,7 +40,11 @@ export default function BookingActions({
   // Legacy props - extract from booking if not provided
   status,
   bookingId,
-  currentUserId
+  currentUserId,
+  // Server-provided data
+  flightAuthorization: serverFlightAuthorization,
+  requireFlightAuthorization: serverRequireFlightAuthorization,
+  isRestrictedUser: serverIsRestrictedUser
 }: BookingActionsProps) {
   // Support legacy usage
   const actualStatus = status || booking?.status;
@@ -50,14 +58,19 @@ export default function BookingActions({
     setMounted(true);
   }, []);
 
-  // React hooks must be called before any early returns
-  const { data: authorization } = useFlightAuthorizationByBooking(actualBookingId || '');
+  // Use server-provided data if available, otherwise fall back to client-side queries
+  const { data: clientAuthorization } = useFlightAuthorizationByBooking(
+    serverFlightAuthorization !== undefined ? '' : (actualBookingId || '')
+  );
+  const authorization = serverFlightAuthorization !== undefined ? serverFlightAuthorization : clientAuthorization;
 
-  // Get flight authorization setting
-  const { requireFlightAuthorization } = useFlightAuthorizationSetting();
+  const { requireFlightAuthorization: clientRequireAuth } = useFlightAuthorizationSetting();
+  const requireFlightAuthorization = serverRequireFlightAuthorization !== undefined
+    ? serverRequireFlightAuthorization
+    : clientRequireAuth;
 
-  // Check if user has restricted access (member/student)
-  const { isRestricted: isRestrictedUser } = useIsRestrictedUser();
+  const { isRestricted: clientIsRestrictedUser } = useIsRestrictedUser();
+  const isRestrictedUser = serverIsRestrictedUser !== undefined ? serverIsRestrictedUser : clientIsRestrictedUser;
 
   // Handle missing booking data gracefully
   if (!booking) {
@@ -86,8 +99,9 @@ export default function BookingActions({
     if (!mounted) return "Flight Authorization";
 
     // Standard authorization status text (override status shown in badge instead)
-    if (!authorization) return "Start Flight Authorization";
-    switch (authorization.status) {
+    if (!authorization || typeof authorization !== 'object') return "Start Flight Authorization";
+    const authStatus = (authorization as { status?: string }).status;
+    switch (authStatus) {
       case 'draft': return "Solo Authorization";
       case 'pending': return "View Flight Authorization";
       case 'approved': return "View Flight Authorization";
@@ -111,18 +125,19 @@ export default function BookingActions({
     }
 
     // Show authorization status if no override
-    if (!authorization) return null;
+    if (!authorization || typeof authorization !== 'object') return null;
+    const authStatus = (authorization as { status?: string }).status;
     const statusColors = {
       'approved': 'bg-green-100 text-green-800',
       'pending': 'bg-yellow-100 text-yellow-800',
       'rejected': 'bg-red-100 text-red-800',
       'draft': 'bg-gray-100 text-gray-800'
     };
-    const colorClass = statusColors[authorization.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
+    const colorClass = statusColors[authStatus as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
 
     return (
       <span className={`ml-auto text-xs px-2 py-1 rounded-full ${colorClass}`}>
-        {authorization.status}
+        {authStatus}
       </span>
     );
   };
@@ -138,8 +153,9 @@ export default function BookingActions({
     }
 
     // Standard authorization status icons
-    if (!authorization) return FileSignature;
-    switch (authorization.status) {
+    if (!authorization || typeof authorization !== 'object') return FileSignature;
+    const authStatus = (authorization as { status?: string }).status;
+    switch (authStatus) {
       case 'draft': return FileSignature;
       case 'pending': return FileSignature;
       case 'approved': return CheckCircle;
@@ -172,8 +188,9 @@ export default function BookingActions({
       badgeColor = "bg-blue-500";
       badgeIcon = ShieldCheck;
       tooltipText = "Flight Authorization Overridden";
-    } else if (authorization) {
-      switch (authorization.status) {
+    } else if (authorization && typeof authorization === 'object') {
+      const authStatus = (authorization as { status?: string }).status;
+      switch (authStatus) {
         case 'approved':
           badgeColor = "bg-green-500";
           badgeIcon = CheckCircle;

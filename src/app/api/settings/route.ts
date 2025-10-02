@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category') as SettingCategory | null;
+    const key = searchParams.get('key');
     const publicOnly = searchParams.get('public') === 'true';
 
     // Get current user
@@ -39,6 +40,11 @@ export async function GET(request: NextRequest) {
       query = query.eq('category', category);
     }
 
+    // Filter by key if provided
+    if (key) {
+      query = query.eq('setting_key', key);
+    }
+
     // Filter by visibility
     if (publicOnly || !isAdmin) {
       query = query.eq('is_public', true);
@@ -49,6 +55,11 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error('Settings fetch error:', error);
       return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
+    }
+
+    // If filtering by both category and key, return single setting instead of array
+    if (category && key && settings && settings.length === 1) {
+      return NextResponse.json({ setting: settings[0] });
     }
 
     const response: SettingsResponse = {

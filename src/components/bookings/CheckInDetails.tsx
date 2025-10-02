@@ -197,8 +197,9 @@ export default function CheckInDetails({
             setSelectedSoloFlightType(defaultSoloType.id);
           }
         }
-      } catch {
-        // Silent error handling - component will still function without flight types
+      } catch (error) {
+        console.error('Failed to fetch flight types:', error);
+        // Component will still function without flight types, but log the error for debugging
       }
     };
     fetchFlightTypes();
@@ -228,8 +229,9 @@ export default function CheckInDetails({
           setChargeHobbs(null);
           setChargeTacho(null);
         }
-      } catch {
-        // Silent error handling - component will still function without charge rates
+      } catch (error) {
+        console.error('Failed to fetch charge rate:', error);
+        // Component will still function without charge rates, but log the error for debugging
         setChargeRate(null);
         setChargeHobbs(null);
         setChargeTacho(null);
@@ -257,8 +259,9 @@ export default function CheckInDetails({
         } else {
           setSoloChargeRate(null);
         }
-      } catch {
-        // Silent error handling - component will still function without solo charge rates
+      } catch (error) {
+        console.error('Failed to fetch solo charge rate:', error);
+        // Component will still function without solo charge rates, but log the error for debugging
         setSoloChargeRate(null);
       }
     };

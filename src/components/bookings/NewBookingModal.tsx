@@ -31,6 +31,7 @@ import {
   CheckCircle,
   Star,
   Repeat,
+  Ticket,
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
@@ -106,6 +107,7 @@ interface NewBookingModalProps {
     instructorUserId?: string;
     aircraftId?: string;
     aircraftRegistration?: string;
+    userId?: string;
   };
   onBookingCreated?: (newBookingData: import("@/types/bookings").Booking) => void;
 }
@@ -143,6 +145,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [voucherNumber, setVoucherNumber] = useState("");
 
   // Recurring booking fields
   const [isRecurring, setIsRecurring] = useState(false);
@@ -389,6 +392,21 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
             // Failed to fetch instructor details for prefilling - silently handle
           });
       }
+
+      // Handle user/member prefilling
+      if (prefilledData.userId) {
+        // Fetch user details to create proper UserResult object
+        fetch(`/api/users?id=${prefilledData.userId}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.users && data.users.length > 0) {
+              setSelectedMember(data.users[0]);
+            }
+          })
+          .catch(() => {
+            // Failed to fetch user details for prefilling - silently handle
+          });
+      }
     }
   }, [prefilledData, aircraft]);
 
@@ -422,6 +440,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       setCustomerName("");
       setCustomerPhone("");
       setCustomerEmail("");
+      setVoucherNumber("");
       setIsRecurring(false);
       setRecurringDays([]);
       setRecurringUntilDate(null);
@@ -753,6 +772,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
               remarks: remarks || null,
               lesson_id: activeTab === "trial" ? null : (isRestrictedRole ? null : (lesson || null)),
               flight_type_id: isRestrictedRole ? null : (flightType || null),
+              voucher_number: activeTab === "trial" ? (voucherNumber || null) : null,
               status: statusOverride || "unconfirmed",
             };
 
@@ -838,6 +858,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
           remarks: remarks || null,
           lesson_id: activeTab === "trial" ? null : (isRestrictedRole ? null : (lesson || null)),
           flight_type_id: isRestrictedRole ? null : (flightType || null),
+          voucher_number: activeTab === "trial" ? (voucherNumber || null) : null,
           status: statusOverride || "unconfirmed",
         };
         const res = await fetch("/api/bookings", {
@@ -897,9 +918,9 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
           <form className="flex flex-col flex-1 min-h-0" onSubmit={handleSubmit}>
             <div className="overflow-y-auto flex-1 px-8">
               {/* Scheduled Times - Common to both tabs */}
-              <div className="border rounded-xl p-6 bg-muted/70 mb-4">
-                  <div className="font-semibold text-lg mb-4 flex items-center gap-2">
-                    <CalendarIcon className="w-5 h-5" /> SCHEDULED TIMES
+              <div className="border rounded-xl p-6 bg-muted/70 mb-6">
+                  <div className="font-semibold text-lg mb-5 flex items-center gap-2 pb-3 border-b border-muted-foreground/10">
+                    <CalendarIcon className="w-5 h-5 text-indigo-600" /> SCHEDULED TIMES
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
                     <div className="max-w-[340px] w-full">
@@ -986,7 +1007,8 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                     </div>
                   )}
 
-                  {/* Recurring Booking Toggle */}
+                  {/* Recurring Booking Toggle - Only show for regular bookings, not trial flights */}
+                  {activeTab === "regular" && (
                   <div className="mt-4 border-t pt-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
@@ -1106,6 +1128,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
                 
                 {/* Tab-specific content */}
@@ -1113,7 +1136,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                   {/* Member and Instructor on same line */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6 mb-8">
                     <div className="max-w-[340px] w-full mr-2">
-                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Member{isRestrictedRole ? ' (You)' : ''}</label>
+                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Member{isRestrictedRole ? ' (You)' : ''} {!isRestrictedRole && <span className="text-red-500">*</span>}</label>
                       <MemberSelect
                         value={selectedMember}
                         onSelect={isRestrictedRole ? () => {} : setSelectedMember}
@@ -1172,7 +1195,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
-                          Aircraft
+                          Aircraft <span className="text-red-500">*</span>
                         </label>
                       </div>
                       <Select value={aircraftId} onValueChange={(selectedAircraftId) => {
@@ -1211,7 +1234,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                     </div>
                     {isRestrictedRole ? (
                       <div className="max-w-[340px] w-full">
-                        <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="w-4 h-4" /> Booking Type</label>
+                        <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="w-4 h-4" /> Booking Type <span className="text-red-500">*</span></label>
                         <Select value={bookingType} onValueChange={setBookingType}>
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="Select booking type" />
@@ -1270,7 +1293,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         </Select>
                       </div>
                       <div className="max-w-[340px] w-full">
-                        <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="w-4 h-4" /> Booking Type</label>
+                        <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="w-4 h-4" /> Booking Type <span className="text-red-500">*</span></label>
                         <Select value={bookingType} onValueChange={setBookingType}>
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="Select booking type" />
@@ -1288,25 +1311,31 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                   {/* Description & Remarks */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
                     <div className="max-w-[340px] w-full">
-                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><AlignLeft className="w-4 h-4" /> Description</label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-semibold flex items-center gap-1"><AlignLeft className="w-4 h-4" /> Description <span className="text-red-500">*</span></label>
+                        <span className="text-xs text-muted-foreground">{purpose.length}/500</span>
+                      </div>
                       <Textarea
                         value={purpose}
                         onChange={e => setPurpose(e.target.value)}
-                        placeholder="Description"
+                        placeholder="Enter booking description..."
+                        maxLength={500}
                         className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
                         rows={4}
                       />
                     </div>
                     <div className="max-w-[340px] w-full">
-                      <div className="flex items-center mb-2">
+                      <div className="flex items-center justify-between mb-2">
                         <label className="block text-xs font-semibold flex items-center gap-1">
                           <StickyNote className="w-4 h-4" /> Booking Remarks
                         </label>
+                        <span className="text-xs text-muted-foreground">{remarks.length}/500</span>
                       </div>
                       <Textarea
                         value={remarks}
                         onChange={e => setRemarks(e.target.value)}
                         placeholder={isRestrictedRole ? "e.g., 'Need less than 80L fuel for weight and balance' or special requirements" : "Enter booking remarks"}
+                        maxLength={500}
                         className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
                         rows={4}
                       />
@@ -1316,6 +1345,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                 
                 <TabsContent value="trial" className="mt-0">
                   {/* Trial Flight - Customer Details */}
+                  <div className="border-t pt-6 mb-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6 mb-8">
                     <div className="max-w-[340px] w-full mr-2">
                       <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><Users className="w-4 h-4" /> Customer Name <span className="text-red-500">*</span></label>
@@ -1346,9 +1376,20 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         className="w-full"
                       />
                     </div>
+                    <div className="max-w-[340px] w-full">
+                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><Ticket className="w-4 h-4" /> Voucher Number</label>
+                      <Input
+                        value={voucherNumber}
+                        onChange={(e) => setVoucherNumber(e.target.value)}
+                        placeholder="Enter voucher number (optional)"
+                        className="w-full"
+                      />
+                    </div>
                   </div>
-                  
+                  </div>
+
                   {/* Instructor and Aircraft on same line */}
+                  <div className="border-t pt-6 mb-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 mb-4">
                     <div className="max-w-[340px] w-full">
                       <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Instructor</label>
@@ -1398,7 +1439,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
-                          Aircraft
+                          Aircraft <span className="text-red-500">*</span>
                         </label>
                       </div>
                       <Select value={aircraftId} onValueChange={(selectedAircraftId) => {
@@ -1435,6 +1476,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                         </SelectContent>
                       </Select>
                     </div>
+                    </div>
                     <div className="max-w-[340px] w-full">
                       <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BadgeCheck className="w-4 h-4" /> Flight Type</label>
                       <Select value={flightType} onValueChange={setFlightType} disabled={dropdownLoading}>
@@ -1464,25 +1506,31 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                   {/* Trial Flight Description */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
                     <div className="max-w-[340px] w-full">
-                      <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><AlignLeft className="w-4 h-4" /> Description <span className="text-red-500">*</span></label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-semibold flex items-center gap-1"><AlignLeft className="w-4 h-4" /> Description <span className="text-red-500">*</span></label>
+                        <span className="text-xs text-muted-foreground">{purpose.length}/500</span>
+                      </div>
                       <Textarea
                         value={purpose}
                         onChange={e => setPurpose(e.target.value)}
-                        placeholder="Enter trial flight description"
+                        placeholder="Enter trial flight description..."
+                        maxLength={500}
                         className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
                         rows={4}
                       />
                     </div>
                     <div className="max-w-[340px] w-full">
-                      <div className="flex items-center mb-2">
+                      <div className="flex items-center justify-between mb-2">
                         <label className="block text-xs font-semibold flex items-center gap-1">
                           <StickyNote className="w-4 h-4" /> Booking Remarks
                         </label>
+                        <span className="text-xs text-muted-foreground">{remarks.length}/500</span>
                       </div>
                       <Textarea
                         value={remarks}
                         onChange={e => setRemarks(e.target.value)}
                         placeholder="Enter internal remarks"
+                        maxLength={500}
                         className="resize-none h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none align-top mb-2.5"
                         rows={4}
                       />
@@ -1492,28 +1540,28 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
             </div>
 
             <div className="flex-shrink-0 p-8 pt-0">
-              <DialogFooter className="border-t pt-6 flex flex-col sm:flex-row gap-2 sm:gap-4 w-full">
+              <DialogFooter className="border-t pt-6 flex flex-col sm:flex-row gap-2 sm:gap-3 w-full">
                 <DialogClose asChild>
-                  <Button variant="outline" type="button" className="w-full sm:w-auto border border-muted hover:border-indigo-400 cursor-pointer">Cancel</Button>
+                  <Button variant="outline" type="button" className="w-full sm:w-auto border-2 border-muted hover:border-indigo-400 transition-colors cursor-pointer">Cancel</Button>
                 </DialogClose>
-                <Button type="submit" className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-md cursor-pointer" disabled={loading}
-                  onClick={e => handleSubmit(e)}
-                >
-                  {isRestrictedRole ? 'Save Booking' : 'Save'}
-                </Button>
                 {/* Save and Confirm button - only visible to privileged users */}
                 {!isRestrictedUser && (
                   <Button
                     type="button"
-                    className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md cursor-pointer"
+                    className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg hover:shadow-xl transition-all cursor-pointer"
                     disabled={loading}
                     onClick={e => handleSubmit(e, 'confirmed')}
                   >
                     Save and Confirm
                   </Button>
                 )}
+                <Button type="submit" className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-md hover:shadow-lg transition-all cursor-pointer" disabled={loading}
+                  onClick={e => handleSubmit(e)}
+                >
+                  {isRestrictedRole ? 'Save Booking' : 'Save'}
+                </Button>
               </DialogFooter>
-              {error && <div className="text-red-600 text-sm mb-2 text-center w-full">{error}</div>}
+              {error && <div className="text-red-600 text-sm mb-2 text-center w-full bg-red-50 border border-red-200 rounded-md p-2 mt-3">{error}</div>}
             </div>
           </form>
         </Tabs>

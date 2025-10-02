@@ -167,27 +167,27 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-600">Type</p>
-                    <p className="font-medium">{membershipSummary.current_membership.membership_types?.name}</p>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-3.5">
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Type</p>
+                    <p className="text-sm font-semibold text-gray-900">{membershipSummary.current_membership.membership_types?.name}</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Annual Fee</p>
-                    <p className="font-medium">
-                      {membershipSummary.current_membership.membership_types?.price === 0 
-                        ? 'Free' 
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Annual Fee</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {membershipSummary.current_membership.membership_types?.price === 0
+                        ? 'Free'
                         : `$${membershipSummary.current_membership.membership_types?.price}`}
                     </p>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Started</p>
-                    <p className="font-medium">{format(new Date(membershipSummary.current_membership.start_date), 'MMM dd, yyyy')}</p>
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Started</p>
+                    <p className="text-sm font-semibold text-gray-900">{format(new Date(membershipSummary.current_membership.start_date), 'MMM dd, yyyy')}</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Expires</p>
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Expires</p>
                     <p className={
-                      isMembershipExpiringSoon(membershipSummary.current_membership) ? 'text-orange-600 font-medium' : 'font-medium'
+                      isMembershipExpiringSoon(membershipSummary.current_membership) ? 'text-orange-600 text-sm font-semibold' : 'text-sm font-semibold text-gray-900'
                     }>
                       {format(new Date(membershipSummary.current_membership.expiry_date), 'MMM dd, yyyy')}
                     </p>
@@ -226,17 +226,18 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
                   </div>
                 )}
 
-                <div className="flex gap-2 pt-2">
-                  <Button 
+                <div className="flex gap-2 pt-3 border-t border-gray-100">
+                  <Button
                     onClick={handleOpenRenewalModal}
                     disabled={isRenewing}
                     className="flex items-center gap-2"
+                    size="sm"
                   >
                     <RefreshCw className={`h-4 w-4 ${isRenewing ? 'animate-spin' : ''}`} />
-                    {isRenewing ? 'Processing...' : 
+                    {isRenewing ? 'Processing...' :
                      membershipSummary.status === 'unpaid' ? 'Pay / Renew Membership' : 'Renew Membership'}
                   </Button>
-                  <Button variant="outline" onClick={() => {}}>
+                  <Button variant="outline" onClick={() => {}} size="sm">
                     View Invoice
                   </Button>
                 </div>

@@ -25,6 +25,7 @@ import OverrideConfirmDialog from './OverrideConfirmDialog';
 import AuthorizationErrorDialog from './AuthorizationErrorDialog';
 import MaintenanceWarnings from './MaintenanceWarnings';
 import ComplianceWarnings from './ComplianceWarnings';
+import TakeoffModal from './TakeoffModal';
 import type { AircraftComponent } from "@/types/aircraft_components";
 
 
@@ -88,6 +89,10 @@ interface CheckOutFormProps {
   flightLog: FlightLog | null;
   aircraftComponents: AircraftComponent[];
   currentAircraftHours: number | null;
+  // Server-provided data to avoid client-side queries
+  flightAuthorization?: unknown;
+  requireFlightAuthorization?: boolean;
+  selectedAircraftMeters?: { current_hobbs: number | null; current_tach: number | null; fuel_consumption: number | null } | null;
 }
 
 // Helper to combine date and time strings into a UTC ISO string
@@ -117,18 +122,46 @@ function formatEndurance(endurance: { hours: number; minutes: number } | null): 
   return `${endurance.hours}h ${endurance.minutes.toString().padStart(2, '0')}m`;
 }
 
-export default function CheckOutForm({ booking, members, instructors, aircraft, lessons, flightTypes, flightLog, aircraftComponents, currentAircraftHours }: CheckOutFormProps) {
+export default function CheckOutForm({
+  booking,
+  members,
+  instructors,
+  aircraft,
+  lessons,
+  flightTypes,
+  flightLog,
+  aircraftComponents,
+  currentAircraftHours,
+  flightAuthorization: serverFlightAuthorization,
+  requireFlightAuthorization: serverRequireFlightAuthorization,
+  selectedAircraftMeters: serverSelectedAircraftMeters
+}: CheckOutFormProps) {
   // Check if booking is read-only (completed bookings cannot be edited)
   const isReadOnly = booking.status === 'complete';
-  
+
   // Authorization override state and hooks
   const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
   const [authErrorDialogOpen, setAuthErrorDialogOpen] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<CheckOutFormData | null>(null);
   const { data: canOverride = false } = useCanOverrideAuthorization();
-  const { data: authorization } = useFlightAuthorizationByBooking(booking.id);
+
+  // Use server-provided authorization data if available, otherwise fall back to client-side query
+  const { data: clientAuthorization } = useFlightAuthorizationByBooking(
+    serverFlightAuthorization !== undefined ? '' : booking.id
+  );
+  const authorization = serverFlightAuthorization !== undefined ? serverFlightAuthorization : clientAuthorization;
+
   const overrideMutation = useOverrideAuthorization();
-  const { requireFlightAuthorization } = useFlightAuthorizationSetting();
+
+  // Use server-provided setting if available, otherwise fall back to client-side query
+  const { requireFlightAuthorization: clientRequireAuth } = useFlightAuthorizationSetting();
+  const requireFlightAuthorization = serverRequireFlightAuthorization !== undefined
+    ? serverRequireFlightAuthorization
+    : clientRequireAuth;
+
+  // Takeoff modal state
+  const [showTakeoffModal, setShowTakeoffModal] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   
   // Parse eta into date and time for default values
   // Default to booking end time if no existing ETA, otherwise use existing ETA
@@ -195,7 +228,13 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
   }, [startDate, endDate, setValue, isReadOnly]);
   
   // Use optimized hooks for data fetching
-  const { data: selectedAircraftMeters, isLoading: isLoadingAircraftMeters } = useAircraftMeters(watchedAircraftId);
+  // Use server-provided aircraft meters if available and aircraft hasn't changed, otherwise query client-side
+  const aircraftHasChanged = watchedAircraftId && watchedAircraftId !== (flightLog?.checked_out_aircraft_id || booking?.aircraft_id);
+  const { data: clientAircraftMeters, isLoading: isLoadingAircraftMeters } = useAircraftMeters(
+    aircraftHasChanged ? watchedAircraftId : ''
+  );
+  const selectedAircraftMeters = aircraftHasChanged ? clientAircraftMeters : (serverSelectedAircraftMeters || clientAircraftMeters);
+
   const instructorValue = useInstructorValue(
     watchedInstructorId,
     instructors,
@@ -214,14 +253,20 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
   const queryClient = useQueryClient();
   const { mutate: saveCheckOut, isPending: saving } = useCheckOutSave({
     onSuccess: () => {
+      // Show success state in modal
+      setSaveSuccess(true);
+
       // Invalidate booking-related queries to ensure fresh data
       queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['flight-logs'] });
       queryClient.invalidateQueries({ queryKey: ['flight-authorizations'] });
-      
+
       // Refresh the page to show updated status (confirmed → flying)
-      router.refresh();
+      // Delay refresh to allow success animation to complete
+      setTimeout(() => {
+        router.refresh();
+      }, 2500);
     }
   });
 
@@ -238,7 +283,7 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
   );
   
   // Check if authorization requirements are met
-  const authorizationApproved = authorization?.status === 'approved';
+  const authorizationApproved = authorization && typeof authorization === 'object' && 'status' in authorization && (authorization as { status?: string }).status === 'approved';
   const authorizationOverridden = booking.authorization_override === true;
   // Only require authorization for solo flights when the setting is enabled
   const authorizationRequirementsMet = !isSoloFlight || !requireFlightAuthorization || authorizationApproved || authorizationOverridden;
@@ -250,7 +295,7 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
     if (!authorizationRequirementsMet) {
       // Store pending form data and show appropriate dialog
       setPendingFormData(data);
-      
+
       if (canOverride) {
         // Show override dialog for instructors/admins (preferred dialog)
         setOverrideDialogOpen(true);
@@ -261,18 +306,24 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
       return;
     }
 
-    // Proceed with normal check-out
+    // Proceed with check-out
+    // Note: Conflict checking for changed resources happens automatically in the booking API
+    // when aircraft_id or instructor_id are updated (see /api/bookings PATCH route)
     await performCheckOut(data);
   };
 
   const performCheckOut = async (data: CheckOutFormData) => {
+    // Show takeoff modal and reset success state
+    setShowTakeoffModal(true);
+    setSaveSuccess(false);
+
     // Use robust UTC ISO string logic for start_time and end_time
     const start_time = getUtcIsoString(data.start_date, data.start_time);
     const end_time = getUtcIsoString(data.end_date, data.end_time);
-    
+
     // Prepare booking data (only general booking fields, not checked_out fields)
     const bookingData: Record<string, unknown> = {};
-    
+
     // Only include fields that have valid values (empty strings will be sanitized in the hook)
     // Note: checked_out_aircraft_id and checked_out_instructor_id are now in flight_logs table only
     if (start_time) bookingData.start_time = start_time;
@@ -283,7 +334,16 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
     if (data.purpose && data.purpose.trim() !== '') bookingData.purpose = data.purpose;
     if (data.flight_type) bookingData.flight_type_id = data.flight_type;
     if (data.booking_type) bookingData.booking_type = data.booking_type;
-    
+
+    // CRITICAL: Sync aircraft_id and instructor_id to booking if they changed during checkout
+    // This ensures the scheduler displays the correct resources and conflict detection works
+    if (data.checked_out_aircraft_id && data.checked_out_aircraft_id !== booking.aircraft_id) {
+      bookingData.aircraft_id = data.checked_out_aircraft_id;
+    }
+    if (data.checked_out_instructor_id && data.checked_out_instructor_id !== booking.instructor_id) {
+      bookingData.instructor_id = data.checked_out_instructor_id;
+    }
+
     // Always set status to 'flying' if not already
     bookingData.status = booking.status !== 'flying' ? 'flying' : booking.status;
     
@@ -889,6 +949,14 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
       onClose={() => setAuthErrorDialogOpen(false)}
       onOverride={handleOverrideConfirm}
       isLoading={overrideMutation.isPending}
+    />
+
+    {/* Takeoff modal for save feedback */}
+    <TakeoffModal
+      isOpen={showTakeoffModal}
+      isLoading={saving}
+      isSuccess={saveSuccess}
+      onClose={() => setShowTakeoffModal(false)}
     />
     </>
   );

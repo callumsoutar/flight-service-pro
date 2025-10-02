@@ -214,6 +214,7 @@ export async function POST(req: NextRequest) {
     remarks: body.remarks || null,
     lesson_id: body.lesson_id || null,
     flight_type_id: body.flight_type_id || null,
+    voucher_number: body.voucher_number || null,
     status: body.status || "unconfirmed",
 
   };
@@ -364,7 +365,7 @@ export async function PATCH(req: NextRequest) {
   }
   // Only allow patching safe fields
   const allowedFields = [
-    "start_time", "end_time", "purpose", "remarks", "instructor_id", "user_id", "aircraft_id", "lesson_id", "flight_type_id", "booking_type", "status",
+    "start_time", "end_time", "purpose", "remarks", "instructor_id", "user_id", "aircraft_id", "lesson_id", "flight_type_id", "booking_type", "status", "voucher_number",
     // Note: checked_out_aircraft_id, checked_out_instructor_id, and meter readings are now in flight_logs table only
   ];
   const updates: Record<string, unknown> = {};
@@ -600,10 +601,10 @@ async function updateAircraftOnBookingCompletion(
   supabase: SupabaseClient,
   bookingId: string
 ) {
-  // Get flight log with total_hours data
+  // Get flight log with total_hours data and booking start_time
   const { data: flightLog, error: flightLogError } = await supabase
     .from('flight_logs')
-    .select('checked_out_aircraft_id, hobbs_end, tach_end, total_hours_end')
+    .select('checked_out_aircraft_id, hobbs_end, tach_end, total_hours_end, bookings!inner(start_time)')
     .eq('booking_id', bookingId)
     .single();
 
@@ -615,6 +616,8 @@ async function updateAircraftOnBookingCompletion(
   const finalHobbsEnd = flightLog.hobbs_end;
   const finalTachEnd = flightLog.tach_end;
   const newTotalHours = flightLog.total_hours_end; // Use pre-calculated value!
+  const bookingData = flightLog as unknown as { bookings?: { start_time: string }[] };
+  const bookingStartTime = bookingData.bookings?.[0]?.start_time;
 
   // Validate that we have the required data
   if (!finalHobbsEnd || !finalTachEnd || !newTotalHours) {
@@ -623,7 +626,35 @@ async function updateAircraftOnBookingCompletion(
     return;
   }
 
-  // Update aircraft current meters and total hours
+  if (!bookingStartTime) {
+    console.warn(`Skipping aircraft update for booking ${bookingId} - booking start_time not found`);
+    return;
+  }
+
+  // SAFETY CHECK: Look for any completed flights AFTER this booking's start time
+  // If there are later flights, we should NOT update the aircraft's current meters and total_hours
+  // because that would set them backwards in time
+  const { data: laterFlights, error: laterFlightsError } = await supabase
+    .from('flight_logs')
+    .select('total_hours_end, bookings!inner(start_time, status)')
+    .eq('checked_out_aircraft_id', aircraftId)
+    .eq('bookings.status', 'complete')
+    .gt('bookings.start_time', bookingStartTime)
+    .limit(1);
+
+  if (laterFlightsError) {
+    console.warn('Error checking for later flights:', laterFlightsError);
+    // Continue with update despite error - better to update than to skip
+  } else if (laterFlights && laterFlights.length > 0) {
+    // There are completed flights AFTER this one
+    // Do NOT update aircraft current meters and total_hours
+    console.warn(`Not updating aircraft ${aircraftId} meters for booking ${bookingId} - there are ${laterFlights.length} completed flight(s) after this booking's time (${bookingStartTime})`);
+    console.warn('This is a historical booking completion. Aircraft meters will not be updated to prevent going backwards in time.');
+    // Exit without updating aircraft
+    return;
+  }
+
+  // Safe to update: This is either the most recent flight, or there are no completed flights after it
   const { error: updateError } = await supabase
     .from('aircraft')
     .update({

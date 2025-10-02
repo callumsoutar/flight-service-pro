@@ -18,6 +18,10 @@ interface BookingActionsClientProps {
   bookingId?: string;
   // Current user ID for ownership validation
   currentUserId?: string;
+  // Server-provided data to avoid client-side queries
+  flightAuthorization?: unknown;
+  requireFlightAuthorization?: boolean;
+  isRestrictedUser?: boolean;
 }
 
 export default function BookingActionsClient(props: BookingActionsClientProps) {

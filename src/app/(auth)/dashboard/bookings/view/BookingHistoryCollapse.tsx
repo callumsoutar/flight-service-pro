@@ -64,23 +64,13 @@ export default function BookingHistoryCollapse({ bookingId, lessons }: BookingHi
   React.useEffect(() => {
     if (open && logs.length === 0 && !loading) {
       setLoading(true);
-      fetch(`/api/audit_logs?row_id=${bookingId}`)
+      // Fetch audit logs with user data in a single query
+      fetch(`/api/audit_logs?row_id=${bookingId}&include_users=true`)
         .then(res => res.json())
-        .then(async (data: AuditLog[] | { error: string }) => {
-          if (!Array.isArray(data) && data.error) throw new Error(data.error);
-          if (!Array.isArray(data)) return;
-          setLogs(data);
-          // Fetch user names for changed_by
-          const userIds = Array.from(new Set(data.map((log: AuditLog) => log.changed_by).filter(Boolean)));
-          if (userIds.length > 0) {
-            const usersRes = await fetch(`/api/members?ids=${userIds.join(",")}`);
-            const usersData: User[] = await usersRes.json();
-            const userMap: Record<string, User> = {};
-            usersData.forEach((u: User) => {
-              userMap[u.id] = u;
-            });
-            setUsers(userMap);
-          }
+        .then((data: { logs: AuditLog[]; users: Record<string, User> } | { error: string }) => {
+          if ('error' in data) throw new Error(data.error);
+          setLogs(data.logs || []);
+          setUsers(data.users || {});
         })
         .catch(e => setError(e.message))
         .finally(() => setLoading(false));

@@ -220,9 +220,9 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="w-[750px] max-w-[95vw] mx-auto p-0 bg-white rounded-xl shadow-xl border-0 overflow-hidden max-h-[85vh]">
+      <DialogContent className="w-[750px] max-w-[95vw] mx-auto p-0 bg-white rounded-xl shadow-xl border-0 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
+        <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="flex items-center justify-center w-9 h-9 bg-orange-100 rounded-lg">
               <Eye className="w-4 h-4 text-orange-600" />
@@ -251,9 +251,9 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
             </div>
           )}
         </div>
-        
+
         {/* Scrollable content area */}
-        <div className="overflow-y-auto max-h-[calc(85vh-90px)] px-6 py-4">
+        <div className="overflow-y-auto flex-1 px-6 py-4">
           {loadingObs ? (
             <div className="space-y-4">
               <Skeleton className="w-full h-32" />
@@ -350,11 +350,11 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
                   )}
 
                   {/* Save button */}
-                  <div className="flex justify-end pt-3 border-t border-slate-100">
+                  <div className="flex justify-end pt-2 border-t border-slate-100">
                     <Button
                       type="submit"
                       disabled={editLoading || !editName || !editStage}
-                      className="bg-orange-600 hover:bg-orange-700 text-white font-medium px-5 py-2 rounded-lg shadow-sm transition-colors"
+                      className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 text-sm"
                     >
                       {editLoading ? "Saving..." : "Save Changes"}
                     </Button>
@@ -395,22 +395,21 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
                       <div className="text-slate-500 text-sm">No comments yet</div>
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
                       {comments.map((c) => (
-                        <div key={c.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 hover:bg-slate-100 transition-colors">
-                          <div className="flex items-start gap-2 mb-1.5">
-                            <div className="flex items-center justify-center w-7 h-7 bg-blue-100 rounded-full flex-shrink-0">
-                              <User className="w-3.5 h-3.5 text-blue-600" />
+                        <div key={c.id} className="bg-slate-50 border border-slate-200 rounded-md p-2.5">
+                          <div className="flex items-start gap-2 mb-1">
+                            <div className="flex items-center justify-center w-6 h-6 bg-blue-100 rounded-full flex-shrink-0">
+                              <User className="w-3 h-3 text-blue-600" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-slate-900 text-sm truncate">{getUserName(c.user_id)}</div>
-                              <div className="flex items-center gap-1 text-xs text-slate-500">
-                                <Calendar className="w-3 h-3" />
+                              <div className="font-medium text-slate-900 text-xs">{getUserName(c.user_id)}</div>
+                              <div className="text-xs text-slate-500">
                                 {format(new Date(c.created_at), 'dd MMM yyyy · HH:mm')}
                               </div>
                             </div>
                           </div>
-                          <div className="text-slate-700 text-sm whitespace-pre-line leading-relaxed pl-9">
+                          <div className="text-slate-700 text-xs whitespace-pre-line pl-8">
                             {c.comment}
                           </div>
                         </div>
@@ -419,22 +418,19 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
                   )}
 
                   {/* Add new comment form */}
-                  <div className="pt-3 border-t border-slate-200">
-                    <form onSubmit={handleAddComment} className="space-y-2.5">
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-slate-700">Add a comment</label>
-                        <Textarea
-                          value={commentText}
-                          onChange={e => setCommentText(e.target.value)}
-                          placeholder="Share your thoughts about this observation..."
-                          className="min-h-[60px] border-slate-200 focus:border-blue-300 focus:ring-blue-200 resize-none text-sm"
-                          disabled={addingComment}
-                        />
-                      </div>
-                      
+                  <div className="pt-2.5 border-t border-slate-200">
+                    <form onSubmit={handleAddComment} className="space-y-2">
+                      <Textarea
+                        value={commentText}
+                        onChange={e => setCommentText(e.target.value)}
+                        placeholder="Add a comment..."
+                        className="min-h-[60px] border-slate-200 focus:border-blue-300 focus:ring-blue-200 resize-none text-xs"
+                        disabled={addingComment}
+                      />
+
                       {error && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
-                          <div className="text-red-800 text-sm font-medium">{error}</div>
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-2 text-red-800 text-xs">
+                          {error}
                         </div>
                       )}
 
@@ -442,7 +438,7 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
                         <Button
                           type="submit"
                           disabled={addingComment || !commentText.trim()}
-                          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2 rounded-lg shadow-sm transition-colors"
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm"
                         >
                           {addingComment ? "Adding..." : "Add Comment"}
                         </Button>

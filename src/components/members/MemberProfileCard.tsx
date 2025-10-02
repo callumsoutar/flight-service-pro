@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { ChevronDown, FileText, Calendar, Menu, UserPlus } from "lucide-react";
+import Link from "next/link";
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useState } from "react";
@@ -61,11 +62,15 @@ export default function MemberProfileCard({ member, joinDate, membershipStatus =
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} className="w-56">
-              <DropdownMenuItem>
-                <Calendar className="w-4 h-4 mr-2" /> New Booking
+              <DropdownMenuItem asChild>
+                <Link href={`/dashboard/scheduler?user_id=${member.id}`}>
+                  <Calendar className="w-4 h-4 mr-2" /> New Booking
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <FileText className="w-4 h-4 mr-2" /> New Invoice
+              <DropdownMenuItem asChild>
+                <Link href={`/dashboard/invoices/edit/new?user_id=${member.id}`}>
+                  <FileText className="w-4 h-4 mr-2" /> New Invoice
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuSub>
@@ -109,9 +114,11 @@ export default function MemberProfileCard({ member, joinDate, membershipStatus =
             </DropdownMenuContent>
           </DropdownMenu>
           {/* New Booking Button */}
-          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold flex items-center gap-2">
-            <Calendar className="w-4 h-4 mr-2" />
-            New Booking
+          <Button asChild className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold flex items-center gap-2">
+            <Link href={`/dashboard/scheduler?user_id=${member.id}`}>
+              <Calendar className="w-4 h-4 mr-2" />
+              New Booking
+            </Link>
           </Button>
         </div>
       </CardContent>

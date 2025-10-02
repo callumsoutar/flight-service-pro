@@ -23,6 +23,7 @@ async function DashboardPage({ userRole }: ProtectedPageProps) {
       lesson_id,
       flight_type_id,
       booking_type,
+      voucher_number,
       created_at,
       updated_at
     `)

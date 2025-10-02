@@ -46,7 +46,6 @@ export const AddAircraftModal: React.FC<AddAircraftModalProps> = ({
   
   // Specifications
   const [capacity, setCapacity] = useState("");
-  const [engineCount, setEngineCount] = useState("1");
   const [fuelConsumption, setFuelConsumption] = useState("");
   const [totalTimeMethod, setTotalTimeMethod] = useState("");
   
@@ -88,7 +87,6 @@ export const AddAircraftModal: React.FC<AddAircraftModalProps> = ({
       setModel("");
       setYearManufactured("");
       setCapacity("");
-      setEngineCount("1");
       setFuelConsumption("");
       setTotalTimeMethod("");
       setCurrentHobbs("0");
@@ -136,7 +134,6 @@ export const AddAircraftModal: React.FC<AddAircraftModalProps> = ({
       model: model.trim() || null,
       year_manufactured: yearManufactured ? parseInt(yearManufactured) : null,
       capacity: capacity ? parseInt(capacity) : null,
-      engine_count: parseInt(engineCount),
       fuel_consumption: fuelConsumption ? parseInt(fuelConsumption) : null,
       total_time_method: totalTimeMethod || null,
       current_hobbs: parseFloat(currentHobbs),
@@ -359,16 +356,6 @@ export const AddAircraftModal: React.FC<AddAircraftModalProps> = ({
                 <h3 className="text-lg font-bold">Specifications</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
-                <div>
-                  <label className="block font-medium mb-1">Engine Count</label>
-                  <Input 
-                    type="number" 
-                    value={engineCount} 
-                    onChange={e => setEngineCount(e.target.value)} 
-                    min="1"
-                    max="10"
-                  />
-                </div>
                 <div>
                   <label className="block font-medium mb-1">Fuel Consumption (L/hr)</label>
                   <Input 

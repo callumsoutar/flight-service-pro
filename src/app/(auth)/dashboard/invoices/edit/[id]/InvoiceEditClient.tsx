@@ -17,7 +17,7 @@ import MemberSelect from '@/components/invoices/MemberSelect';
 import type { UserResult } from '@/components/invoices/MemberSelect';
 import { toast } from "sonner";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -39,7 +39,10 @@ interface InvoiceEditClientProps {
 export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClientProps) {
   // Determine if this is a new invoice
   const isNewInvoice = mode === 'new' || !id;
-  
+
+  // Get URL search params
+  const searchParams = useSearchParams();
+
   // Existing state for edit mode
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -139,6 +142,26 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
       setSelectedMember(null);
     }
   }, [invoice]);
+
+  // Pre-populate user from URL search params for new invoices
+  useEffect(() => {
+    if (!isNewInvoice) return;
+
+    const userId = searchParams.get('user_id');
+    if (!userId) return;
+
+    // Fetch the user data
+    fetch(`/api/users?id=${userId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.users && data.users.length > 0) {
+          setSelectedMember(data.users[0]);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch user from URL parameter:', err);
+      });
+  }, [isNewInvoice, searchParams]);
 
   useEffect(() => {
     if (invoice) {

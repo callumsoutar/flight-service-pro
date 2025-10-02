@@ -12,6 +12,7 @@ interface ContactDetailsModalProps {
   userId: string | null;
   loading?: boolean;
   error?: string | null;
+  userData?: UserType | null;
 }
 
 // Hook to fetch user contact details
@@ -58,12 +59,17 @@ export function ContactDetailsModal({
   onOpenChange,
   userId,
   loading: externalLoading = false,
-  error: externalError
+  error: externalError,
+  userData
 }: ContactDetailsModalProps) {
-  const { data: user, loading: fetchLoading, error: fetchError } = useUserContactDetails(userId);
+  // Only fetch user data if not provided as prop
+  const { data: fetchedUser, loading: fetchLoading, error: fetchError } = useUserContactDetails(
+    userData ? null : userId
+  );
 
-  const loading = externalLoading || fetchLoading;
-  const error = externalError || fetchError;
+  const user = userData || fetchedUser;
+  const loading = externalLoading || (userData ? false : fetchLoading);
+  const error = externalError || (userData ? null : fetchError);
 
   const handleClose = () => {
     onOpenChange(false);

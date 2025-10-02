@@ -13,7 +13,7 @@ import { ChangeAircraftModal } from "@/components/bookings/ChangeAircraftModal";
 import { ContactDetailsModal } from "@/components/bookings/ContactDetailsModal";
 import { useCancelBooking } from "@/hooks/use-cancel-booking";
 import { useGeneralSettings } from "@/contexts/SettingsContext";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { useIsRestrictedUser } from "@/hooks/use-role-protection";
@@ -107,6 +107,9 @@ interface ShiftOverride {
 }
 
 const FlightSchedulerInner = () => {
+  // Get URL search params
+  const searchParams = useSearchParams();
+
   // State for selected date
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [_isCalendarOpen, _setIsCalendarOpen] = useState(false);
@@ -148,6 +151,7 @@ const FlightSchedulerInner = () => {
     instructorUserId?: string;
     aircraftId?: string;
     aircraftRegistration?: string;
+    userId?: string;
   } | null>(null);
 
   // State for hover effects
@@ -226,6 +230,21 @@ const FlightSchedulerInner = () => {
     };
     getCurrentUser();
   }, []);
+
+  // Handle user_id from URL parameter to pre-open booking modal
+  useEffect(() => {
+    const userId = searchParams.get('user_id');
+    if (userId && !showNewBookingModal) {
+      // Set prefilled data with the userId
+      setPrefilledBookingData({
+        date: selectedDate,
+        startTime: '',
+        userId: userId
+      });
+      // Open the modal
+      setShowNewBookingModal(true);
+    }
+  }, [searchParams, showNewBookingModal, selectedDate]);
 
   // Fetch cancellation categories only when cancel modal is opened
   useEffect(() => {
@@ -1616,6 +1635,12 @@ const FlightSchedulerInner = () => {
               setSelectedAircraft(null);
               setSelectedTimeSlot(null);
               setPrefilledBookingData(null);
+
+              // Clear user_id from URL if present
+              const userId = searchParams.get('user_id');
+              if (userId) {
+                router.replace('/dashboard/scheduler');
+              }
             }}
             aircraft={aircraft.map(a => ({
               id: a.id,

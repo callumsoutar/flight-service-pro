@@ -37,6 +37,8 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
   let flightTypes: { id: string; name: string }[] = [];
   let hasLessonProgress = false;
   let aircraftObservations: Observation[] = [];
+  let flightAuthorization = null;
+  let requireFlightAuthorization = true;
 
   // Fetch booking with full user, instructor, aircraft, and flight_type objects
   const { data: bookingData } = await supabase
@@ -45,27 +47,24 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
     .eq("id", bookingId)
     .single();
 
-  // Fetch instructor comments count (with error handling)
-  const { count: instructorCommentsCount, error: instructorCommentsError } = await supabase
-    .from("instructor_comments")
-    .select("id", { count: "exact", head: true })
-    .eq("booking_id", bookingId);
-  
-  if (instructorCommentsError) {
-    // Failed to fetch instructor comments count - continue without it
-  }
+  // Fetch instructor comments count and lesson progress in parallel
+  const [
+    { count: instructorCommentsCount },
+    { data: lessonProgressData }
+  ] = await Promise.all([
+    supabase
+      .from("instructor_comments")
+      .select("id", { count: "exact", head: true })
+      .eq("booking_id", bookingId)
+      .then(result => ({ count: result.count || 0 })),
+    supabase
+      .from("lesson_progress")
+      .select("id")
+      .eq("booking_id", bookingId)
+      .limit(1)
+      .then(result => ({ data: result.data || [] }))
+  ]);
 
-  // Check if lesson_progress exists for this booking (with error handling)
-  const { data: lessonProgressData, error: lessonProgressError } = await supabase
-    .from("lesson_progress")
-    .select("id")
-    .eq("booking_id", bookingId)
-    .limit(1);
-  
-  if (lessonProgressError) {
-    // Failed to fetch lesson progress - continue without it
-  }
-  
   hasLessonProgress = !!(lessonProgressData && lessonProgressData.length > 0);
 
   booking = bookingData;
@@ -171,67 +170,103 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
     .select("id, name, instruction_type");
   flightTypes = (flightTypeRows || []).map((f: { id: string; name: string; instruction_type?: string }) => ({ id: f.id, name: f.name, instruction_type: f.instruction_type }));
 
-  // Fetch all bookings for conflict checking
-  const { data: allBookingsData } = await supabase
-    .from("bookings")
-    .select("id, aircraft_id, instructor_id, start_time, end_time, status");
-  const allBookings = (allBookingsData || []).map(booking => ({
-    ...booking,
-    // Add required fields with default values for conflict checking
-    user_id: null,
-    purpose: "",
-    remarks: null,
-    lesson_id: null,
-    flight_type_id: null,
-    booking_type: "flight" as const,
-    hobbs_start: null,
-    hobbs_end: null,
-    tach_start: null,
-    tach_end: null,
+  // Fetch bookings for conflict checking (filtered by date range for performance)
+  // Only fetch bookings within ±7 days of the current booking to reduce payload
+  let allBookings: Booking[] = [];
+  if (booking?.start_time && booking?.end_time) {
+    const bookingStart = new Date(booking.start_time);
+    const bookingEnd = new Date(booking.end_time);
 
-    created_at: "",
-    updated_at: ""
-  })) as Booking[];
+    // Calculate date range (7 days before start, 7 days after end)
+    const rangeStart = new Date(bookingStart);
+    rangeStart.setDate(rangeStart.getDate() - 7);
+    const rangeEnd = new Date(bookingEnd);
+    rangeEnd.setDate(rangeEnd.getDate() + 7);
+
+    const { data: allBookingsData } = await supabase
+      .from("bookings")
+      .select("id, aircraft_id, instructor_id, start_time, end_time, status")
+      .gte("start_time", rangeStart.toISOString())
+      .lte("end_time", rangeEnd.toISOString());
+
+    allBookings = (allBookingsData || []).map(booking => ({
+      ...booking,
+      // Add required fields with default values for conflict checking
+      user_id: null,
+      purpose: "",
+      remarks: null,
+      lesson_id: null,
+      flight_type_id: null,
+      booking_type: "flight" as const,
+      voucher_number: null,
+      hobbs_start: null,
+      hobbs_end: null,
+      tach_start: null,
+      tach_end: null,
+      created_at: "",
+      updated_at: ""
+    })) as Booking[];
+  }
+
+  // Fetch flight authorization if booking exists
+  if (booking?.id) {
+    const { data: authData } = await supabase
+      .from("flight_authorizations")
+      .select("*")
+      .eq("booking_id", booking.id)
+      .maybeSingle();
+
+    flightAuthorization = authData;
+  }
+
+  // Fetch flight authorization setting
+  const { data: settingsData } = await supabase
+    .from("settings")
+    .select("setting_value")
+    .eq("category", "bookings")
+    .eq("setting_key", "require_flight_authorization_for_solo")
+    .maybeSingle();
+
+  if (settingsData?.setting_value !== undefined) {
+    requireFlightAuthorization = Boolean(settingsData.setting_value);
+  }
 
   // Assign member, instructor, and aircraft only if booking is not null
   if (booking) {
     // Use booking.user, booking.instructor, and booking.aircraft if present (from Supabase join), else fallback to lookup and expand to full object
     const fallbackUser = (u: { id: string; name: string } | undefined): User | null =>
-      u ? { 
-        id: u.id, 
-        first_name: u.name.split(" ")[0] || "", 
-        last_name: u.name.split(" ").slice(1).join(" ") || "", 
-        email: "", 
+      u ? {
+        id: u.id,
+        first_name: u.name.split(" ")[0] || "",
+        last_name: u.name.split(" ").slice(1).join(" ") || "",
+        email: "",
         account_balance: 0,
         is_active: true,
         public_directory_opt_in: false,
-        created_at: "", 
-        updated_at: "" 
+        created_at: "",
+        updated_at: ""
       } : null;
     const fallbackAircraft = (a: { id: string; registration: string; type: string } | undefined): Aircraft | null =>
-      a ? { 
-        id: a.id, 
-        registration: a.registration, 
-        type: a.type, 
-        total_hours: 0, 
-        updated_at: "", 
-        current_tach: 0, 
-        current_hobbs: 0, 
-        manufacturer: null, 
-        year_manufactured: null, 
-        last_maintenance_date: null, 
-        next_maintenance_date: null, 
-        status: "active", 
-        capacity: null, 
-        for_ato: false, 
-        fuel_consumption: null, 
-        prioritise_scheduling: false, 
-        record_tacho: false, 
-        record_hobbs: false, 
-        record_airswitch: false, 
-        on_line: true, 
-        aircraft_image_url: null, 
-        engine_count: 1 
+      a ? {
+        id: a.id,
+        registration: a.registration,
+        type: a.type,
+        total_hours: 0,
+        updated_at: "",
+        current_tach: 0,
+        current_hobbs: 0,
+        manufacturer: null,
+        year_manufactured: null,
+        status: "active",
+        capacity: null,
+        for_ato: false,
+        fuel_consumption: null,
+        prioritise_scheduling: false,
+        record_tacho: false,
+        record_hobbs: false,
+        record_airswitch: false,
+        on_line: true,
+        aircraft_image_url: null
       } : null;
     member = booking.user ?? fallbackUser(members.find((m) => m.id === booking.user_id));
     instructor =
@@ -270,7 +305,15 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
               <BookingConfirmActionClient bookingId={booking.id} status={booking.status} />
             )}
             {booking && booking.id && (
-              <BookingActions booking={booking} status={status} bookingId={booking.id} currentUserId={user.id} />
+              <BookingActions
+                booking={booking}
+                status={status}
+                bookingId={booking.id}
+                currentUserId={user.id}
+                flightAuthorization={flightAuthorization}
+                requireFlightAuthorization={requireFlightAuthorization}
+                isRestrictedUser={isRestrictedUser}
+              />
             )}
             {booking && booking.id && (
               <BookingStagesOptions
@@ -309,6 +352,7 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
               aircraft={aircraft}
               bookingStatus={status}
               aircraftObservations={aircraftObservations}
+              isRestrictedUser={isRestrictedUser}
             />
           </div>
         </div>

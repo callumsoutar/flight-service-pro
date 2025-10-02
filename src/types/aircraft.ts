@@ -9,8 +9,6 @@ export interface Aircraft {
   manufacturer?: string | null;
   year_manufactured?: number | null;
   total_hours?: number | null;
-  last_maintenance_date?: string | null; 
-  next_maintenance_date?: string | null;
   status?: string;
   capacity?: number | null;
   created_at?: string;
@@ -23,7 +21,6 @@ export interface Aircraft {
   on_line?: boolean;
   for_ato?: boolean;
   fuel_consumption?: number | null;
-  engine_count?: number;
   prioritise_scheduling?: boolean;
   aircraft_image_url?: string | null;
   total_time_method?: TotalTimeMethod | null;

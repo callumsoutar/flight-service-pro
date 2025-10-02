@@ -2,6 +2,7 @@ import { BookingStages, BOOKING_STAGES } from "@/components/bookings/BookingStag
 import BookingActions from "@/components/bookings/BookingActionsClient";
 import { Booking } from "@/types/bookings";
 import React from "react";
+import { redirect } from 'next/navigation';
 import { createClient } from "@/lib/SupabaseServerClient";
 import BookingHistoryCollapse from "../../view/BookingHistoryCollapse";
 import CheckOutForm from "@/components/bookings/CheckOutForm";
@@ -9,14 +10,20 @@ import { FlightLog } from "@/types/flight_logs";
 import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 import { StatusBadge } from "@/components/bookings/StatusBadge";
-import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
+import {
+  withRoleProtection,
+  ROLE_CONFIGS,
+  ProtectedPageProps,
+  validateBookingAccess
+} from "@/lib/rbac-page-wrapper";
 import { AircraftComponent } from "@/types/aircraft_components";
 
 interface BookingCheckOutPageProps extends ProtectedPageProps {
   params: Promise<{ id: string }>;
 }
 
-async function BookingCheckOutPage({ params }: BookingCheckOutPageProps) {
+async function BookingCheckOutPage(props: BookingCheckOutPageProps) {
+  const { params, user, userRole } = props;
   const { id: bookingId } = await params;
   const supabase = await createClient();
 
@@ -29,46 +36,155 @@ async function BookingCheckOutPage({ params }: BookingCheckOutPageProps) {
   let flightLog: FlightLog | null = null;
   let aircraftComponents: AircraftComponent[] = [];
   let currentAircraftHours: number | null = null;
+  let flightAuthorization = null;
+  let requireFlightAuthorization = true;
+  let hasLessonProgress = false;
+  let selectedAircraftMeters: { current_hobbs: number | null; current_tach: number | null; fuel_consumption: number | null } | null = null;
 
-  // Fetch booking with full user, instructor, aircraft, and flight_type objects
+  // Fetch booking first to get the booking user_id for access validation
   const { data: bookingData } = await supabase
     .from("bookings")
-    .select(`*, user:user_id(*), instructor:instructor_id(*), aircraft:aircraft_id(*), flight_type:flight_type_id(*), lesson_id, authorization_override, authorization_override_by, authorization_override_at, authorization_override_reason`)
+    .select(`*, user:user_id(*), instructor:instructor_id(*, users:users!instructors_user_id_fkey(*)), aircraft:aircraft_id(*), flight_type:flight_type_id(*), lesson_id, authorization_override, authorization_override_by, authorization_override_at, authorization_override_reason`)
     .eq("id", bookingId)
     .single();
+
   booking = bookingData;
 
-  // Fetch instructor comments count
-  const { count: instructorCommentsCount } = await supabase
-    .from("instructor_comments")
-    .select("id", { count: "exact", head: true })
-    .eq("booking_id", bookingId);
+  // Redirect if booking not found
+  if (!booking) {
+    redirect('/dashboard/bookings');
+  }
 
-  // Fetch all members (users)
-  const { data: memberRows } = await supabase
-    .from("users")
-    .select("id, first_name, last_name");
+  // Check if user has permission to access this specific booking
+  const canAccessBooking = await validateBookingAccess({
+    user,
+    userRole,
+    bookingUserId: booking.user_id || ''
+  });
+
+  if (!canAccessBooking) {
+    redirect('/dashboard/bookings');
+  }
+
+  // Parallel fetch all required data for optimal performance
+  const [
+    { count: instructorCommentsCount },
+    { data: lessonProgressData },
+    { data: memberRows },
+    { data: instructorRows },
+    { data: aircraftRows },
+    { data: lessonRows },
+    { data: flightTypeRows },
+    { data: flightLogData },
+    { data: authData },
+    { data: settingsData }
+  ] = await Promise.all([
+    // Instructor comments count
+    supabase
+      .from("instructor_comments")
+      .select("id", { count: "exact", head: true })
+      .eq("booking_id", bookingId)
+      .then(result => ({ count: result.count || 0 })),
+
+    // Lesson progress check
+    supabase
+      .from("lesson_progress")
+      .select("id")
+      .eq("booking_id", bookingId)
+      .limit(1)
+      .then(result => ({ data: result.data || [] })),
+
+    // All members
+    supabase
+      .from("users")
+      .select("id, first_name, last_name")
+      .then(result => ({ data: result.data || [] })),
+
+    // All instructors with proper join structure
+    supabase
+      .from("instructors")
+      .select(`
+        id,
+        user_id,
+        users:users!instructors_user_id_fkey (
+          id,
+          first_name,
+          last_name,
+          email
+        )
+      `)
+      .then(result => ({ data: result.data || [] })),
+
+    // All aircraft
+    supabase
+      .from("aircraft")
+      .select("id, registration, type")
+      .then(result => ({ data: result.data || [] })),
+
+    // All lessons
+    supabase
+      .from("lessons")
+      .select("id, name, order")
+      .order("order", { ascending: true })
+      .then(result => ({ data: result.data || [] })),
+
+    // All flight types
+    supabase
+      .from("flight_types")
+      .select("id, name")
+      .then(result => ({ data: result.data || [] })),
+
+    // Flight log with proper instructor join
+    supabase
+      .from("flight_logs")
+      .select(`
+        *,
+        checked_out_aircraft:checked_out_aircraft_id(id, registration, type),
+        checked_out_instructor:checked_out_instructor_id(
+          *,
+          users:users!instructors_user_id_fkey(id, first_name, last_name, email)
+        )
+      `)
+      .eq("booking_id", bookingId)
+      .maybeSingle()
+      .then(result => ({ data: result.data || null })),
+
+    // Flight authorization
+    supabase
+      .from("flight_authorizations")
+      .select("*")
+      .eq("booking_id", bookingId)
+      .maybeSingle()
+      .then(result => ({ data: result.data || null })),
+
+    // Flight authorization setting
+    supabase
+      .from("settings")
+      .select("setting_value")
+      .eq("category", "bookings")
+      .eq("setting_key", "require_flight_authorization_for_solo")
+      .maybeSingle()
+      .then(result => ({ data: result.data || null }))
+  ]);
+
+  // Process fetched data
+  hasLessonProgress = !!(lessonProgressData && lessonProgressData.length > 0);
+  flightAuthorization = authData;
+
+  if (settingsData?.setting_value !== undefined) {
+    requireFlightAuthorization = Boolean(settingsData.setting_value);
+  }
+
+  flightLog = flightLogData;
+
   members = (memberRows || []).map((user) => ({
     id: user.id,
     name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.id,
   }));
 
-  // Fetch all instructors from the instructors table
-  const { data: instructorRows } = await supabase
-    .from("instructors")
-    .select(`
-      id,
-      user_id,
-      users!instructors_user_id_fkey (
-        id,
-        first_name,
-        last_name,
-        email
-      )
-    `);
-  
   instructors = (instructorRows || []).map((instructor) => {
-    const user = instructor.users?.[0]; // users is an array, get first element
+    // Note: Supabase returns users as array even with alias syntax due to foreign key relationship
+    const user = Array.isArray(instructor.users) ? instructor.users[0] : instructor.users;
     let name = instructor.id;
     if (user?.first_name || user?.last_name) {
       const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim();
@@ -79,68 +195,55 @@ async function BookingCheckOutPage({ params }: BookingCheckOutPageProps) {
       }
     }
     return {
-      id: instructor.id, // 
+      id: instructor.id,
       name,
     };
   });
 
-  // Fetch all aircraft
-  const { data: aircraftRows } = await supabase
-    .from("aircraft")
-    .select("id, registration, type");
   aircraftList = (aircraftRows || []).map((a: { id: string; registration: string; type: string }) => ({
     id: a.id,
     registration: a.registration,
     type: a.type,
   }));
 
-  // Fetch all lessons ordered by order column
-  const { data: lessonRows } = await supabase
-    .from("lessons")
-    .select("id, name, order")
-    .order("order", { ascending: true });
   lessons = (lessonRows || []).map((l: { id: string; name: string }) => ({ id: l.id, name: l.name }));
 
-  // Fetch all flight types
-  const { data: flightTypeRows } = await supabase
-    .from("flight_types")
-    .select("id, name");
   flightTypes = (flightTypeRows || []).map((f: { id: string; name: string }) => ({ id: f.id, name: f.name }));
 
-  // Fetch flight_log for this booking
-  if (booking && booking.id) {
-    const { data: flightLogData } = await supabase
-      .from("flight_logs")
-      .select(`
-        *,
-        checked_out_aircraft:checked_out_aircraft_id(id, registration, type),
-        checked_out_instructor:checked_out_instructor_id(*)
-      `)
-      .eq("booking_id", booking.id)
-      .single();
-    flightLog = flightLogData;
-  }
-
-  // Fetch aircraft components for the selected aircraft (from flight log or booking)
+  // Fetch aircraft components and meters for the selected aircraft (from flight log or booking)
   const selectedAircraftId = flightLog?.checked_out_aircraft_id || booking?.aircraft_id;
   if (selectedAircraftId) {
-    // Fetch components for this aircraft
-    const { data: componentsData } = await supabase
-      .from("aircraft_components")
-      .select("*")
-      .eq("aircraft_id", selectedAircraftId)
-      .is("voided_at", null);
+    // Fetch components and aircraft data in parallel
+    const [
+      { data: componentsData },
+      { data: aircraftData }
+    ] = await Promise.all([
+      supabase
+        .from("aircraft_components")
+        .select("*")
+        .eq("aircraft_id", selectedAircraftId)
+        .is("voided_at", null)
+        .then(result => ({ data: result.data || [] })),
+
+      supabase
+        .from("aircraft")
+        .select("total_hours, current_hobbs, current_tach, fuel_consumption")
+        .eq("id", selectedAircraftId)
+        .single()
+        .then(result => ({ data: result.data || null }))
+    ]);
 
     aircraftComponents = componentsData || [];
-
-    // Fetch current aircraft hours
-    const { data: aircraftData } = await supabase
-      .from("aircraft")
-      .select("total_hours")
-      .eq("id", selectedAircraftId)
-      .single();
-
     currentAircraftHours = aircraftData?.total_hours ? Number(aircraftData.total_hours) : null;
+
+    // Pre-fetch aircraft meters to avoid client-side query
+    if (aircraftData) {
+      selectedAircraftMeters = {
+        current_hobbs: typeof aircraftData.current_hobbs === 'number' ? aircraftData.current_hobbs : null,
+        current_tach: typeof aircraftData.current_tach === 'number' ? aircraftData.current_tach : null,
+        fuel_consumption: typeof aircraftData.fuel_consumption === 'number' ? aircraftData.fuel_consumption : null,
+      };
+    }
   }
 
   const status = booking?.status ?? "unconfirmed";
@@ -166,10 +269,11 @@ async function BookingCheckOutPage({ params }: BookingCheckOutPageProps) {
               <BookingActions booking={booking} status={status} bookingId={booking.id} hideCheckOutButton={true} />
             )}
             {booking && booking.id && (
-              <BookingStagesOptions 
-                bookingId={booking.id} 
-                bookingStatus={booking.status} 
-                instructorCommentsCount={instructorCommentsCount || 0} 
+              <BookingStagesOptions
+                bookingId={booking.id}
+                bookingStatus={booking.status}
+                instructorCommentsCount={instructorCommentsCount || 0}
+                hasLessonProgress={hasLessonProgress}
               />
             )}
           </div>
@@ -186,6 +290,9 @@ async function BookingCheckOutPage({ params }: BookingCheckOutPageProps) {
             flightLog={flightLog}
             aircraftComponents={aircraftComponents}
             currentAircraftHours={currentAircraftHours}
+            flightAuthorization={flightAuthorization}
+            requireFlightAuthorization={requireFlightAuthorization}
+            selectedAircraftMeters={selectedAircraftMeters}
           />
         )}
       </div>

@@ -142,6 +142,14 @@ export async function POST(
 
     // 3. Update or create flight log with meter readings
     let flightLog = booking.flight_logs?.[0];
+
+    // Server-side validation: Solo end hobbs must be greater than end hobbs for dual flights
+    if (typeof soloEndHobbs === 'number' && typeof hobbsEnd === 'number' && soloEndHobbs <= hobbsEnd) {
+      return NextResponse.json({
+        error: `Invalid solo end hobbs: Solo end (${soloEndHobbs}) must be greater than dual end (${hobbsEnd})`
+      }, { status: 400 });
+    }
+
     const meterUpdates: Record<string, number | null> = {};
     if (typeof hobbsStart === 'number') meterUpdates.hobbs_start = roundToOneDecimal(hobbsStart);
     if (typeof hobbsEnd === 'number') meterUpdates.hobbs_end = roundToOneDecimal(hobbsEnd);
@@ -172,6 +180,18 @@ export async function POST(
         typeof tachStart === 'number' && typeof tachEnd === 'number') {
       const hobbsTime = hobbsEnd - hobbsStart;
       const tachoTime = tachEnd - tachStart;
+
+      // Server-side validation: Ensure end readings are greater than start readings
+      if (hobbsEnd <= hobbsStart) {
+        return NextResponse.json({
+          error: `Invalid hobbs readings: End (${hobbsEnd}) must be greater than start (${hobbsStart})`
+        }, { status: 400 });
+      }
+      if (tachEnd <= tachStart) {
+        return NextResponse.json({
+          error: `Invalid tach readings: End (${tachEnd}) must be greater than start (${tachStart})`
+        }, { status: 400 });
+      }
 
       // Calculate credited time based on aircraft's total_time_method
       let creditedTime = 0;
@@ -207,10 +227,43 @@ export async function POST(
           break;
       }
 
-      // Set total_hours_start from current aircraft total_hours
-      meterUpdates.total_hours_start = roundToOneDecimal(aircraft.total_hours || 0);
-      // Set total_hours_end by adding credited time
-      meterUpdates.total_hours_end = roundToOneDecimal((aircraft.total_hours || 0) + creditedTime);
+      // SAFE CALCULATION: Determine historical total_hours at the time of this flight
+      // This prevents the critical bug where editing historical flights would use current aircraft hours
+      const aircraftId = booking.aircraft_id || booking.flight_logs?.[0]?.checked_out_aircraft_id;
+
+      // Find the most recent completed flight BEFORE this booking's start time
+      // Query flight_logs joined with bookings to get temporal ordering
+      const { data: priorFlightLog, error: priorFlightError } = await supabase
+        .from('flight_logs')
+        .select('total_hours_end, bookings!inner(start_time, status)')
+        .eq('checked_out_aircraft_id', aircraftId)
+        .eq('bookings.status', 'complete')
+        .lt('bookings.start_time', booking.start_time)
+        .order('bookings.start_time', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let baselineTotalHours = 0;
+
+      if (priorFlightError) {
+        console.warn('Error fetching prior flight for total_hours baseline:', priorFlightError);
+        // Fallback to current aircraft total_hours if we can't determine historical baseline
+        // This is safe for current/future flights but may be inaccurate for historical flights
+        baselineTotalHours = aircraft.total_hours || 0;
+        console.warn(`Using current aircraft total_hours (${baselineTotalHours}) as baseline for booking ${bookingId} - may be inaccurate for historical flights`);
+      } else if (priorFlightLog && priorFlightLog.total_hours_end !== null) {
+        // Use the prior flight's end hours as our baseline
+        baselineTotalHours = priorFlightLog.total_hours_end;
+      } else {
+        // No prior flights - this is the first flight for this aircraft
+        // Start from 0 (aircraft maintenance tracking begins with this flight)
+        baselineTotalHours = 0;
+      }
+
+      // Set total_hours_start from the determined baseline
+      meterUpdates.total_hours_start = roundToOneDecimal(baselineTotalHours);
+      // Set total_hours_end by adding credited time to the baseline
+      meterUpdates.total_hours_end = roundToOneDecimal(baselineTotalHours + creditedTime);
     }
 
     if (Object.keys(meterUpdates).length > 0) {
@@ -342,13 +395,14 @@ export async function POST(
     // 6. Create or update line items based on flight instruction type
     const itemOperations = [];
 
-    // First, clear ALL existing items to start fresh (prevents duplicates)
-    if (currentItems && currentItems.length > 0) {
-      await supabase
-        .from("invoice_items")
-        .delete()
-        .eq("invoice_id", invoice.id);
-    }
+    // TODO: TRANSACTION SAFETY IMPROVEMENT NEEDED
+    // Current implementation deletes all items then recreates them, which is not atomic.
+    // If the insert fails after delete, invoice items are lost.
+    // Future improvement: Use a PostgreSQL function to handle this atomically, or
+    // implement a better upsert strategy that updates existing items instead of deleting.
+    // For now, we collect all inserts first, then delete only if inserts will succeed.
+
+    // IMPORTANT: Do NOT delete old items yet - we'll delete them only after successfully creating new ones
 
     if (isSoloFlight) {
       // SOLO FLIGHTS: Only create aircraft charge, no instructor charge
@@ -514,16 +568,42 @@ export async function POST(
       }
     }
 
-    // Items are already cleared above, no need for complex cleanup logic
-
-    // Execute line item operations in parallel
+    // Execute line item operations (inserts) in parallel
     const itemResults = await Promise.allSettled(itemOperations);
 
     // Check for errors in item operations
     for (const result of itemResults) {
       if (result.status === 'rejected') {
         console.error('Line item operation failed:', result.reason);
-        return NextResponse.json({ error: "Failed to update invoice items" }, { status: 500 });
+        return NextResponse.json({ error: "Failed to create new invoice items" }, { status: 500 });
+      }
+    }
+
+    // SAFE: Now that all new items have been successfully created, delete the old items
+    // This ensures we never lose invoice items due to failed inserts
+    if (currentItems && currentItems.length > 0) {
+      // Get the IDs of newly created items to avoid deleting them
+      const newItemIds = itemResults
+        .filter(r => r.status === 'fulfilled')
+        .map(r => (r as PromiseFulfilledResult<{ data: { id: string } }>).value?.data?.id)
+        .filter(Boolean);
+
+      if (newItemIds.length > 0) {
+        // Delete only items that are NOT in the new items list
+        const { error: deleteError } = await supabase
+          .from("invoice_items")
+          .delete()
+          .eq("invoice_id", invoice.id)
+          .not('id', 'in', `(${newItemIds.map(id => `'${id}'`).join(',')})`);
+
+        if (deleteError) {
+          console.warn('Failed to delete old invoice items:', deleteError);
+          // Don't fail the request - new items are created successfully
+          // Old items will be cleaned up on next calculation
+        }
+      } else {
+        // No new items were created successfully, something went wrong
+        console.error('No new invoice items were created - skipping delete of old items');
       }
     }
 

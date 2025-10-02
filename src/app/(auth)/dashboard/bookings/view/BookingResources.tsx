@@ -26,15 +26,24 @@ interface BookingResourcesProps {
   aircraft?: Aircraft | null;
   bookingStatus?: string;
   aircraftObservations?: Observation[];
+  isRestrictedUser?: boolean;
 }
 
-export default function BookingResources({ member, instructor, aircraft, bookingStatus, aircraftObservations = [] }: BookingResourcesProps) {
+export default function BookingResources({
+  member,
+  instructor,
+  aircraft,
+  bookingStatus,
+  aircraftObservations = [],
+  isRestrictedUser: serverIsRestrictedUser
+}: BookingResourcesProps) {
   const [selectedObservationId, setSelectedObservationId] = useState<string | null>(null);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
-  // Check if user has restricted access (member/student)
-  const { isRestricted: isRestrictedUser } = useIsRestrictedUser();
+  // Use server-provided isRestrictedUser if available, otherwise fall back to client hook
+  const { isRestricted: clientIsRestrictedUser } = useIsRestrictedUser();
+  const isRestrictedUser = serverIsRestrictedUser !== undefined ? serverIsRestrictedUser : clientIsRestrictedUser;
 
   // Use pre-loaded observations (already filtered for open/investigation stages)
   const activeObservations = aircraftObservations;
@@ -67,7 +76,10 @@ export default function BookingResources({ member, instructor, aircraft, booking
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => handleContactDetailsClick(member.id)}
+                onClick={() => {
+                  setSelectedUserId(member.id);
+                  setContactModalOpen(true);
+                }}
                 className="h-8 w-8 p-0 hover:bg-blue-100"
                 title="View contact details"
               >
@@ -152,6 +164,7 @@ export default function BookingResources({ member, instructor, aircraft, booking
         open={contactModalOpen}
         onOpenChange={setContactModalOpen}
         userId={selectedUserId}
+        userData={member}
       />
     </Card>
   );
