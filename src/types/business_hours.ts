@@ -1,11 +1,8 @@
 export interface BusinessHours {
-  id: string;
   open_time: string; // HH:MM:SS format
   close_time: string; // HH:MM:SS format
   is_24_hours: boolean;
   is_closed: boolean; // if true, business is closed all week
-  created_at: string;
-  updated_at: string;
 }
 
 export interface UpdateBusinessHoursRequest {
@@ -15,6 +12,7 @@ export interface UpdateBusinessHoursRequest {
   is_closed?: boolean;
 }
 
+// Legacy response type - can be removed after migration
 export interface BusinessHoursResponse {
   business_hours: BusinessHours;
 }

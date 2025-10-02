@@ -28,6 +28,10 @@ export interface FlightLog {
   dual_time?: number | null;
   solo_time?: number | null;
 
+  // Total hours tracking (for aircraft maintenance/tech log)
+  total_hours_start?: number | null;
+  total_hours_end?: number | null;
+
   // Joined data
   checked_out_aircraft?: import("./aircraft").Aircraft;
   checked_out_instructor?: import("./instructors").Instructor;

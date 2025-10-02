@@ -11,11 +11,13 @@ export async function GET(req: NextRequest) {
   if (userError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  
+
   // Get search query and type filter
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q")?.toLowerCase() || "";
   const type = searchParams.get("type") || "";
+  const aircraft_type_id = searchParams.get("aircraft_type_id") || "";
+  const include_rates = searchParams.get("include_rates") === "true";
 
   // Fetch chargeables (only non-voided)
   let query = supabase
@@ -37,7 +39,60 @@ export async function GET(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ chargeables: data || [] });
+
+  let chargeables = data || [];
+
+  // If aircraft_type_id is provided, fetch aircraft-specific rates for landing fees
+  if (aircraft_type_id && chargeables.length > 0) {
+    const landingFeeIds = chargeables
+      .filter(c => c.type === 'landing_fee')
+      .map(c => c.id);
+
+    if (landingFeeIds.length > 0) {
+      const { data: rates } = await supabase
+        .from("landing_fee_rates")
+        .select("*")
+        .in("chargeable_id", landingFeeIds)
+        .eq("aircraft_type_id", aircraft_type_id);
+
+      // Map rates to chargeables, override base rate with aircraft-specific rate
+      if (rates && rates.length > 0) {
+        chargeables = chargeables.map(c => {
+          if (c.type === 'landing_fee') {
+            const aircraftRate = rates.find(r => r.chargeable_id === c.id);
+            if (aircraftRate) {
+              return { ...c, rate: aircraftRate.rate };
+            }
+          }
+          return c;
+        });
+      }
+    }
+  }
+
+  // If include_rates is true, fetch all landing fee rates for config UI
+  if (include_rates) {
+    const landingFeeIds = chargeables
+      .filter(c => c.type === 'landing_fee')
+      .map(c => c.id);
+
+    if (landingFeeIds.length > 0) {
+      const { data: rates } = await supabase
+        .from("landing_fee_rates")
+        .select("*")
+        .in("chargeable_id", landingFeeIds);
+
+      // Attach rates to their respective chargeables
+      chargeables = chargeables.map(c => {
+        if (c.type === 'landing_fee' && rates) {
+          return { ...c, landing_fee_rates: rates.filter(r => r.chargeable_id === c.id) };
+        }
+        return c;
+      });
+    }
+  }
+
+  return NextResponse.json({ chargeables });
 }
 
 export async function POST(req: NextRequest) {

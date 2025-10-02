@@ -308,12 +308,12 @@ export default function AircraftFlightHistoryTab({ aircraftId }: AircraftFlightH
                         </div>
                       </td>
                       <td className="py-2 px-3 text-xs">
-                        {flight.booking?.instructor ? (
+                        {flight.checked_out_instructor ? (
                           <div className="flex items-center gap-1">
                             <User className="w-3 h-3 text-gray-500" />
                             <span>
-                              {flight.booking.instructor.users?.[0]?.first_name || flight.booking.instructor.users?.[0]?.last_name
-                                ? `${flight.booking.instructor.users[0].first_name || ""} ${flight.booking.instructor.users[0].last_name || ""}`.trim()
+                              {flight.checked_out_instructor.first_name || flight.checked_out_instructor.last_name
+                                ? `${flight.checked_out_instructor.first_name || ""} ${flight.checked_out_instructor.last_name || ""}`.trim()
                                 : 'Instructor'
                               }
                             </span>

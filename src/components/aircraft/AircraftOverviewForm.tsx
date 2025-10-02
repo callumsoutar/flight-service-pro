@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { Aircraft } from "@/types/aircraft";
 import type { AircraftType } from "@/types/aircraft_types";
 import { Input } from "@/components/ui/input";
@@ -53,10 +53,38 @@ const aircraftSchema = z.object({
 
 type AircraftFormValues = z.infer<typeof aircraftSchema>;
 
+// Cache aircraft types globally to avoid refetching
+let cachedAircraftTypes: AircraftType[] | null = null;
+let cachePromise: Promise<AircraftType[]> | null = null;
+
+async function fetchAircraftTypes(): Promise<AircraftType[]> {
+  if (cachedAircraftTypes) {
+    return cachedAircraftTypes;
+  }
+
+  if (cachePromise) {
+    return cachePromise;
+  }
+
+  cachePromise = fetch("/api/aircraft-types")
+    .then(res => res.json())
+    .then(data => {
+      cachedAircraftTypes = data.aircraft_types || [];
+      cachePromise = null;
+      return cachedAircraftTypes;
+    })
+    .catch(err => {
+      cachePromise = null;
+      throw err;
+    });
+
+  return cachePromise;
+}
+
 export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: Aircraft, onSave: (updated: Aircraft) => void }) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [aircraftTypes, setAircraftTypes] = useState<AircraftType[]>([]);
+  const [aircraftTypes, setAircraftTypes] = useState<AircraftType[]>(cachedAircraftTypes || []);
   const [isAddTypeDialogOpen, setIsAddTypeDialogOpen] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
   const [newTypeCategory, setNewTypeCategory] = useState("");
@@ -97,9 +125,8 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
   });
 
   useEffect(() => {
-    fetch("/api/aircraft-types")
-      .then(res => res.json())
-      .then(data => setAircraftTypes(data.aircraft_types || []))
+    fetchAircraftTypes()
+      .then(data => setAircraftTypes(data))
       .catch(() => toast.error("Failed to load aircraft types"));
   }, []);
 
@@ -125,7 +152,9 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
         toast.error(result.error || "Failed to create aircraft type");
       } else {
         toast.success("Aircraft type created!");
-        setAircraftTypes([...aircraftTypes, result.aircraft_type]);
+        const updatedTypes = [...aircraftTypes, result.aircraft_type];
+        setAircraftTypes(updatedTypes);
+        cachedAircraftTypes = updatedTypes; // Update cache
         setValue("aircraft_type_id", result.aircraft_type.id, { shouldDirty: true });
         setIsAddTypeDialogOpen(false);
         setNewTypeName("");

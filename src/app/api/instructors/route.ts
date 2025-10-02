@@ -7,6 +7,12 @@ const InstructorSchema = z.object({
   first_name: z.string().nullable().optional(),
   last_name: z.string().nullable().optional(),
   rating: z.string().uuid().nullable().optional(), // Added rating field
+  status: z.enum(["active", "inactive", "deactivated", "suspended"]).optional(),
+  employment_type: z.enum(["full_time", "part_time", "casual", "contractor"]).nullable().optional(),
+  hire_date: z.string().datetime().nullable().optional(),
+  termination_date: z.string().datetime().nullable().optional(),
+  hourly_rate: z.number().nullable().optional(),
+  notes: z.string().nullable().optional(),
   approved_by: z.string().uuid().nullable().optional(),
   approved_at: z.string().datetime().optional(),
   expires_at: z.string().datetime().nullable().optional(),
@@ -14,9 +20,6 @@ const InstructorSchema = z.object({
   instrument_check_due_date: z.string().date().nullable().optional(),
   is_actively_instructing: z.boolean().default(false),
   class_1_medical_due_date: z.string().date().nullable().optional(),
-  notes: z.string().nullable().optional(),
-  employment_type: z.enum(["full_time", "part_time", "casual", "contractor"]).nullable().optional(),
-  status: z.enum(["active", "inactive", "deactivated", "suspended"]).optional(),
   // Endorsement columns
   night_removal: z.boolean().default(false),
   aerobatics_removal: z.boolean().default(false),
@@ -43,6 +46,9 @@ function filterInstructorData(instructor: any) {
     multi_removal: instructor.multi_removal,
     tawa_removal: instructor.tawa_removal,
     ifr_removal: instructor.ifr_removal,
+    // Compliance fields for safety checking
+    instructor_check_due_date: instructor.instructor_check_due_date,
+    class_1_medical_due_date: instructor.class_1_medical_due_date,
     // Include joined user data if present
     users: instructor.users ? {
       id: instructor.users.id,
@@ -52,7 +58,7 @@ function filterInstructorData(instructor: any) {
     } : null,
     // Include instructor category if present
     instructor_category: instructor.instructor_category,
-    // Exclude sensitive fields: notes, medical dates, employment details, etc.
+    // Exclude sensitive fields: notes, employment details, hourly rates, etc.
   };
 }
 

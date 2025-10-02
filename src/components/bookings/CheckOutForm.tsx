@@ -23,6 +23,9 @@ import { useOverrideAuthorization } from '@/hooks/use-authorization-override';
 import { useFlightAuthorizationSetting } from '@/hooks/use-flight-authorization-setting';
 import OverrideConfirmDialog from './OverrideConfirmDialog';
 import AuthorizationErrorDialog from './AuthorizationErrorDialog';
+import MaintenanceWarnings from './MaintenanceWarnings';
+import ComplianceWarnings from './ComplianceWarnings';
+import type { AircraftComponent } from "@/types/aircraft_components";
 
 
 
@@ -83,6 +86,8 @@ interface CheckOutFormProps {
   lessons: { id: string; name: string }[];
   flightTypes: { id: string; name: string }[];
   flightLog: FlightLog | null;
+  aircraftComponents: AircraftComponent[];
+  currentAircraftHours: number | null;
 }
 
 // Helper to combine date and time strings into a UTC ISO string
@@ -112,7 +117,7 @@ function formatEndurance(endurance: { hours: number; minutes: number } | null): 
   return `${endurance.hours}h ${endurance.minutes.toString().padStart(2, '0')}m`;
 }
 
-export default function CheckOutForm({ booking, members, instructors, aircraft, lessons, flightTypes, flightLog }: CheckOutFormProps) {
+export default function CheckOutForm({ booking, members, instructors, aircraft, lessons, flightTypes, flightLog, aircraftComponents, currentAircraftHours }: CheckOutFormProps) {
   // Check if booking is read-only (completed bookings cannot be edited)
   const isReadOnly = booking.status === 'complete';
   
@@ -369,18 +374,18 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
   }
 
   return (
-    <div className="flex w-full max-w-6xl mx-auto gap-4 mt-8">
+    <>
+    <form onSubmit={handleSubmit(onSubmit)} className="flex w-full max-w-6xl mx-auto gap-4 mt-8">
       <div className="flex-[2] bg-white border rounded-xl p-8 min-h-[300px] shadow-sm">
         {/* Check-Out Details form content (excluding Flight Information) */}
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="font-semibold text-lg mb-4 flex items-center gap-2">
-            <Plane className="w-6 h-6 text-primary" /> Check-Out Details
-            {isReadOnly && (
-              <span className="ml-3 px-3 py-1 bg-gray-100 text-gray-600 text-sm font-normal rounded-lg border">
-                Read Only - Booking Complete
-              </span>
-            )}
-          </div>
+        <div className="font-semibold text-lg mb-4 flex items-center gap-2">
+          <Plane className="w-6 h-6 text-primary" /> Check-Out Details
+          {isReadOnly && (
+            <span className="ml-3 px-3 py-1 bg-gray-100 text-gray-600 text-sm font-normal rounded-lg border">
+              Read Only - Booking Complete
+            </span>
+          )}
+        </div>
           {/* Scheduled Times */}
           <div className="border rounded-xl p-6 bg-muted/50 mb-8">
             <div className="font-semibold text-lg mb-4 flex items-center gap-2">
@@ -670,7 +675,20 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
               )} />
             </div>
           </div>
-        </form>
+          {/* Warnings - Compact inline style */}
+          <div className="space-y-2 mt-6">
+            {watchedAircraftId && (
+              <MaintenanceWarnings
+                aircraftId={watchedAircraftId}
+                currentHours={currentAircraftHours}
+                components={aircraftComponents}
+              />
+            )}
+            <ComplianceWarnings
+              instructorId={watchedInstructorId || null}
+              userId={watch("member") || null}
+            />
+          </div>
       </div>
       <div className="flex-[1] bg-white border rounded-xl p-8 min-h-[300px] shadow-sm">
         {/* Flight Information content from Check-OutDetailsForm */}
@@ -844,36 +862,34 @@ export default function CheckOutForm({ booking, members, instructors, aircraft, 
         </div>
         {/* Save Check-Out button: full width, green, at bottom of right column */}
         {!isReadOnly && (
-          <form onSubmit={handleSubmit(onSubmit)}>
-            <Button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white mt-8 flex items-center justify-center gap-2" disabled={saving}>
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Check-Out"
-              )}
-            </Button>
-          </form>
+          <Button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white mt-8 flex items-center justify-center gap-2" disabled={saving}>
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Check-Out"
+            )}
+          </Button>
         )}
       </div>
-      
-      {/* Override confirmation dialog */}
-      <OverrideConfirmDialog
-        isOpen={overrideDialogOpen}
-        onClose={handleOverrideCancel}
-        onConfirm={handleOverrideConfirm}
-        isLoading={overrideMutation.isPending}
-      />
+    </form>
+    {/* Override confirmation dialog */}
+    <OverrideConfirmDialog
+      isOpen={overrideDialogOpen}
+      onClose={handleOverrideCancel}
+      onConfirm={handleOverrideConfirm}
+      isLoading={overrideMutation.isPending}
+    />
 
-      {/* Authorization error dialog for students */}
-      <AuthorizationErrorDialog
-        isOpen={authErrorDialogOpen}
-        onClose={() => setAuthErrorDialogOpen(false)}
-        onOverride={handleOverrideConfirm}
-        isLoading={overrideMutation.isPending}
-      />
-    </div>
+    {/* Authorization error dialog for students */}
+    <AuthorizationErrorDialog
+      isOpen={authErrorDialogOpen}
+      onClose={() => setAuthErrorDialogOpen(false)}
+      onOverride={handleOverrideConfirm}
+      isLoading={overrideMutation.isPending}
+    />
+    </>
   );
 } 

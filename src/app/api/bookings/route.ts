@@ -463,15 +463,15 @@ export async function PATCH(req: NextRequest) {
   // First, check if there's a flight_log with checked_out_aircraft_id
   const { data: flightLog } = await supabase
     .from("flight_logs")
-    .select("checked_out_aircraft_id, hobbs_start, hobbs_end, tach_start, tach_end")
+    .select("checked_out_aircraft_id, hobbs_start, hobbs_end, tach_start, tach_end, total_hours_end")
     .eq("booking_id", id)
     .single();
-    
+
   if (flightLog?.checked_out_aircraft_id) {
     try {
       // Case 1: Booking being set to 'complete' for the first time
       if (updates.status === 'complete' && existingBooking.status !== 'complete') {
-        await updateAircraftOnBookingCompletion(supabase, { ...existingBooking, ...flightLog }, updates);
+        await updateAircraftOnBookingCompletion(supabase, id);
       }
       // Case 2: Booking is already 'complete' and meter readings are being corrected
       else if (existingBooking.status === 'complete' && isMeterCorrection({ ...existingBooking, ...flightLog }, updates)) {
@@ -598,74 +598,32 @@ type BookingUpdatesForAircraft = {
 
 async function updateAircraftOnBookingCompletion(
   supabase: SupabaseClient,
-  existingBooking: BookingForAircraftUpdate,
-  updates: BookingUpdatesForAircraft
+  bookingId: string
 ) {
-  const aircraftId = existingBooking.checked_out_aircraft_id;
-  
-  // Get final meter readings - prefer updated values, fall back to existing
-  const finalHobbsEnd = updates.hobbs_end ?? existingBooking.hobbs_end;
-  const finalTachEnd = updates.tach_end ?? existingBooking.tach_end;
-  const finalHobbsStart = updates.hobbs_start ?? existingBooking.hobbs_start;
-  const finalTachStart = updates.tach_start ?? existingBooking.tach_start;
-  
-  // Validate that we have the required meter readings
-  if (!finalHobbsEnd || !finalTachEnd || !finalHobbsStart || !finalTachStart) {
-    // Skip aircraft update - missing meter readings
+  // Get flight log with total_hours data
+  const { data: flightLog, error: flightLogError } = await supabase
+    .from('flight_logs')
+    .select('checked_out_aircraft_id, hobbs_end, tach_end, total_hours_end')
+    .eq('booking_id', bookingId)
+    .single();
+
+  if (flightLogError || !flightLog) {
+    throw new Error('Flight log not found');
+  }
+
+  const aircraftId = flightLog.checked_out_aircraft_id;
+  const finalHobbsEnd = flightLog.hobbs_end;
+  const finalTachEnd = flightLog.tach_end;
+  const newTotalHours = flightLog.total_hours_end; // Use pre-calculated value!
+
+  // Validate that we have the required data
+  if (!finalHobbsEnd || !finalTachEnd || !newTotalHours) {
+    // Skip aircraft update - missing required data
+    console.warn(`Skipping aircraft update for booking ${bookingId} - missing required flight log data`);
     return;
   }
 
-  // Get aircraft data including total_time_method
-  const { data: aircraft, error: aircraftFetchError } = await supabase
-    .from('aircraft')
-    .select('total_time_method, total_hours, current_hobbs, current_tach')
-    .eq('id', aircraftId)
-    .single();
-    
-  if (aircraftFetchError) {
-    throw new Error(`Failed to fetch aircraft data: ${aircraftFetchError.message}`);
-  }
-
-  // Calculate flight time based on total_time_method
-  const hobbsTime = finalHobbsEnd - finalHobbsStart;
-  const tachoTime = finalTachEnd - finalTachStart;
-  
-  let flightTimeToAdd = 0;
-  switch (aircraft.total_time_method) {
-    case 'hobbs':
-      flightTimeToAdd = hobbsTime;
-      break;
-    case 'tacho':
-      flightTimeToAdd = tachoTime;
-      break;
-    case 'airswitch':
-      // TODO: Add airswitch meter fields to schema
-      // For now, fallback to hobbs time until airswitch meters are implemented
-      flightTimeToAdd = hobbsTime;
-      console.warn(`Aircraft ${aircraftId} uses airswitch method but no airswitch meters available - using hobbs time`);
-      break;
-    case 'hobbs less 5%':
-      flightTimeToAdd = hobbsTime * 0.95;
-      break;
-    case 'hobbs less 10%':
-      flightTimeToAdd = hobbsTime * 0.90;
-      break;
-    case 'tacho less 5%':
-      flightTimeToAdd = tachoTime * 0.95;
-      break;
-    case 'tacho less 10%':
-      flightTimeToAdd = tachoTime * 0.90;
-      break;
-    default:
-      // Default to hobbs if no method specified
-      flightTimeToAdd = hobbsTime;
-      console.warn(`Unknown total_time_method '${aircraft.total_time_method}' for aircraft ${aircraftId} - using hobbs time`);
-      break;
-  }
-
   // Update aircraft current meters and total hours
-  const newTotalHours = (aircraft.total_hours || 0) + flightTimeToAdd;
-  
   const { error: updateError } = await supabase
     .from('aircraft')
     .update({
@@ -675,11 +633,10 @@ async function updateAircraftOnBookingCompletion(
       updated_at: new Date().toISOString()
     })
     .eq('id', aircraftId);
-    
+
   if (updateError) {
     throw new Error(`Failed to update aircraft: ${updateError.message}`);
   }
-
 }
 
 function isMeterCorrection(existingBooking: BookingForAircraftUpdate, updates: BookingUpdatesForAircraft): boolean {
@@ -748,8 +705,9 @@ async function handleMeterCorrection(
   const tachoDifference = newTachoTime - oldTachoTime;
 
   // Update aircraft total_hours and current meters
-  const newTotalHours = aircraft.total_hours + creditedTimeDifference;
-  
+  // Round to 1 decimal place to avoid floating-point precision errors
+  const newTotalHours = Math.round((aircraft.total_hours + creditedTimeDifference) * 10) / 10;
+
   const { error: updateError } = await supabase
     .from('aircraft')
     .update({

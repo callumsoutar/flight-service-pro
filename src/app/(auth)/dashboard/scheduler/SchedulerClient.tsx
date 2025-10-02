@@ -1,7 +1,7 @@
 'use client';
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,7 @@ import { CancelBookingModal } from "@/components/bookings/CancelBookingModal";
 import { ChangeAircraftModal } from "@/components/bookings/ChangeAircraftModal";
 import { ContactDetailsModal } from "@/components/bookings/ContactDetailsModal";
 import { useCancelBooking } from "@/hooks/use-cancel-booking";
-import { useBusinessHours } from "@/hooks/use-business-hours";
-import { useCancellationCategories } from "@/hooks/use-cancellation-categories";
+import { useGeneralSettings } from "@/contexts/SettingsContext";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { SettingsProvider } from "@/contexts/SettingsContext";
@@ -107,18 +106,7 @@ interface ShiftOverride {
   voided_at?: string;
 }
 
-
-interface ResizeData {
-  booking: Booking;
-  resource: string;
-  resizeType: 'start' | 'end';
-  originalStart: number;
-  originalDuration: number;
-  startX: number;
-  containerRect: DOMRect;
-}
-
-const FlightScheduler = () => {
+const FlightSchedulerInner = () => {
   // State for selected date
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [_isCalendarOpen, _setIsCalendarOpen] = useState(false);
@@ -173,10 +161,6 @@ const FlightScheduler = () => {
   const [timelineOffset, setTimelineOffset] = useState(0);
   const timelineRef = useRef<HTMLDivElement>(null);
 
-  // State for resize functionality
-  const [resizeData, setResizeData] = useState<ResizeData | null>(null);
-  const [hasResized, setHasResized] = useState(false);
-
   // State for context menu and double-click
   const [contextMenu, setContextMenu] = useState<{
     booking: Booking;
@@ -186,18 +170,9 @@ const FlightScheduler = () => {
   } | null>(null);
   const [clickTimeout, setClickTimeout] = useState<NodeJS.Timeout | null>(null);
 
-  // State for time change confirmation
-  const [showTimeChangeModal, setShowTimeChangeModal] = useState(false);
-  const [pendingTimeChange, setPendingTimeChange] = useState<{
-    booking: Booking;
-    newStart: number;
-    newDuration: number;
-    resource: string;
-  } | null>(null);
-
   // State for available instructors (processed)
   const [availableInstructors, setAvailableInstructors] = useState<Instructor[]>([]);
-  
+
   // State for bookings by resource
   const [bookingsByResource, setBookingsByResource] = useState<Record<string, Booking[]>>({});
 
@@ -207,15 +182,36 @@ const FlightScheduler = () => {
 
   // Hooks
   const { mutate: cancelBooking } = useCancelBooking();
-  const { data: businessHours, isLoading: businessHoursLoading } = useBusinessHours();
-  const { data: cancellationCategories } = useCancellationCategories();
+  const generalSettings = useGeneralSettings();
+
+  // Extract business hours from general settings
+  // Use useMemo to prevent infinite re-renders when this object is used in useEffect dependencies
+  const businessHours = useMemo(() => {
+    if (!generalSettings) return null;
+    return {
+      open_time: generalSettings.business_open_time || '09:00:00',
+      close_time: generalSettings.business_close_time || '17:00:00',
+      is_24_hours: generalSettings.business_is_24_hours || false,
+      is_closed: generalSettings.business_is_closed || false,
+    };
+  }, [
+    generalSettings?.business_open_time,
+    generalSettings?.business_close_time,
+    generalSettings?.business_is_24_hours,
+    generalSettings?.business_is_closed
+  ]);
+  const businessHoursLoading = !generalSettings;
   const router = useRouter();
   const { isRestricted, isLoading: roleLoading, error: roleError } = useIsRestrictedUser();
-  
+
   // State for current user
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [currentUser, setCurrentUser] = useState<any>(null);
-  
+
+  // State for cancellation categories (only fetch when needed)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [cancellationCategories, setCancellationCategories] = useState<any[]>([]);
+  const [isFetchingCategories, setIsFetchingCategories] = useState(false);
 
   // Get current user
   useEffect(() => {
@@ -230,6 +226,30 @@ const FlightScheduler = () => {
     };
     getCurrentUser();
   }, []);
+
+  // Fetch cancellation categories only when cancel modal is opened
+  useEffect(() => {
+    const fetchCancellationCategories = async () => {
+      if (!showCancelBookingModal || isFetchingCategories || cancellationCategories.length > 0) {
+        return; // Don't fetch if modal not open, already fetching, or already have data
+      }
+
+      setIsFetchingCategories(true);
+      try {
+        const response = await fetch('/api/cancellation-categories');
+        if (response.ok) {
+          const data = await response.json();
+          setCancellationCategories(data.categories || []);
+        }
+      } catch (error) {
+        console.error('Error fetching cancellation categories:', error);
+      } finally {
+        setIsFetchingCategories(false);
+      }
+    };
+
+    fetchCancellationCategories();
+  }, [showCancelBookingModal, isFetchingCategories, cancellationCategories.length]);
 
   // Check if user can access a specific booking
   const canAccessBooking = (booking: Booking): boolean => {
@@ -287,7 +307,7 @@ const FlightScheduler = () => {
   const timeSlots = generateTimeSlots();
 
   // Fetch all data - restored from original
-  const fetchAllData = useCallback(async (isInitialLoad = false, isDateChange = false) => {
+  const fetchAllData = async (isInitialLoad = false, isDateChange = false) => {
     setError(null);
     if (isInitialLoad) {
       setLoading(true);
@@ -571,18 +591,15 @@ const FlightScheduler = () => {
       setAircraftLoading(false);
       setInstructorsLoading(false);
     }
-  }, [selectedDate]);
+  };
 
-  // Initial load when component mounts
+  // Initial load when component mounts, and refresh when date or business hours change
   useEffect(() => {
-    fetchAllData(true);
-  }, [fetchAllData]);
-
-  // Refresh data when selected date or business hours changes
-  useEffect(() => {
-    if (loading) return; // Skip if initial load is still happening
-    fetchAllData(false, true); // Mark as date change
-  }, [selectedDate, businessHours, fetchAllData, loading]);
+    // Determine if this is the initial load
+    const isInitialLoad = !aircraft.length && !availableInstructors.length;
+    fetchAllData(isInitialLoad, !isInitialLoad);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, businessHours]); // Only depend on actual changing values to prevent duplicate calls
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -628,21 +645,6 @@ const FlightScheduler = () => {
     const startTime = formatTime(booking.start);
     const endTime = formatTime(booking.start + booking.duration);
     return `${startTime} - ${endTime}`;
-  };
-
-  // Convert decimal hours to database timestamp format
-  const convertDecimalTimeToTimestamp = (decimalTime: number, date: Date): string => {
-    const hours = Math.floor(decimalTime);
-    const minutes = Math.round((decimalTime - hours) * 60);
-    const timestamp = new Date(date);
-    timestamp.setHours(hours, minutes, 0, 0);
-    return timestamp.toISOString();
-  };
-
-  // Snap time to 15-minute intervals
-  const snapToQuarterHour = (decimalTime: number): number => {
-    const quarterHours = Math.round(decimalTime * 4) / 4;
-    return Math.max(0, quarterHours); // Ensure non-negative
   };
 
   // Check if a time slot is in the past
@@ -861,60 +863,6 @@ const FlightScheduler = () => {
     };
   };
 
-  // Special version for resize operations that allows visual feedback beyond visible timeline
-  const getResizeBookingStyle = (booking: Booking, rowHeight: number) => {
-    const visibleSlots = getVisibleTimeSlots();
-    
-    if (visibleSlots.length === 0) {
-      return { display: 'none' };
-    }
-    
-    const firstVisibleTime = convertTimeToPosition(visibleSlots[0]);
-    const lastVisibleTime = convertTimeToPosition(visibleSlots[visibleSlots.length - 1]) + 0.5;
-    
-    const timelineStart = firstVisibleTime;
-    const timelineEnd = lastVisibleTime;
-    const timelineSpan = timelineEnd - timelineStart;
-    
-    // Allow booking to extend beyond visible timeline for resize feedback
-    const bookingEnd = booking.start + booking.duration;
-    const startPercent = ((booking.start - timelineStart) / timelineSpan) * 100;
-    const endPercent = ((bookingEnd - timelineStart) / timelineSpan) * 100;
-    const widthPercent = endPercent - startPercent;
-    
-    // Don't constrain width for resize operations
-    const finalWidth = Math.max(widthPercent, 1);
-    
-    // Use a special resize color to indicate it's being modified
-    const backgroundColor = 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)'; // Blue for resize
-    const boxShadow = '0 4px 16px rgba(59, 130, 246, 0.4)';
-
-    return {
-      position: 'absolute' as const,
-      left: `${startPercent}%`,
-      width: `${finalWidth}%`,
-      height: `${rowHeight - 6}px`,
-      background: backgroundColor,
-      color: 'white',
-      fontSize: '12px',
-      fontWeight: '600',
-      padding: '8px 12px',
-      borderRadius: '8px',
-      border: '2px solid #3b82f6',
-      whiteSpace: 'nowrap' as const,
-      overflow: 'visible', // Allow overflow during resize
-      textOverflow: 'ellipsis',
-      zIndex: 100, // Higher z-index for resize
-      top: '3px',
-      cursor: 'pointer',
-      userSelect: 'none' as const,
-      display: 'flex',
-      alignItems: 'center',
-      boxShadow: boxShadow,
-      transition: 'none', // No transition during resize for immediate feedback
-      backdropFilter: 'blur(10px)'
-    };
-  };
 
   // Handle cell click (for creating new bookings)
   const handleCellClick = (resource: string, timeSlot: string, isInstructor: boolean) => {
@@ -968,31 +916,27 @@ const FlightScheduler = () => {
   const handleBookingClick = (booking: Booking, event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    
-    // Check if user can access this booking
-    if (!canAccessBooking(booking)) {
+
+    // Restricted users can only access their own bookings
+    // Privileged users (owner/admin/instructor) can access all bookings
+    if (isRestricted && booking.user_id !== currentUser?.id) {
       toast.error('You can only view your own bookings');
       return;
     }
-    
-    // Don't handle click if a resize operation just occurred
-    if (hasResized) {
-      return;
-    }
-    
+
     // Clear any existing timeout
     if (clickTimeout) {
       clearTimeout(clickTimeout);
       setClickTimeout(null);
     }
-    
+
     // Set a timeout to handle single click after checking for double click
     const timeout = setTimeout(() => {
       // Navigate to booking view page only if no double click occurred
       router.push(`/dashboard/bookings/view/${booking.id}`);
       setClickTimeout(null);
     }, 300); // Wait 300ms for potential double click
-    
+
     setClickTimeout(timeout);
   };
 
@@ -1000,19 +944,25 @@ const FlightScheduler = () => {
   const handleBookingDoubleClick = (booking: Booking, event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    
-    // Check if user can access this booking
-    if (!canAccessBooking(booking)) {
+
+    // Restricted users can only access their own bookings
+    // Privileged users (owner/admin/instructor) can access all bookings
+    if (isRestricted && booking.user_id !== currentUser?.id) {
       toast.error('You can only interact with your own bookings');
       return;
     }
-    
+
+    // Don't show context menu for completed bookings
+    if (booking.status === 'complete') {
+      return;
+    }
+
     // Clear single click timeout to prevent navigation
     if (clickTimeout) {
       clearTimeout(clickTimeout);
       setClickTimeout(null);
     }
-    
+
     // Close hover modal when showing context menu
     setHoveredBooking(null);
 
@@ -1032,13 +982,19 @@ const FlightScheduler = () => {
   const handleBookingRightClick = (booking: Booking, event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    
-    // Check if user can access this booking
-    if (!canAccessBooking(booking)) {
+
+    // Restricted users can only access their own bookings
+    // Privileged users (owner/admin/instructor) can access all bookings
+    if (isRestricted && booking.user_id !== currentUser?.id) {
       toast.error('You can only interact with your own bookings');
       return;
     }
-    
+
+    // Don't show context menu for completed bookings
+    if (booking.status === 'complete') {
+      return;
+    }
+
     // Close hover modal when showing context menu
     setHoveredBooking(null);
 
@@ -1158,220 +1114,7 @@ const FlightScheduler = () => {
     return { x: adjustedX, y: adjustedY, transform };
   };
 
-  // Resize handlers
 
-  const handleMouseMove = (event: MouseEvent) => {
-    if (resizeData) {
-      // Handle visual feedback for resize
-      handleResizeMouseMove(event);
-    }
-  };
-
-  const handleMouseUp = (event: MouseEvent) => {
-    if (resizeData) {
-      // Handle resize operations
-      const deltaX = event.clientX - resizeData.startX;
-      const timelineWidth = resizeData.containerRect.width;
-      const visibleSlots = getVisibleTimeSlots();
-      const timelineSpan = visibleSlots.length * 0.5; // Each slot is 30 minutes
-      const timeChange = (deltaX / timelineWidth) * timelineSpan;
-      
-      let newStart = resizeData.originalStart;
-      let newDuration = resizeData.originalDuration;
-      
-      if (resizeData.resizeType === 'start') {
-        // Resize from start (change start time, adjust duration)
-        const newStartTime = snapToQuarterHour(resizeData.originalStart + timeChange);
-        const maxStart = resizeData.originalStart + resizeData.originalDuration - 0.25; // Minimum 15 minutes
-        newStart = Math.min(newStartTime, maxStart);
-        newDuration = resizeData.originalStart + resizeData.originalDuration - newStart;
-      } else {
-        // Resize from end (change duration only)
-        const newDurationValue = snapToQuarterHour(resizeData.originalDuration + timeChange);
-        newDuration = Math.max(0.25, newDurationValue); // Minimum 15 minutes
-      }
-      
-      // Show confirmation modal
-      setPendingTimeChange({
-        booking: resizeData.booking,
-        newStart,
-        newDuration,
-        resource: resizeData.resource
-      });
-      setShowTimeChangeModal(true);
-      
-      // Reset visual styling on the booking element
-      const bookingElement = document.querySelector(`[data-booking-id="${resizeData.booking.id}"]`) as HTMLElement;
-      if (bookingElement) {
-        bookingElement.style.opacity = '';
-        bookingElement.style.zIndex = '';
-      }
-      
-      setResizeData(null);
-    }
-    
-    // Reset cursor
-    document.body.style.cursor = '';
-    
-    // Reset resize flag after a short delay to allow click handler to check it
-    setTimeout(() => {
-      setHasResized(false);
-    }, 10);
-    
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
-  };
-
-  // Handle resize mouse down
-  const handleResizeMouseDown = (event: React.MouseEvent, booking: Booking, resource: string, resizeType: 'start' | 'end') => {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    // Check if user can access this booking
-    if (!canAccessBooking(booking)) {
-      toast.error('You can only modify your own bookings');
-      return;
-    }
-    
-    // Reset the resize flag at the start of a new resize operation
-    setHasResized(false);
-    
-    const containerElement = event.currentTarget.closest('.timeline-container') as HTMLElement;
-    if (!containerElement) {
-      console.error('Container element not found');
-      return;
-    }
-
-    const containerRect = containerElement.getBoundingClientRect();
-
-    setResizeData({
-      booking,
-      resource,
-      resizeType,
-      originalStart: booking.start,
-      originalDuration: booking.duration,
-      startX: event.clientX,
-      containerRect
-    });
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
-
-  const handleResizeMouseMove = (event: MouseEvent) => {
-    if (!resizeData) return;
-
-    // Mark that a resize operation has occurred
-    setHasResized(true);
-    
-    // Calculate the new dimensions for visual feedback
-    const deltaX = event.clientX - resizeData.startX;
-    const timelineWidth = resizeData.containerRect.width;
-    const visibleSlots = getVisibleTimeSlots();
-    const timelineSpan = visibleSlots.length * 0.5; // Each slot is 30 minutes
-    const timeChange = (deltaX / timelineWidth) * timelineSpan;
-
-    // Find the booking element
-    const bookingElement = document.querySelector(`[data-booking-id="${resizeData.booking.id}"]`) as HTMLElement;
-    if (!bookingElement) {
-      return;
-    }
-    
-    let newStart = resizeData.originalStart;
-    let newDuration = resizeData.originalDuration;
-    
-    if (resizeData.resizeType === 'start') {
-      // Resize from start (change start time, adjust duration)
-      const newStartTime = snapToQuarterHour(resizeData.originalStart + timeChange);
-      const maxStart = resizeData.originalStart + resizeData.originalDuration - 0.25; // Minimum 15 minutes
-      newStart = Math.min(newStartTime, maxStart);
-      newDuration = resizeData.originalStart + resizeData.originalDuration - newStart;
-    } else {
-      // Resize from end (change duration only)
-      const newDurationValue = snapToQuarterHour(resizeData.originalDuration + timeChange);
-      newDuration = Math.max(0.25, newDurationValue); // Minimum 15 minutes
-    }
-
-    // Apply visual changes to the booking element
-    const rowHeight = 42; // Same as used in renderResourceRow
-    const tempBooking = { ...resizeData.booking, start: newStart, duration: newDuration };
-    const newStyle = getResizeBookingStyle(tempBooking, rowHeight);
-    
-    // Apply the new styling
-    Object.assign(bookingElement.style, newStyle);
-    
-    // Add visual indicator that we're resizing
-    bookingElement.style.opacity = '0.8';
-    bookingElement.style.zIndex = '100';
-    
-    // Update visual feedback with cursor
-    document.body.style.cursor = resizeData.resizeType === 'start' ? 'w-resize' : 'e-resize';
-  };
-
-  // Update booking times via API
-  const updateBookingTimes = async (bookingId: string, newStart: number, newDuration: number) => {
-    try {
-      const startTimestamp = convertDecimalTimeToTimestamp(newStart, selectedDate);
-      const endTimestamp = convertDecimalTimeToTimestamp(newStart + newDuration, selectedDate);
-      
-      const response = await fetch('/api/bookings', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: bookingId,
-          start_time: startTimestamp,
-          end_time: endTimestamp,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update booking');
-      }
-
-      await response.json();
-      toast.success('Booking times updated successfully');
-      
-      // Refresh the scheduler data to show the updated booking
-      // The useEffect will refetch when selectedDate changes, but we'll refresh manually
-      window.location.reload(); // Simple refresh for now
-      
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update booking times';
-      toast.error(errorMessage);
-    }
-  };
-
-  // Confirm time change
-  const handleConfirmTimeChange = async () => {
-    if (!pendingTimeChange) return;
-    
-    await updateBookingTimes(
-      pendingTimeChange.booking.id,
-      pendingTimeChange.newStart,
-      pendingTimeChange.newDuration
-    );
-    
-    setShowTimeChangeModal(false);
-    setPendingTimeChange(null);
-  };
-
-  // Cancel time change
-  const handleCancelTimeChange = () => {
-    if (pendingTimeChange) {
-      // Reset the booking to its original styling
-      const bookingElement = document.querySelector(`[data-booking-id="${pendingTimeChange.booking.id}"]`) as HTMLElement;
-      if (bookingElement) {
-        const rowHeight = 42;
-        const originalStyle = getBookingStyle(pendingTimeChange.booking, rowHeight);
-        Object.assign(bookingElement.style, originalStyle);
-      }
-    }
-    setShowTimeChangeModal(false);
-    setPendingTimeChange(null);
-  };
 
   // Handle booking confirmation
   const handleConfirmBooking = async (booking: Booking) => {
@@ -1526,20 +1269,16 @@ const FlightScheduler = () => {
                 data-booking-id={booking.id}
                 style={getBookingStyle(booking, rowHeight)}
                 onMouseEnter={(e) => {
-                  if (!resizeData) {
-                    if (!shouldRestrictInteraction) {
-                      (e.target as HTMLElement).style.transform = 'scale(1.02)';
-                      (e.target as HTMLElement).style.zIndex = '30';
-                      handleBookingMouseEnter(e, booking);
-                    }
+                  if (!shouldRestrictInteraction) {
+                    (e.target as HTMLElement).style.transform = 'scale(1.02)';
+                    (e.target as HTMLElement).style.zIndex = '30';
+                    handleBookingMouseEnter(e, booking);
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (!resizeData) {
-                    (e.target as HTMLElement).style.transform = 'scale(1)';
-                    (e.target as HTMLElement).style.zIndex = '20';
-                    handleBookingMouseLeave();
-                  }
+                  (e.target as HTMLElement).style.transform = 'scale(1)';
+                  (e.target as HTMLElement).style.zIndex = '20';
+                  handleBookingMouseLeave();
                 }}
                 onMouseMove={handleBookingMouseMove}
                 onClick={(e) => !shouldRestrictInteraction ? handleBookingClick(booking, e) : undefined}
@@ -1547,26 +1286,8 @@ const FlightScheduler = () => {
                 onContextMenu={(e) => !shouldRestrictInteraction ? handleBookingRightClick(booking, e) : undefined}
                 className={`transition-all duration-200 group relative ${!shouldRestrictInteraction ? 'hover:shadow-xl' : 'cursor-not-allowed'}`}
               >
-                {/* Start resize handle - only show if interaction is not restricted */}
-                {!shouldRestrictInteraction && (
-                  <div
-                    className="absolute left-0 top-0 bottom-0 w-3 cursor-w-resize opacity-0 group-hover:opacity-100 transition-opacity bg-blue-400/30 hover:bg-blue-500/50 z-10"
-                    onMouseDown={(e) => handleResizeMouseDown(e, booking, resourceKey!, 'start')}
-                    title="Drag to change start time"
-                  />
-                )}
-                
                 {/* Booking content */}
                 <span className="px-3 block truncate">{booking.name}</span>
-                
-                {/* End resize handle - only show if interaction is not restricted */}
-                {!shouldRestrictInteraction && (
-                  <div
-                    className="absolute right-0 top-0 bottom-0 w-3 cursor-e-resize opacity-0 group-hover:opacity-100 transition-opacity bg-blue-400/30 hover:bg-blue-500/50 z-10"
-                    onMouseDown={(e) => handleResizeMouseDown(e, booking, resourceKey!, 'end')}
-                    title="Drag to change end time"
-                  />
-                )}
               </div>
             );
           })}
@@ -1784,7 +1505,6 @@ const FlightScheduler = () => {
   SchedulerHeader.displayName = 'SchedulerHeader';
 
   return (
-    <SettingsProvider>
       <div className="w-full min-h-screen flex flex-col items-center">
         <div className="w-full max-w-[96vw] px-6 pt-8 pb-12 flex flex-col gap-8">
           {/* Persistent Header */}
@@ -2108,17 +1828,14 @@ const FlightScheduler = () => {
                 <User className="w-4 h-4" />
                 View Contact Details
               </button>
-              
-              {/* Change Aircraft - only show if booking is not complete */}
-              {contextMenu.booking.status !== 'complete' && (
-                <button
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-150"
-                  onClick={() => handleContextMenuAction('change-aircraft', contextMenu.booking)}
-                >
-                  <Plane className="w-4 h-4" />
-                  Change Aircraft
-                </button>
-              )}
+
+              <button
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-150"
+                onClick={() => handleContextMenuAction('change-aircraft', contextMenu.booking)}
+              >
+                <Plane className="w-4 h-4" />
+                Change Aircraft
+              </button>
 
               {/* Confirm Booking - only show for unconfirmed bookings */}
               {contextMenu.booking.status === 'unconfirmed' && (
@@ -2141,55 +1858,15 @@ const FlightScheduler = () => {
             </div>
           </div>
         )}
-
-        {/* Time Change Confirmation Modal */}
-        {showTimeChangeModal && pendingTimeChange && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Time Change</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  You&apos;re about to change the booking times for <strong>{pendingTimeChange.booking.name}</strong>
-                </p>
-                
-                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-700">Original:</span>
-                    <span className="text-sm text-gray-600">
-                      {formatTime(pendingTimeChange.booking.start)} - {formatTime(pendingTimeChange.booking.start + pendingTimeChange.booking.duration)}
-                      <span className="ml-2 text-gray-500">({pendingTimeChange.booking.duration}h)</span>
-                    </span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-700">New:</span>
-                    <span className="text-sm text-blue-600 font-medium">
-                      {formatTime(pendingTimeChange.newStart)} - {formatTime(pendingTimeChange.newStart + pendingTimeChange.newDuration)}
-                      <span className="ml-2 text-gray-500">({pendingTimeChange.newDuration}h)</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex gap-3 justify-end">
-                <Button
-                  variant="outline"
-                  onClick={handleCancelTimeChange}
-                  className="px-4 py-2"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleConfirmTimeChange}
-                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white"
-                >
-                  Confirm Change
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
+  );
+};
+
+// Wrapper component that provides the SettingsProvider
+const FlightScheduler = () => {
+  return (
+    <SettingsProvider>
+      <FlightSchedulerInner />
     </SettingsProvider>
   );
 };

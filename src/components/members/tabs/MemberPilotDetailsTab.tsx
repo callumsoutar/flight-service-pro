@@ -5,8 +5,6 @@ import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
@@ -49,8 +47,8 @@ const pilotDetailsSchema = z.object({
   pilot_license_number: z.string().optional(),
   pilot_license_type: z.string().optional(), // Keep for backward compatibility
   pilot_license_id: z.string().optional(),
-  pilot_license_expiry: z.string().optional(),
-  medical_certificate_expiry: z.string().optional(),
+  pilot_license_expiry: z.string().optional().transform(val => val === "" ? undefined : val),
+  medical_certificate_expiry: z.string().optional().transform(val => val === "" ? undefined : val),
 });
 
 type PilotDetailsFormValues = z.infer<typeof pilotDetailsSchema>;
@@ -246,12 +244,19 @@ export default function MemberPilotDetailsTab({ memberId }: PilotDetailsTabProps
   const onSubmit = async (data: PilotDetailsFormValues) => {
     setIsSaving(true);
     setError(null);
-    
+
+    // Convert undefined to null for API compatibility
+    const payload = {
+      ...data,
+      pilot_license_expiry: data.pilot_license_expiry || null,
+      medical_certificate_expiry: data.medical_certificate_expiry || null,
+    };
+
     try {
       const res = await fetch(`/api/members?id=${memberId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
       
       if (!res.ok) {
@@ -365,29 +370,26 @@ export default function MemberPilotDetailsTab({ memberId }: PilotDetailsTabProps
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2 text-gray-700">License Expiry Date</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start text-left font-normal bg-white"
+              <div className="flex gap-2">
+                <Input
+                  type="date"
+                  value={watch("pilot_license_expiry") || ""}
+                  onChange={(e) => setValue("pilot_license_expiry", e.target.value, { shouldDirty: true })}
+                  className="bg-white flex-1"
+                  placeholder="yyyy-mm-dd"
+                />
+                {watch("pilot_license_expiry") && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setValue("pilot_license_expiry", undefined as unknown as string, { shouldDirty: true })}
+                    className="px-3"
                   >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {watch("pilot_license_expiry") ? format(new Date(watch("pilot_license_expiry")!), 'PPP') : 'Pick a date'}
+                    <X className="w-4 h-4" />
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={watch("pilot_license_expiry") ? new Date(watch("pilot_license_expiry")!) : undefined}
-                    onSelect={(date) => {
-                      if (date) {
-                        setValue("pilot_license_expiry", format(date, 'yyyy-MM-dd'), { shouldDirty: true });
-                      }
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+                )}
+              </div>
               {errors.pilot_license_expiry && <p className="text-xs text-red-500 mt-1">{errors.pilot_license_expiry.message}</p>}
             </div>
             <div className="flex items-center gap-2 mt-2">
@@ -417,41 +419,38 @@ export default function MemberPilotDetailsTab({ memberId }: PilotDetailsTabProps
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2 text-gray-700">Medical Certificate Expiry Date</label>
-              <div className="flex items-center gap-3">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      className="flex-1 justify-start text-left font-normal bg-white"
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  value={watch("medical_certificate_expiry") || ""}
+                  onChange={(e) => setValue("medical_certificate_expiry", e.target.value, { shouldDirty: true })}
+                  className="bg-white flex-1"
+                  placeholder="yyyy-mm-dd"
+                />
+                {watch("medical_certificate_expiry") && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setValue("medical_certificate_expiry", undefined as unknown as string, { shouldDirty: true })}
+                      className="px-3"
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {watch("medical_certificate_expiry") ? format(new Date(watch("medical_certificate_expiry")!), 'PPP') : 'Pick a date'}
+                      <X className="w-4 h-4" />
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={watch("medical_certificate_expiry") ? new Date(watch("medical_certificate_expiry")!) : undefined}
-                      onSelect={(date) => {
-                        if (date) {
-                          setValue("medical_certificate_expiry", format(date, 'yyyy-MM-dd'), { shouldDirty: true });
-                        }
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-                {watch("medical_certificate_expiry") && (() => {
-                  const expiryStatus = getExpiryStatus(watch("medical_certificate_expiry"));
-                  const Icon = expiryStatus.icon;
-                  return (
-                    <Badge className={`${expiryStatus.color} flex items-center gap-1 px-3 py-1 flex-shrink-0`}>
-                      <Icon className="w-3 h-3" />
-                      {expiryStatus.status === 'expired' ? 'Expired' : 
-                       expiryStatus.status === 'expiring' ? 'Expiring Soon' : 'Valid'}
-                    </Badge>
-                  );
-                })()}
+                    {(() => {
+                      const expiryStatus = getExpiryStatus(watch("medical_certificate_expiry"));
+                      const Icon = expiryStatus.icon;
+                      return (
+                        <Badge className={`${expiryStatus.color} flex items-center gap-1 px-3 py-1 flex-shrink-0`}>
+                          <Icon className="w-3 h-3" />
+                          {expiryStatus.status === 'expired' ? 'Expired' :
+                           expiryStatus.status === 'expiring' ? 'Expiring Soon' : 'Valid'}
+                        </Badge>
+                      );
+                    })()}
+                  </>
+                )}
               </div>
               {errors.medical_certificate_expiry && <p className="text-xs text-red-500 mt-1">{errors.medical_certificate_expiry.message}</p>}
             </div>
@@ -522,22 +521,26 @@ export default function MemberPilotDetailsTab({ memberId }: PilotDetailsTabProps
                   <label className="block text-xs font-medium text-gray-700 mb-1.5">
                     Expiry Date (Optional)
                   </label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full h-9 justify-start text-sm font-normal bg-white">
-                        <CalendarIcon className="mr-2 h-4 w-4 text-gray-500" />
-                        {endorsementExpiryDate ? format(endorsementExpiryDate, 'MMM dd, yyyy') : 'Select date'}
+                  <div className="flex gap-2">
+                    <Input
+                      type="date"
+                      value={endorsementExpiryDate ? format(endorsementExpiryDate, 'yyyy-MM-dd') : ''}
+                      onChange={(e) => setEndorsementExpiryDate(e.target.value ? new Date(e.target.value) : undefined)}
+                      className="h-9 text-sm bg-white flex-1"
+                      placeholder="yyyy-mm-dd"
+                    />
+                    {endorsementExpiryDate && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEndorsementExpiryDate(undefined)}
+                        className="h-9 px-2"
+                      >
+                        <X className="w-4 h-4" />
                       </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={endorsementExpiryDate}
-                        onSelect={setEndorsementExpiryDate}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                    )}
+                  </div>
                 </div>
 
                 <div className="lg:col-span-3">

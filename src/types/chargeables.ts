@@ -61,4 +61,29 @@ export type ChargeableUpdate = {
   voided_at?: string | null;
   created_at?: string;
   updated_at?: string;
-}; 
+};
+
+// Landing fee rates - aircraft-type-specific pricing
+export type LandingFeeRate = {
+  id: string;
+  chargeable_id: string;
+  aircraft_type_id: string;
+  rate: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LandingFeeRateInsert = {
+  chargeable_id: string;
+  aircraft_type_id: string;
+  rate: number;
+};
+
+export type LandingFeeRateUpdate = {
+  rate: number;
+};
+
+// Extended chargeable with aircraft-specific rates
+export interface ChargeableWithAircraftRates extends Chargeable {
+  landing_fee_rates?: LandingFeeRate[];
+} 

@@ -1,15 +1,16 @@
 "use client";
 import { useState } from "react";
-import { Plane, Clock, DollarSign, Fuel } from "lucide-react";
+import { Plane, Clock, DollarSign, PlaneLanding } from "lucide-react";
 import * as Tabs from "@radix-ui/react-tabs";
 import FlightTypesConfig from "./FlightTypesConfig";
 import ChargeablesConfig from "./ChargeablesConfig";
+import LandingFeesConfig from "./LandingFeesConfig";
 
 const chargeTabs = [
   { id: "aircraft", label: "Aircraft Rates", icon: Plane },
   { id: "instructor", label: "Instructor Rates", icon: Clock },
+  { id: "landing", label: "Landing Fees", icon: PlaneLanding },
   { id: "additional", label: "Additional Charges", icon: DollarSign },
-  { id: "fuel", label: "Fuel Pricing", icon: Fuel },
 ];
 
 export default function ChargesTab() {
@@ -56,18 +57,12 @@ export default function ChargesTab() {
             </div>
           </Tabs.Content>
 
-          <Tabs.Content value="additional" className="outline-none">
-            <ChargeablesConfig />
+          <Tabs.Content value="landing" className="outline-none">
+            <LandingFeesConfig />
           </Tabs.Content>
 
-          <Tabs.Content value="fuel" className="outline-none">
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Fuel className="w-12 h-12 text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Fuel Pricing</h3>
-              <p className="text-sm text-gray-500 max-w-md">
-                Manage fuel prices and fuel-related charges. This feature is coming soon.
-              </p>
-            </div>
+          <Tabs.Content value="additional" className="outline-none">
+            <ChargeablesConfig />
           </Tabs.Content>
         </div>
       </Tabs.Root>

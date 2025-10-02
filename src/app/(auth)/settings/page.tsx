@@ -13,12 +13,6 @@ async function SettingsPage({ user, userRole }: ProtectedPageProps) {
           <div className="flex-1 min-w-0 flex flex-col items-start gap-0">
             <h1 className="text-[3rem] font-extrabold tracking-tight text-gray-900" style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1 }}>Settings</h1>
             <p className="text-lg text-muted-foreground">Configure your flight school settings and preferences.</p>
-            {/* Debug info in development */}
-            {process.env.NODE_ENV === 'development' && (
-              <div className="text-xs text-gray-500 mt-1">
-                User: {user.email} | Role: {userRole}
-              </div>
-            )}
           </div>
         </div>
 

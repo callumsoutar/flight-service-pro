@@ -129,7 +129,18 @@ export async function POST(
       return Math.round(value * 10) / 10;
     };
 
-    // 2. Update or create flight log with meter readings
+    // 2. Get aircraft data to calculate total_hours progression
+    const { data: aircraft, error: aircraftError } = await supabase
+      .from('aircraft')
+      .select('total_time_method, total_hours, current_hobbs, current_tach')
+      .eq('id', booking.aircraft_id || booking.flight_logs?.[0]?.checked_out_aircraft_id)
+      .single();
+
+    if (aircraftError) {
+      console.warn('Failed to fetch aircraft for total_hours calculation:', aircraftError);
+    }
+
+    // 3. Update or create flight log with meter readings
     let flightLog = booking.flight_logs?.[0];
     const meterUpdates: Record<string, number | null> = {};
     if (typeof hobbsStart === 'number') meterUpdates.hobbs_start = roundToOneDecimal(hobbsStart);
@@ -154,6 +165,52 @@ export async function POST(
       // For trial flights or other types, store as dual_time
       meterUpdates.dual_time = roundToOneDecimal(chargeTime);
       meterUpdates.solo_time = null;
+    }
+
+    // Calculate and store total_hours progression
+    if (aircraft && typeof hobbsStart === 'number' && typeof hobbsEnd === 'number' &&
+        typeof tachStart === 'number' && typeof tachEnd === 'number') {
+      const hobbsTime = hobbsEnd - hobbsStart;
+      const tachoTime = tachEnd - tachStart;
+
+      // Calculate credited time based on aircraft's total_time_method
+      let creditedTime = 0;
+      switch (aircraft.total_time_method) {
+        case 'hobbs':
+          creditedTime = hobbsTime;
+          break;
+        case 'tacho':
+          creditedTime = tachoTime;
+          break;
+        case 'airswitch':
+          // TODO: Add airswitch meter fields to schema
+          // For now, fallback to hobbs time until airswitch meters are implemented
+          creditedTime = hobbsTime;
+          console.warn(`Aircraft ${aircraft.id} uses airswitch method but no airswitch meters available - using hobbs time`);
+          break;
+        case 'hobbs less 5%':
+          creditedTime = hobbsTime * 0.95;
+          break;
+        case 'hobbs less 10%':
+          creditedTime = hobbsTime * 0.90;
+          break;
+        case 'tacho less 5%':
+          creditedTime = tachoTime * 0.95;
+          break;
+        case 'tacho less 10%':
+          creditedTime = tachoTime * 0.90;
+          break;
+        default:
+          // Default to hobbs if no method specified
+          creditedTime = hobbsTime;
+          console.warn(`Unknown total_time_method '${aircraft.total_time_method}' for aircraft - using hobbs time`);
+          break;
+      }
+
+      // Set total_hours_start from current aircraft total_hours
+      meterUpdates.total_hours_start = roundToOneDecimal(aircraft.total_hours || 0);
+      // Set total_hours_end by adding credited time
+      meterUpdates.total_hours_end = roundToOneDecimal((aircraft.total_hours || 0) + creditedTime);
     }
 
     if (Object.keys(meterUpdates).length > 0) {

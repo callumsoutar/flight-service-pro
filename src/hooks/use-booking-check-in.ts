@@ -291,6 +291,56 @@ export function useBookingCheckIn(bookingId: string) {
           updated_at: new Date().toISOString(),
         };
 
+        // Fetch aircraft data to calculate optimistic total_hours
+        let totalHoursStart = null;
+        let totalHoursEnd = null;
+        try {
+          const aircraftResponse = await fetch(`/api/aircraft?id=${bookingData.aircraft_id}`);
+          if (aircraftResponse.ok) {
+            const aircraftData = await aircraftResponse.json();
+            const aircraft = aircraftData.aircraft;
+
+            if (aircraft && params.hobbsStart !== undefined && params.hobbsEnd !== undefined &&
+                params.tachStart !== undefined && params.tachEnd !== undefined) {
+              const hobbsTime = params.hobbsEnd - params.hobbsStart;
+              const tachoTime = params.tachEnd - params.tachStart;
+
+              // Calculate credited time based on aircraft's total_time_method
+              let creditedTime = 0;
+              switch (aircraft.total_time_method) {
+                case 'hobbs':
+                  creditedTime = hobbsTime;
+                  break;
+                case 'tacho':
+                  creditedTime = tachoTime;
+                  break;
+                case 'airswitch':
+                  creditedTime = hobbsTime; // Fallback
+                  break;
+                case 'hobbs less 5%':
+                  creditedTime = hobbsTime * 0.95;
+                  break;
+                case 'hobbs less 10%':
+                  creditedTime = hobbsTime * 0.90;
+                  break;
+                case 'tacho less 5%':
+                  creditedTime = tachoTime * 0.95;
+                  break;
+                case 'tacho less 10%':
+                  creditedTime = tachoTime * 0.90;
+                  break;
+                default:
+                  creditedTime = hobbsTime;
+              }
+
+              totalHoursStart = roundToOneDecimal(aircraft.total_hours || 0);
+              totalHoursEnd = roundToOneDecimal((aircraft.total_hours || 0) + creditedTime);
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to fetch aircraft for optimistic total_hours calculation:', error);
+        }
+
         // Create optimistic flight log
         const optimisticFlightLog: FlightLog = {
           id: 'optimistic-flight-log',
@@ -305,6 +355,8 @@ export function useBookingCheckIn(bookingId: string) {
           solo_end_hobbs: params.soloEndHobbs ?? null,
           dual_time: params.dualTime > 0 ? params.dualTime : null,
           solo_time: params.soloTime > 0 ? params.soloTime : null,
+          total_hours_start: totalHoursStart,
+          total_hours_end: totalHoursEnd,
           briefing_completed: false,
           authorization_completed: false,
           created_at: new Date().toISOString(),

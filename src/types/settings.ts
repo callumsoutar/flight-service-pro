@@ -65,6 +65,10 @@ export interface GeneralSettings {
   website_url: string;
   timezone: string;
   currency: string;
+  business_open_time: string;
+  business_close_time: string;
+  business_is_24_hours: boolean;
+  business_is_closed: boolean;
 }
 
 export interface SystemSettings {

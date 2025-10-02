@@ -26,9 +26,10 @@ interface ChargeableSearchDropdownProps {
   onAdd?: (item: Chargeable, quantity: number) => void;
   taxRate: number; // e.g. 0.15 for 15%
   category?: 'landing_fee' | 'airways_fees' | 'other';
+  aircraftTypeId?: string; // For landing fee aircraft-specific rates
 }
 
-export default function ChargeableSearchDropdown({ onAdd, taxRate, category }: ChargeableSearchDropdownProps) {
+export default function ChargeableSearchDropdown({ onAdd, taxRate, category, aircraftTypeId }: ChargeableSearchDropdownProps) {
   const [search, setSearch] = useState("");
   const [focused, setFocused] = useState(false);
   const [selected, setSelected] = useState<Chargeable | null>(null);
@@ -46,6 +47,10 @@ export default function ChargeableSearchDropdown({ onAdd, taxRate, category }: C
     if (category === 'landing_fee' || category === 'airways_fees') {
       url += `&type=${category}`;
     }
+    // Include aircraft_type_id for landing fees to get aircraft-specific rates
+    if (aircraftTypeId && (category === 'landing_fee' || !category)) {
+      url += `&aircraft_type_id=${aircraftTypeId}`;
+    }
     fetch(url, { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error("Failed to fetch chargeables");
@@ -61,7 +66,7 @@ export default function ChargeableSearchDropdown({ onAdd, taxRate, category }: C
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [search, focused, category]);
+  }, [search, focused, category, aircraftTypeId]);
 
   return (
     <div className="w-full flex flex-col gap-2 p-2">

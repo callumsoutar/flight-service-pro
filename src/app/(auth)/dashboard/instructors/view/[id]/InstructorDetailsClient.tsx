@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import * as Tabs from "@radix-ui/react-tabs";
-import { User, Mail, Award, Activity, FileText, Upload, Clock, CalendarCheck2, ActivitySquare, Stethoscope, Settings, Briefcase, Calendar as CalendarIcon, UserCog, Shield } from "lucide-react";
+import { User, Mail, Award, Activity, FileText, Clock, CalendarCheck2, ActivitySquare, Stethoscope, Settings, Briefcase, Calendar as CalendarIcon, UserCog, Shield } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,8 +16,6 @@ import { toast } from "sonner";
 import { useEffect } from "react";
 import type { InstructorCategory } from "@/types/instructor_categories";
 import AircraftTypeRatingsTab from "@/components/instructors/AircraftTypeRatingsTab";
-import { Dropzone, DropzoneContent, DropzoneEmptyState } from '@/components/dropzone';
-import { useSupabaseUpload } from '@/hooks/use-supabase-upload';
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Controller } from "react-hook-form";
@@ -30,10 +28,9 @@ const InstructorFlightTypeRatesTable = dynamic(() => import("@/components/Instru
 
 const tabItems = [
   { id: "license", label: "Details", icon: Award },
-  { id: "uploads", label: "Uploads", icon: Upload },
   { id: "history", label: "History", icon: Clock },
   { id: "notes", label: "Notes", icon: FileText },
-  { id: "settings", label: "Settings", icon: Settings }, // <-- Added settings tab
+  { id: "settings", label: "Settings", icon: Settings },
 ];
 
 const licenseSchema = z.object({
@@ -561,28 +558,7 @@ export default function InstructorDetailsClient({ instructor }: { instructor: In
               </div>
             </form>
           </Tabs.Content>
-          <Tabs.Content value="uploads" className="w-full space-y-6">
-            <div className="flex flex-row items-center justify-between">
-              <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900">
-                <Upload className="w-6 h-6 text-indigo-600" />
-                Document Uploads
-              </h2>
-            </div>
-            
-            <div className="max-w-2xl w-full">
-              <Dropzone {...useSupabaseUpload({
-                bucketName: 'test',
-                path: 'test',
-                allowedMimeTypes: ['image/*'],
-                maxFiles: 2,
-                maxFileSize: 1000 * 1000 * 10, // 10MB
-              })}>
-                <DropzoneEmptyState />
-                <DropzoneContent />
-              </Dropzone>
-            </div>
-          </Tabs.Content>
-          
+
           <Tabs.Content value="history" className="w-full space-y-6">
             <div className="flex flex-row items-center justify-between">
               <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900">

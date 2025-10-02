@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { Booking } from "@/types/bookings";
 import { Invoice } from "@/types/invoices";
+import { InvoiceService } from "@/lib/invoice-service";
 
 interface CompleteBookingRequest {
   invoiceItems?: Array<{
@@ -93,8 +94,37 @@ export async function POST(
       }
     }
 
-    // 4. Update invoice status to 'pending' and ensure booking_id is set
-    const invoiceUpdates: { status: string; booking_id?: string } = { status: "pending" };
+    // 4. Calculate and update invoice totals based on all invoice items
+    try {
+      await InvoiceService.updateInvoiceTotals(supabase, invoice.id);
+    } catch (totalError) {
+      console.error('Failed to update invoice totals:', totalError);
+      return NextResponse.json({ error: `Failed to calculate invoice totals: ${totalError instanceof Error ? totalError.message : 'Unknown error'}` }, { status: 500 });
+    }
+
+    // 5. Generate invoice number if not already set
+    let invoiceNumber = invoice.invoice_number;
+    if (!invoiceNumber) {
+      try {
+        invoiceNumber = await InvoiceService.generateInvoiceNumber();
+      } catch (numberError) {
+        console.error('Failed to generate invoice number:', numberError);
+        return NextResponse.json({ error: `Failed to generate invoice number: ${numberError instanceof Error ? numberError.message : 'Unknown error'}` }, { status: 500 });
+      }
+    }
+
+    // 6. Update invoice status to 'pending', set invoice number, and ensure booking_id is set
+    const invoiceUpdates: {
+      status: string;
+      booking_id?: string;
+      invoice_number?: string;
+      issue_date?: string;
+    } = {
+      status: "pending",
+      invoice_number: invoiceNumber,
+      issue_date: invoice.issue_date || new Date().toISOString()
+    };
+
     if (invoice.booking_id !== bookingId) {
       invoiceUpdates.booking_id = bookingId;
     }
@@ -108,10 +138,10 @@ export async function POST(
       return NextResponse.json({ error: `Failed to update invoice: ${invoiceUpdateError.message}` }, { status: 500 });
     }
 
-    // 5. Complete the booking using the main bookings API logic (this triggers aircraft meter updates)
+    // 7. Complete the booking using the main bookings API logic (this triggers aircraft meter updates)
     const bookingUpdateResponse = await fetch(`${req.nextUrl.origin}/api/bookings`, {
       method: "PATCH",
-      headers: { 
+      headers: {
         "Content-Type": "application/json",
         "Authorization": req.headers.get("Authorization") || "",
         "Cookie": req.headers.get("Cookie") || "",
@@ -129,7 +159,7 @@ export async function POST(
 
     const { booking: completedBooking } = await bookingUpdateResponse.json();
 
-    // 6. Fetch updated invoice
+    // 8. Fetch updated invoice with all totals
     const { data: updatedInvoice } = await supabase
       .from("invoices")
       .select("*")

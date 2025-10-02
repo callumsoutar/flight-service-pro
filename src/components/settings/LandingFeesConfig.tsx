@@ -4,66 +4,58 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, AlertCircle, DollarSign, Trash2 } from "lucide-react";
-import { Chargeable, ChargeableType, CHARGEABLE_TYPE_LABELS, ChargeableWithAircraftRates } from "@/types/chargeables";
+import { Search, Plus, AlertCircle, PlaneLanding, Trash2 } from "lucide-react";
+import { ChargeableWithAircraftRates, CHARGEABLE_TYPE_LABELS } from "@/types/chargeables";
+import { AircraftType } from "@/types/aircraft_types";
 
-interface ChargeableFormData {
+interface LandingFeeFormData {
   name: string;
   description: string;
-  type: ChargeableType | "";
   rate: string;
   is_taxable: boolean;
   is_active: boolean;
 }
 
-type FilterType = "airways_fees" | "other";
-
-export default function ChargeablesConfig() {
-  const [chargeables, setChargeables] = useState<ChargeableWithAircraftRates[]>([]);
-  const [selectedChargeable, setSelectedChargeable] = useState<ChargeableWithAircraftRates | null>(null);
+export default function LandingFeesConfig() {
+  const [landingFees, setLandingFees] = useState<ChargeableWithAircraftRates[]>([]);
+  const [selectedFee, setSelectedFee] = useState<ChargeableWithAircraftRates | null>(null);
+  const [aircraftTypes, setAircraftTypes] = useState<AircraftType[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [taxRate, setTaxRate] = useState(0.15); // Default 15%
-  const [filterType, setFilterType] = useState<FilterType | "all">("all");
+  const [taxRate, setTaxRate] = useState(0.15);
+  const [aircraftRates, setAircraftRates] = useState<Record<string, string>>({});
 
-  const [editFormData, setEditFormData] = useState<ChargeableFormData>({
+  const [editFormData, setEditFormData] = useState<LandingFeeFormData>({
     name: "",
     description: "",
-    type: "",
     rate: "",
     is_taxable: true,
     is_active: true,
   });
 
-  const [addFormData, setAddFormData] = useState<ChargeableFormData>({
+  const [addFormData, setAddFormData] = useState<LandingFeeFormData>({
     name: "",
     description: "",
-    type: "",
     rate: "",
     is_taxable: true,
     is_active: true,
   });
 
-  const fetchChargeables = async () => {
+  const fetchLandingFees = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/chargeables?include_rates=true");
+      const response = await fetch("/api/chargeables?type=landing_fee&include_rates=true");
       if (!response.ok) {
-        throw new Error("Failed to fetch chargeables");
+        throw new Error("Failed to fetch landing fees");
       }
       const data = await response.json();
-      // Exclude landing fees - they have their own tab now
-      const nonLandingFees = (data.chargeables || []).filter(
-        (c: ChargeableWithAircraftRates) => c.type !== 'landing_fee'
-      );
-      setChargeables(nonLandingFees);
+      setLandingFees(data.chargeables || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -71,6 +63,18 @@ export default function ChargeablesConfig() {
     }
   };
 
+  const fetchAircraftTypes = async () => {
+    try {
+      const response = await fetch("/api/aircraft-types");
+      if (!response.ok) {
+        throw new Error("Failed to fetch aircraft types");
+      }
+      const data = await response.json();
+      setAircraftTypes(data.aircraft_types || []);
+    } catch (err) {
+      console.error("Failed to fetch aircraft types:", err);
+    }
+  };
 
   const fetchTaxRate = async () => {
     try {
@@ -88,28 +92,38 @@ export default function ChargeablesConfig() {
   };
 
   useEffect(() => {
-    fetchChargeables();
+    fetchLandingFees();
     fetchTaxRate();
+    fetchAircraftTypes();
   }, []);
 
   useEffect(() => {
-    if (selectedChargeable) {
+    if (selectedFee) {
       setEditFormData({
-        name: selectedChargeable.name,
-        description: selectedChargeable.description || "",
-        type: selectedChargeable.type,
-        rate: selectedChargeable.rate.toString(),
-        is_taxable: selectedChargeable.is_taxable,
-        is_active: selectedChargeable.is_active ?? true,
+        name: selectedFee.name,
+        description: selectedFee.description || "",
+        rate: selectedFee.rate.toString(),
+        is_taxable: selectedFee.is_taxable,
+        is_active: selectedFee.is_active ?? true,
       });
+
+      // Initialize aircraft rates for landing fees
+      if (selectedFee.landing_fee_rates) {
+        const rates: Record<string, string> = {};
+        selectedFee.landing_fee_rates.forEach(r => {
+          rates[r.aircraft_type_id] = r.rate.toString();
+        });
+        setAircraftRates(rates);
+      } else {
+        setAircraftRates({});
+      }
     }
-  }, [selectedChargeable]);
+  }, [selectedFee]);
 
   const resetAddForm = () => {
     setAddFormData({
       name: "",
       description: "",
-      type: "",
       rate: "",
       is_taxable: true,
       is_active: true,
@@ -117,8 +131,8 @@ export default function ChargeablesConfig() {
   };
 
   const handleAdd = async () => {
-    if (!addFormData.name.trim() || !addFormData.type || !addFormData.rate) {
-      setError("Name, type, and rate are required");
+    if (!addFormData.name.trim() || !addFormData.rate) {
+      setError("Name and rate are required");
       return;
     }
 
@@ -131,16 +145,17 @@ export default function ChargeablesConfig() {
         },
         body: JSON.stringify({
           ...addFormData,
+          type: "landing_fee",
           rate: parseFloat(addFormData.rate),
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create chargeable");
+        throw new Error(errorData.error || "Failed to create landing fee");
       }
 
-      await fetchChargeables();
+      await fetchLandingFees();
       setIsAddDialogOpen(false);
       resetAddForm();
       setError(null);
@@ -151,11 +166,58 @@ export default function ChargeablesConfig() {
     }
   };
 
-  const handleEdit = async () => {
-    if (!selectedChargeable) return;
+  const saveAircraftRates = async (chargeableId: string) => {
+    const existingRates = selectedFee?.landing_fee_rates || [];
 
-    if (!editFormData.name.trim() || !editFormData.type || !editFormData.rate) {
-      setError("Name, type, and rate are required");
+    // Update or create rates for each aircraft type that has a value
+    for (const aircraftTypeId of Object.keys(aircraftRates)) {
+      const rateValue = aircraftRates[aircraftTypeId];
+      if (!rateValue || rateValue.trim() === '') continue;
+
+      const existingRate = existingRates.find(r => r.aircraft_type_id === aircraftTypeId);
+
+      if (existingRate) {
+        // Update existing rate
+        await fetch("/api/landing-fee-rates", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chargeable_id: chargeableId,
+            aircraft_type_id: aircraftTypeId,
+            rate: parseFloat(rateValue),
+          }),
+        });
+      } else {
+        // Create new rate
+        await fetch("/api/landing-fee-rates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chargeable_id: chargeableId,
+            aircraft_type_id: aircraftTypeId,
+            rate: parseFloat(rateValue),
+          }),
+        });
+      }
+    }
+
+    // Delete rates that were cleared (empty string or removed)
+    for (const existingRate of existingRates) {
+      const currentValue = aircraftRates[existingRate.aircraft_type_id];
+      if (!currentValue || currentValue.trim() === '') {
+        await fetch(
+          `/api/landing-fee-rates?chargeable_id=${chargeableId}&aircraft_type_id=${existingRate.aircraft_type_id}`,
+          { method: "DELETE" }
+        );
+      }
+    }
+  };
+
+  const handleEdit = async () => {
+    if (!selectedFee) return;
+
+    if (!editFormData.name.trim() || !editFormData.rate) {
+      setError("Name and rate are required");
       return;
     }
 
@@ -167,22 +229,32 @@ export default function ChargeablesConfig() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          id: selectedChargeable.id,
+          id: selectedFee.id,
           ...editFormData,
+          type: "landing_fee",
           rate: parseFloat(editFormData.rate),
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to update chargeable");
+        throw new Error(errorData.error || "Failed to update landing fee");
       }
 
-      await fetchChargeables();
+      // Save aircraft-specific rates
+      await saveAircraftRates(selectedFee.id);
+
+      await fetchLandingFees();
       setError(null);
 
-      // Refresh to get updated data
-      setSelectedChargeable(null);
+      // Update selected fee to reflect changes
+      const updatedFees = landingFees.map(f =>
+        f.id === selectedFee.id ? { ...f, ...editFormData, rate: parseFloat(editFormData.rate) } : f
+      );
+      const updatedSelected = updatedFees.find(f => f.id === selectedFee.id);
+      if (updatedSelected) {
+        setSelectedFee(updatedSelected);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -190,25 +262,25 @@ export default function ChargeablesConfig() {
     }
   };
 
-  const handleDelete = async (chargeable: Chargeable) => {
-    if (!confirm(`Are you sure you want to delete "${chargeable.name}"? This will hide it from the system but preserve historical data.`)) {
+  const handleDelete = async (fee: ChargeableWithAircraftRates) => {
+    if (!confirm(`Are you sure you want to delete "${fee.name}"? This will hide it from the system but preserve historical data.`)) {
       return;
     }
 
     try {
       setSaving(true);
-      const response = await fetch(`/api/chargeables?id=${chargeable.id}`, {
+      const response = await fetch(`/api/chargeables?id=${fee.id}`, {
         method: "DELETE",
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to delete chargeable");
+        throw new Error(errorData.error || "Failed to delete landing fee");
       }
 
-      await fetchChargeables();
-      if (selectedChargeable?.id === chargeable.id) {
-        setSelectedChargeable(null);
+      await fetchLandingFees();
+      if (selectedFee?.id === fee.id) {
+        setSelectedFee(null);
       }
       setError(null);
     } catch (err) {
@@ -218,22 +290,9 @@ export default function ChargeablesConfig() {
     }
   };
 
-  const filteredChargeables = chargeables.filter(chargeable => {
-    const matchesSearch = chargeable.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      chargeable.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      CHARGEABLE_TYPE_LABELS[chargeable.type].toLowerCase().includes(searchTerm.toLowerCase());
-
-    if (filterType === "all") return matchesSearch;
-
-    if (filterType === "airways_fees") {
-      return matchesSearch && chargeable.type === "airways_fees";
-    }
-
-    if (filterType === "other") {
-      return matchesSearch && chargeable.type !== "airways_fees";
-    }
-
-    return matchesSearch;
+  const filteredFees = landingFees.filter(fee => {
+    return fee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      fee.description?.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   const formatCurrency = (amount: number) => {
@@ -252,20 +311,20 @@ export default function ChargeablesConfig() {
   if (loading) {
     return (
       <div className="text-center py-8">
-        <div className="text-gray-500">Loading chargeables...</div>
+        <div className="text-gray-500">Loading landing fees...</div>
       </div>
     );
   }
 
   return (
     <div className="h-[600px] flex gap-6">
-      {/* Left side - List of chargeables */}
+      {/* Left side - List of landing fees */}
       <div className="w-1/2 flex flex-col">
         <div className="flex items-center gap-4 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
-              placeholder="Search chargeables..."
+              placeholder="Search landing fees..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -280,7 +339,7 @@ export default function ChargeablesConfig() {
             </DialogTrigger>
             <DialogContent className="max-w-md w-full rounded-xl p-6">
               <DialogHeader>
-                <DialogTitle>Add New Chargeable</DialogTitle>
+                <DialogTitle>Add New Landing Fee</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
@@ -289,29 +348,11 @@ export default function ChargeablesConfig() {
                     id="add-name"
                     value={addFormData.name}
                     onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })}
-                    placeholder="Enter chargeable name"
+                    placeholder="e.g., Wellington International"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="add-type">Type</Label>
-                  <Select
-                    value={addFormData.type}
-                    onValueChange={(value) => setAddFormData({ ...addFormData, type: value as ChargeableType })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(CHARGEABLE_TYPE_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="add-rate">Rate (NZD, Tax Exclusive)</Label>
+                  <Label htmlFor="add-rate">Default Rate (NZD, Tax Exclusive)</Label>
                   <Input
                     id="add-rate"
                     type="number"
@@ -321,6 +362,9 @@ export default function ChargeablesConfig() {
                     onChange={(e) => setAddFormData({ ...addFormData, rate: e.target.value })}
                     placeholder="0.00"
                   />
+                  <div className="mt-1 text-xs text-gray-500">
+                    You can set aircraft-specific rates after creating
+                  </div>
                 </div>
                 <div>
                   <Label htmlFor="add-description">Description (Optional)</Label>
@@ -328,7 +372,7 @@ export default function ChargeablesConfig() {
                     id="add-description"
                     value={addFormData.description}
                     onChange={(e) => setAddFormData({ ...addFormData, description: e.target.value })}
-                    placeholder="Enter description"
+                    placeholder="e.g., Landing fees for Wellington airport"
                     rows={3}
                   />
                 </div>
@@ -354,7 +398,7 @@ export default function ChargeablesConfig() {
                   </Button>
                   <Button
                     onClick={handleAdd}
-                    disabled={saving || !addFormData.name.trim() || !addFormData.type || !addFormData.rate}
+                    disabled={saving || !addFormData.name.trim() || !addFormData.rate}
                   >
                     {saving ? "Creating..." : "Create"}
                   </Button>
@@ -371,52 +415,25 @@ export default function ChargeablesConfig() {
           </div>
         )}
 
-        <div className="flex items-center gap-2 mb-4">
-          <Button
-            variant={filterType === "all" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilterType("all")}
-          >
-            All
-          </Button>
-          <Button
-            variant={filterType === "airways_fees" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilterType("airways_fees")}
-          >
-            Airways Fees
-          </Button>
-          <Button
-            variant={filterType === "other" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilterType("other")}
-          >
-            Other
-          </Button>
-        </div>
-
         <div className="flex-1 overflow-y-auto border rounded-lg">
-          {filteredChargeables.length === 0 ? (
+          {filteredFees.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              {searchTerm ? "No chargeables match your search." : "No chargeables configured yet."}
+              {searchTerm ? "No landing fees match your search." : "No landing fees configured yet."}
             </div>
           ) : (
             <div className="divide-y">
-              {filteredChargeables.map((chargeable) => (
+              {filteredFees.map((fee) => (
                 <div
-                  key={chargeable.id}
+                  key={fee.id}
                   className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
-                    selectedChargeable?.id === chargeable.id ? "bg-blue-50 border-l-4 border-l-blue-500" : ""
+                    selectedFee?.id === fee.id ? "bg-blue-50 border-l-4 border-l-blue-500" : ""
                   }`}
-                  onClick={() => setSelectedChargeable(chargeable)}
+                  onClick={() => setSelectedFee(fee)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-medium text-gray-900">{chargeable.name}</h4>
-                      <Badge variant="secondary" className="text-xs">
-                        {CHARGEABLE_TYPE_LABELS[chargeable.type]}
-                      </Badge>
-                      {chargeable.is_taxable ? (
+                      <h4 className="font-medium text-gray-900">{fee.name}</h4>
+                      {fee.is_taxable ? (
                         <Badge variant="default" className="text-xs bg-green-100 text-green-800">
                           Taxable
                         </Badge>
@@ -425,13 +442,16 @@ export default function ChargeablesConfig() {
                           Tax Exempt
                         </Badge>
                       )}
-                      {!chargeable.is_active && (
+                      {!fee.is_active && (
                         <Badge variant="outline" className="text-xs text-gray-500">
                           Inactive
                         </Badge>
                       )}
                     </div>
                   </div>
+                  {fee.description && (
+                    <p className="text-sm text-gray-500 mt-1">{fee.description}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -441,14 +461,14 @@ export default function ChargeablesConfig() {
 
       {/* Right side - Edit form */}
       <div className="w-1/2 border rounded-lg p-6 flex flex-col">
-        {selectedChargeable ? (
+        {selectedFee ? (
           <>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium">Edit Chargeable</h3>
+              <h3 className="text-lg font-medium">Edit Landing Fee</h3>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleDelete(selectedChargeable)}
+                onClick={() => handleDelete(selectedFee)}
                 className="text-red-600 hover:text-red-700"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
@@ -463,31 +483,12 @@ export default function ChargeablesConfig() {
                   id="edit-name"
                   value={editFormData.name}
                   onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                  placeholder="Enter chargeable name"
+                  placeholder="Enter landing fee name"
                 />
               </div>
 
               <div>
-                <Label htmlFor="edit-type">Type</Label>
-                <Select
-                  value={editFormData.type}
-                  onValueChange={(value) => setEditFormData({ ...editFormData, type: value as ChargeableType })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CHARGEABLE_TYPE_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="edit-rate">Rate (NZD, Tax Exclusive)</Label>
+                <Label htmlFor="edit-rate">Default Rate (NZD, Tax Exclusive)</Label>
                 <Input
                   id="edit-rate"
                   type="number"
@@ -497,18 +498,39 @@ export default function ChargeablesConfig() {
                   onChange={(e) => setEditFormData({ ...editFormData, rate: e.target.value })}
                   placeholder="0.00"
                 />
-                {editFormData.rate && !isNaN(parseFloat(editFormData.rate)) && (
-                  <div className="mt-2 text-sm text-gray-600">
-                    <div>Tax Exclusive: {formatCurrency(parseFloat(editFormData.rate))}</div>
-                    <div>
-                      {editFormData.is_taxable
-                        ? `Tax Inclusive: ${formatCurrency(calculateTaxInclusiveRate(parseFloat(editFormData.rate), true))}`
-                        : `Tax Exempt: ${formatCurrency(calculateTaxInclusiveRate(parseFloat(editFormData.rate), false))}`
-                      }
-                    </div>
-                  </div>
-                )}
+                <div className="mt-2 text-xs text-gray-500">
+                  Used when no aircraft-specific rate is set below
+                </div>
               </div>
+
+              {/* Aircraft-specific rates */}
+              {aircraftTypes.length > 0 && (
+                <div className="border rounded-lg p-4 bg-gray-50">
+                  <Label className="mb-3 block">Aircraft-Specific Rates</Label>
+                  <div className="text-xs text-gray-500 mb-3">
+                    Set different rates for each aircraft type. Leave blank to use default rate.
+                  </div>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {aircraftTypes.map((aircraftType) => (
+                      <div key={aircraftType.id} className="flex items-center gap-2">
+                        <Label htmlFor={`rate-${aircraftType.id}`} className="w-32 text-sm truncate">
+                          {aircraftType.name}
+                        </Label>
+                        <Input
+                          id={`rate-${aircraftType.id}`}
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={aircraftRates[aircraftType.id] || ''}
+                          onChange={(e) => setAircraftRates({ ...aircraftRates, [aircraftType.id]: e.target.value })}
+                          placeholder={editFormData.rate || '0.00'}
+                          className="flex-1"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <Label htmlFor="edit-description">Description (Optional)</Label>
@@ -543,7 +565,7 @@ export default function ChargeablesConfig() {
             <div className="mt-4 pt-4 border-t">
               <Button
                 onClick={handleEdit}
-                disabled={saving || !editFormData.name.trim() || !editFormData.type || !editFormData.rate}
+                disabled={saving || !editFormData.name.trim() || !editFormData.rate}
                 className="w-full"
               >
                 {saving ? "Saving..." : "Save Changes"}
@@ -553,8 +575,8 @@ export default function ChargeablesConfig() {
         ) : (
           <div className="h-full flex items-center justify-center text-gray-500">
             <div className="text-center">
-              <DollarSign className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p>Select a chargeable from the list to edit</p>
+              <PlaneLanding className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <p>Select a landing fee from the list to edit</p>
             </div>
           </div>
         )}

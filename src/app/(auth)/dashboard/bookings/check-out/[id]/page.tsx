@@ -10,6 +10,7 @@ import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 import { StatusBadge } from "@/components/bookings/StatusBadge";
 import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
+import { AircraftComponent } from "@/types/aircraft_components";
 
 interface BookingCheckOutPageProps extends ProtectedPageProps {
   params: Promise<{ id: string }>;
@@ -26,6 +27,8 @@ async function BookingCheckOutPage({ params }: BookingCheckOutPageProps) {
   let lessons: { id: string; name: string }[] = [];
   let flightTypes: { id: string; name: string }[] = [];
   let flightLog: FlightLog | null = null;
+  let aircraftComponents: AircraftComponent[] = [];
+  let currentAircraftHours: number | null = null;
 
   // Fetch booking with full user, instructor, aircraft, and flight_type objects
   const { data: bookingData } = await supabase
@@ -118,6 +121,28 @@ async function BookingCheckOutPage({ params }: BookingCheckOutPageProps) {
     flightLog = flightLogData;
   }
 
+  // Fetch aircraft components for the selected aircraft (from flight log or booking)
+  const selectedAircraftId = flightLog?.checked_out_aircraft_id || booking?.aircraft_id;
+  if (selectedAircraftId) {
+    // Fetch components for this aircraft
+    const { data: componentsData } = await supabase
+      .from("aircraft_components")
+      .select("*")
+      .eq("aircraft_id", selectedAircraftId)
+      .is("voided_at", null);
+
+    aircraftComponents = componentsData || [];
+
+    // Fetch current aircraft hours
+    const { data: aircraftData } = await supabase
+      .from("aircraft")
+      .select("total_hours")
+      .eq("id", selectedAircraftId)
+      .single();
+
+    currentAircraftHours = aircraftData?.total_hours ? Number(aircraftData.total_hours) : null;
+  }
+
   const status = booking?.status ?? "unconfirmed";
 
   return (
@@ -159,6 +184,8 @@ async function BookingCheckOutPage({ params }: BookingCheckOutPageProps) {
             lessons={lessons}
             flightTypes={flightTypes}
             flightLog={flightLog}
+            aircraftComponents={aircraftComponents}
+            currentAircraftHours={currentAircraftHours}
           />
         )}
       </div>

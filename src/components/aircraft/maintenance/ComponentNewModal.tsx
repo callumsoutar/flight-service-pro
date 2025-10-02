@@ -1,3 +1,4 @@
+"use client";
 import {
   Dialog,
   DialogContent,
@@ -11,9 +12,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import React, { useState, useEffect } from "react";
 import { AircraftComponent, ComponentType, IntervalType, ComponentStatus } from "@/types/aircraft_components";
-import { Info, Repeat, Calendar, Settings2, StickyNote } from "lucide-react";
+import { Info, Repeat, Calendar, Settings2, StickyNote, CalendarIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { format } from "date-fns";
 
 interface ComponentNewModalProps {
   open: boolean;
@@ -36,13 +40,14 @@ const ComponentNewModal: React.FC<ComponentNewModalProps> = ({ open, onOpenChang
   const [intervalType, setIntervalType] = useState<IntervalType>("HOURS");
   const [intervalHours, setIntervalHours] = useState<number | null>(null);
   const [intervalDays, setIntervalDays] = useState<number | null>(null);
-  const [currentDueDate, setCurrentDueDate] = useState<string>("");
+  const [currentDueDate, setCurrentDueDate] = useState<Date | null>(null);
   const [currentDueHours, setCurrentDueHours] = useState<number | null>(null);
-  const [lastCompletedDate, setLastCompletedDate] = useState<string>("");
+  const [lastCompletedDate, setLastCompletedDate] = useState<Date | null>(null);
   const [lastCompletedHours, setLastCompletedHours] = useState<number | null>(null);
   const [status, setStatus] = useState<ComponentStatus>("active");
   const [priority, setPriority] = useState<string | null>("MEDIUM");
   const [notes, setNotes] = useState<string>("");
+  const [notesExpanded, setNotesExpanded] = useState(false);
 
   // Reset fields when modal opens
   useEffect(() => {
@@ -53,13 +58,14 @@ const ComponentNewModal: React.FC<ComponentNewModalProps> = ({ open, onOpenChang
       setIntervalType("HOURS");
       setIntervalHours(null);
       setIntervalDays(null);
-      setCurrentDueDate("");
+      setCurrentDueDate(null);
       setCurrentDueHours(null);
-      setLastCompletedDate("");
+      setLastCompletedDate(null);
       setLastCompletedHours(null);
       setStatus("active");
       setPriority("MEDIUM");
       setNotes("");
+      setNotesExpanded(false);
     }
   }, [open]);
 
@@ -72,9 +78,9 @@ const ComponentNewModal: React.FC<ComponentNewModalProps> = ({ open, onOpenChang
       interval_type: intervalType,
       interval_hours: intervalHours,
       interval_days: intervalDays,
-      current_due_date: currentDueDate === "" ? null : currentDueDate,
+      current_due_date: currentDueDate ? currentDueDate.toISOString().split('T')[0] : null,
       current_due_hours: currentDueHours,
-      last_completed_date: lastCompletedDate === "" ? null : lastCompletedDate,
+      last_completed_date: lastCompletedDate ? lastCompletedDate.toISOString().split('T')[0] : null,
       last_completed_hours: lastCompletedHours,
       status: status as ComponentStatus,
       priority,
@@ -90,25 +96,25 @@ const ComponentNewModal: React.FC<ComponentNewModalProps> = ({ open, onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[700px] max-w-[98vw] mx-auto p-10 bg-white rounded-2xl shadow-xl border border-muted overflow-y-auto max-h-[90vh]">
-        <DialogHeader className="mb-2">
-          <DialogTitle className="text-2xl font-bold mb-1 tracking-tight">Create Component</DialogTitle>
-          <DialogDescription className="mb-2 text-base text-muted-foreground font-normal">Enter details for the new aircraft component.</DialogDescription>
+      <DialogContent className="w-[700px] max-w-[98vw] mx-auto p-6 bg-white rounded-2xl shadow-xl border border-muted overflow-y-auto max-h-[90vh]">
+        <DialogHeader className="mb-3">
+          <DialogTitle className="text-xl font-bold tracking-tight">Create Component</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground font-normal">Enter details for the new aircraft component.</DialogDescription>
         </DialogHeader>
-        <form className="flex flex-col gap-8 w-full" onSubmit={handleSave}>
+        <form className="flex flex-col gap-5 w-full" onSubmit={handleSave}>
           {/* Component Info */}
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Info className="w-5 h-5 text-indigo-600" />
-              <h3 className="text-lg font-bold">Component Info</h3>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Info className="w-4 h-4 text-indigo-600" />
+              <h3 className="text-base font-semibold">Component Info</h3>
             </div>
-            <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-medium mb-1">Name <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium mb-1">Name <span className="text-red-500">*</span></label>
                 <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. 100 Hour Inspection" required />
               </div>
               <div>
-                <label className="block font-medium mb-1">Component Type <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium mb-1">Component Type <span className="text-red-500">*</span></label>
                 <Select value={componentType} onValueChange={v => setComponentType(v as ComponentType)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select type" />
@@ -120,86 +126,127 @@ const ComponentNewModal: React.FC<ComponentNewModalProps> = ({ open, onOpenChang
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <label className="block font-medium mb-1">Description</label>
-                <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Add any notes or details about this component..." />
-              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Description</label>
+              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Add any notes or details..." className="resize-none h-16" />
             </div>
           </div>
-          <hr className="my-2 border-muted" />
+          <hr className="border-muted" />
           {/* Dates & Hours */}
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Calendar className="w-5 h-5 text-green-600" />
-              <h3 className="text-lg font-bold">Dates & Hours</h3>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-green-600" />
+              <h3 className="text-base font-semibold">Dates & Hours</h3>
             </div>
-            <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-medium mb-1">Last Completed Hours</label>
+                <label className="block text-sm font-medium mb-1">Last Completed Hours</label>
                 <Input type="number" value={lastCompletedHours ?? ""} onChange={e => setLastCompletedHours(e.target.value ? Number(e.target.value) : null)} />
               </div>
               <div>
-                <label className="block font-medium mb-1">Last Completed Date</label>
-                <Input type="date" value={lastCompletedDate || ""} onChange={e => setLastCompletedDate(e.target.value)} />
+                <label className="block text-sm font-medium mb-1">Last Completed Date</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={
+                        "w-full justify-start text-left font-normal " +
+                        (!lastCompletedDate ? "text-muted-foreground" : "")
+                      }
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {lastCompletedDate ? format(lastCompletedDate, "dd MMM yyyy") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={lastCompletedDate ?? undefined}
+                      onSelect={date => setLastCompletedDate(date ?? null)}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
-              {/* Separated section for current due and extension */}
-              <div className="bg-gray-100 rounded-xl p-4 flex flex-col gap-4">
-                <div>
-                  <label className="block font-medium mb-1">Current Due Hours</label>
-                  <Input type="number" value={currentDueHours ?? ""} onChange={e => setCurrentDueHours(e.target.value ? Number(e.target.value) : null)} className="bg-white" />
-                </div>
-                <div>
-                  <label className="block font-medium mb-1">Current Due Date</label>
-                  <Input type="date" value={currentDueDate || ""} onChange={e => setCurrentDueDate(e.target.value)} className="bg-white" />
-                </div>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3 grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Current Due Hours</label>
+                <Input type="number" value={currentDueHours ?? ""} onChange={e => setCurrentDueHours(e.target.value ? Number(e.target.value) : null)} className="bg-white" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Current Due Date</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={
+                        "w-full justify-start text-left font-normal bg-white " +
+                        (!currentDueDate ? "text-muted-foreground" : "")
+                      }
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {currentDueDate ? format(currentDueDate, "dd MMM yyyy") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={currentDueDate ?? undefined}
+                      onSelect={date => setCurrentDueDate(date ?? null)}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
           </div>
-          <hr className="my-2 border-muted" />
+          <hr className="border-muted" />
           {/* Intervals */}
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Repeat className="w-5 h-5 text-blue-600" />
-              <h3 className="text-lg font-bold">Intervals</h3>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Repeat className="w-4 h-4 text-blue-600" />
+              <h3 className="text-base font-semibold">Intervals</h3>
             </div>
-            <div className="flex flex-col gap-4">
-              <div>
-                <label className="block font-medium mb-1">Interval Type <span className="text-red-500">*</span></label>
-                <Select value={intervalType} onValueChange={v => setIntervalType(v as IntervalType)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select interval" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {INTERVAL_TYPE_OPTIONS.map((type) => (
-                      <SelectItem key={type} value={type}>{type.charAt(0) + type.slice(1).toLowerCase()}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Interval Type <span className="text-red-500">*</span></label>
+              <Select value={intervalType} onValueChange={v => setIntervalType(v as IntervalType)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select interval" />
+                </SelectTrigger>
+                <SelectContent>
+                  {INTERVAL_TYPE_OPTIONS.map((type) => (
+                    <SelectItem key={type} value={type}>{type.charAt(0) + type.slice(1).toLowerCase()}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               {(intervalType === "HOURS" || intervalType === "BOTH") && (
                 <div>
-                  <label className="block font-medium mb-1">Interval Hours <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium mb-1">Interval Hours <span className="text-red-500">*</span></label>
                   <Input type="number" value={intervalHours ?? ""} onChange={e => setIntervalHours(e.target.value ? Number(e.target.value) : null)} placeholder="e.g. 100" />
                 </div>
               )}
               {(intervalType === "CALENDAR" || intervalType === "BOTH") && (
                 <div>
-                  <label className="block font-medium mb-1">Interval Days <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium mb-1">Interval Days <span className="text-red-500">*</span></label>
                   <Input type="number" value={intervalDays ?? ""} onChange={e => setIntervalDays(e.target.value ? Number(e.target.value) : null)} placeholder="e.g. 365" />
                 </div>
               )}
             </div>
           </div>
-          <hr className="my-2 border-muted" />
+          <hr className="border-muted" />
           {/* Status & Priority */}
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Settings2 className="w-5 h-5 text-orange-600" />
-              <h3 className="text-lg font-bold">Status & Priority</h3>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Settings2 className="w-4 h-4 text-orange-600" />
+              <h3 className="text-base font-semibold">Status & Priority</h3>
             </div>
-            <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-medium mb-1">Status <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium mb-1">Status <span className="text-red-500">*</span></label>
                 <Select value={status} onValueChange={v => setStatus(v as ComponentStatus)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select status" />
@@ -212,7 +259,7 @@ const ComponentNewModal: React.FC<ComponentNewModalProps> = ({ open, onOpenChang
                 </Select>
               </div>
               <div>
-                <label className="block font-medium mb-1">Priority</label>
+                <label className="block text-sm font-medium mb-1">Priority</label>
                 <Select value={priority || ""} onValueChange={v => setPriority(v)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select priority" />
@@ -226,20 +273,27 @@ const ComponentNewModal: React.FC<ComponentNewModalProps> = ({ open, onOpenChang
               </div>
             </div>
           </div>
-          <hr className="my-2 border-muted" />
+          <hr className="border-muted" />
           {/* Notes Section */}
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-2 mb-2">
-              <StickyNote className="w-5 h-5 text-purple-600" />
-              <h3 className="text-lg font-bold">Notes</h3>
-            </div>
-            <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any additional notes..." />
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setNotesExpanded(!notesExpanded)}
+              className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+            >
+              <StickyNote className="w-4 h-4 text-purple-600" />
+              <h3 className="text-base font-semibold">Notes</h3>
+              {notesExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            {notesExpanded && (
+              <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any additional notes..." className="resize-none h-20" />
+            )}
           </div>
-          <DialogFooter className="pt-8 flex flex-col sm:flex-row gap-2 sm:gap-4 w-full">
+          <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2 sm:gap-3 w-full">
             <DialogClose asChild>
-              <Button variant="outline" type="button" className="w-full sm:w-auto border border-muted hover:border-indigo-400">Cancel</Button>
+              <Button variant="outline" type="button" className="w-full sm:w-auto">Cancel</Button>
             </DialogClose>
-            <Button type="submit" className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-md">Create Component</Button>
+            <Button type="submit" className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">Create Component</Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -6,6 +6,21 @@ export interface Instructor {
   rating: string | null; // Foreign key to instructor_categories table
   created_at: string;
   updated_at: string;
+  // Status and employment
+  status: "active" | "inactive" | "deactivated" | "suspended";
+  employment_type: "full_time" | "part_time" | "casual" | "contractor" | null;
+  hire_date: string | null;
+  termination_date: string | null;
+  hourly_rate: number | null;
+  // Approval and certification
+  approved_by: string | null;
+  approved_at: string | null;
+  expires_at: string | null;
+  instructor_check_due_date: string | null;
+  instrument_check_due_date: string | null;
+  is_actively_instructing: boolean;
+  class_1_medical_due_date: string | null;
+  notes: string | null;
   // Endorsement columns
   night_removal: boolean;
   aerobatics_removal: boolean;
