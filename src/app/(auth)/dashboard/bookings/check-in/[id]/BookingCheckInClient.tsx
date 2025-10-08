@@ -4,8 +4,9 @@ import CheckInDetails from "@/components/bookings/CheckInDetails";
 import type { Booking } from "@/types/bookings";
 import type { Chargeable } from "@/types/chargeables";
 import type { InvoiceItem } from "@/types/invoice_items";
-import { Pencil, PlaneLanding, AirVent, Grid, Trash2, Loader2, CheckCircle2, MessageSquare, X } from "lucide-react";
+import { Pencil, PlaneLanding, AirVent, Grid, Trash2, Loader2, CheckCircle2, MessageSquare } from "lucide-react";
 import ChargeableSearchDropdown from "@/components/invoices/ChargeableSearchDropdown";
+import LandingFeeSelector from "@/components/invoices/LandingFeeSelector";
 import { useRouter } from "next/navigation";
 import { 
   useBookingCheckIn, 
@@ -76,7 +77,6 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
   } = useInvoiceItemsManagement(invoice?.id || null);
 
   const [chargeableTab, setChargeableTab] = useState<'landing_fee' | 'airways_fees' | 'other'>('landing_fee');
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const handleCalculateCharges = useCallback(async (details: {
     chargeTime: number;
@@ -138,11 +138,36 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
 
   const handleAddItem = useCallback(async (item: Chargeable, quantity: number): Promise<void> => {
     if (!invoice) return;
-    
+
     // Use the optimized addItem mutation
     addItem({
       invoiceId: invoice.id,
       item,
+      quantity,
+    });
+  }, [invoice, addItem]);
+
+  // Handler specifically for landing fees (which have a different structure)
+  const handleAddLandingFee = useCallback(async (item: { chargeable_id: string; description: string; rate: number; is_taxable: boolean }, quantity: number): Promise<void> => {
+    if (!invoice) return;
+
+    // Convert landing fee item to Chargeable format for addItem
+    const chargeableItem: Chargeable = {
+      id: item.chargeable_id,
+      name: item.description,
+      description: null,
+      chargeable_type_id: '', // Not needed for adding to invoice
+      rate: item.rate,
+      is_taxable: item.is_taxable,
+      is_active: true,
+      voided_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    addItem({
+      invoiceId: invoice.id,
+      item: chargeableItem,
       quantity,
     });
   }, [invoice, addItem]);
@@ -238,23 +263,16 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
   
   const displayInvoice = optimisticData?.invoice || lastCalculateResult?.invoice || invoice;
 
-  // Show success modal when booking is completed, but only for dual flights
-  // Solo flights should skip the debrief modal and go directly to invoice/payment
+  // Navigate for solo flights only
+  // For dual flights, show inline action bar instead of redirecting
   React.useEffect(() => {
-    if (completeSuccess) {
-      if (isDualFlight) {
-        setShowSuccessModal(true);
-      } else if (isSoloFlight) {
-        // For solo flights, navigate directly to invoice/payment if available
-        if (displayInvoice?.id) {
-          router.push(`/dashboard/invoices/view/${displayInvoice.id}`);
-        }
-      } else {
-        // For other types (trial, etc.), show the modal as fallback
-        setShowSuccessModal(true);
+    if (completeSuccess && isSoloFlight) {
+      // For solo flights, navigate directly to invoice/payment if available
+      if (displayInvoice?.id) {
+        router.push(`/dashboard/invoices/view/${displayInvoice.id}`);
       }
     }
-  }, [completeSuccess, isDualFlight, isSoloFlight, displayInvoice?.id, router]);
+  }, [completeSuccess, isSoloFlight, displayInvoice?.id, router]);
 
   // Show loading state only for critical data
   const isLoading = invoiceLoading && flightTypesLoading;
@@ -391,12 +409,12 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
           {displayInvoice && (
             <div className="pt-2 pb-4">
               <hr className="border-t border-gray-200 mt-6 mb-4" />
-              <div className="flex gap-3 mt-4 mb-2">
+              <div className="flex gap-2 mt-4 mb-2">
                 <button
-                  className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 border
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
                     ${chargeableTab === 'landing_fee'
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm scale-105'
-                      : 'bg-gray-100 text-muted-foreground border-transparent hover:bg-gray-200'}
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}
                   `}
                   onClick={() => setChargeableTab('landing_fee')}
                 >
@@ -404,10 +422,10 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
                   Landing Fees
                 </button>
                 <button
-                  className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 border
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
                     ${chargeableTab === 'airways_fees'
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm scale-105'
-                      : 'bg-gray-100 text-muted-foreground border-transparent hover:bg-gray-200'}
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}
                   `}
                   onClick={() => setChargeableTab('airways_fees')}
                 >
@@ -415,10 +433,10 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
                   Airways Fees
                 </button>
                 <button
-                  className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 border
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
                     ${chargeableTab === 'other'
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm scale-105'
-                      : 'bg-gray-100 text-muted-foreground border-transparent hover:bg-gray-200'}
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}
                   `}
                   onClick={() => setChargeableTab('other')}
                 >
@@ -427,15 +445,27 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
                 </button>
               </div>
               <p className="text-sm text-muted-foreground mt-1 mb-4 ml-1">
-                Select a category to quickly find the right chargeable.
+                {chargeableTab === 'landing_fee'
+                  ? 'Search for an airport to add its landing fee for this aircraft.'
+                  : 'Select a category to quickly find the right chargeable.'}
               </p>
-              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Add Extra Charges</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">
+                {chargeableTab === 'landing_fee' ? 'Add Landing Fee' : 'Add Extra Charges'}
+              </h3>
               <div className="mt-2">
-                <ChargeableSearchDropdown
-                  onAdd={handleAddItem}
-                  taxRate={displayInvoice.tax_rate ?? organizationTaxRate}
-                  category={chargeableTab}
-                />
+                {chargeableTab === 'landing_fee' ? (
+                  <LandingFeeSelector
+                    onAdd={handleAddLandingFee}
+                    taxRate={displayInvoice.tax_rate ?? organizationTaxRate}
+                    aircraftTypeId={aircraft?.aircraft_type_id}
+                  />
+                ) : (
+                  <ChargeableSearchDropdown
+                    onAdd={handleAddItem}
+                    taxRate={displayInvoice.tax_rate ?? organizationTaxRate}
+                    category={chargeableTab}
+                  />
+                )}
               </div>
               {isAdding && (
                 <div className="mt-2 text-sm text-blue-600 flex items-center gap-2">
@@ -460,90 +490,61 @@ export default function BookingCheckInClient({ booking, instructors }: BookingCh
               <div className="font-bold text-green-600">${displayTotals.total.toFixed(2)}</div>
             </div>
           </div>
-          {/* Confirm and Save Button */}
-          <div className="mt-6 flex flex-col items-end gap-2">
-            {calculateError && <div className="text-red-600 text-sm">{calculateError}</div>}
-            {completeError && <div className="text-red-600 text-sm">{completeError}</div>}
-            {completeSuccess && (
-              <div className="flex items-center gap-1 text-green-600 text-sm font-medium">
-                <CheckCircle2 className="w-4 h-4" />
-                {isSoloFlight ? 'Solo flight completed successfully!' : 'Booking completed successfully!'}
+
+          {/* Action Buttons Section */}
+          <div className="mt-6">
+            {calculateError && <div className="text-red-600 text-sm mb-3">{calculateError}</div>}
+            {completeError && <div className="text-red-600 text-sm mb-3">{completeError}</div>}
+
+            {/* Success state for dual flights - show action buttons */}
+            {completeSuccess && isDualFlight ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-green-600 text-sm font-medium px-3 py-2 bg-green-50 rounded-lg border border-green-200">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Flight charges saved!
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => router.push(`/dashboard/bookings/debrief/${booking.id}`)}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm text-sm"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    Continue to Debrief
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (displayInvoice?.id) {
+                        router.push(`/dashboard/invoices/view/${displayInvoice.id}`);
+                      }
+                    }}
+                    className="flex-1 bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-1.5 border border-gray-300 text-sm"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    View Invoice
+                  </button>
+                </div>
               </div>
+            ) : completeSuccess && isSoloFlight ? (
+              /* Success message for solo flights (before redirect) */
+              <div className="flex items-center gap-2 text-green-600 text-sm font-medium px-3 py-2 bg-green-50 rounded-lg border border-green-200">
+                <CheckCircle2 className="w-4 h-4" />
+                Solo flight completed successfully! Redirecting to invoice...
+              </div>
+            ) : (
+              /* Save button - shown before completion */
+              <button
+                className={`w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg font-medium bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed text-sm`}
+                onClick={handleConfirmAndSave}
+                disabled={isCompleting || displayInvoiceItems.length === 0 || !displayInvoice}
+                type="button"
+              >
+                {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Save and Confirm
+              </button>
             )}
-            <button
-              className={`inline-flex items-center gap-2 px-6 py-2 rounded-lg font-semibold bg-indigo-600 text-white shadow hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed`}
-              onClick={handleConfirmAndSave}
-              disabled={isCompleting || displayInvoiceItems.length === 0 || !displayInvoice}
-              type="button"
-            >
-              {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              Save and Confirm
-            </button>
           </div>
         </div>
       </div>
-      
-      {/* Success Modal with Debrief Option */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-10 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                  <CheckCircle2 className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">Check-In Complete!</h3>
-                  <p className="text-sm text-gray-600">Flight charges have been saved successfully.</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowSuccessModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <MessageSquare className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-semibold text-blue-900 mb-1">Ready for Debrief?</h4>
-                    <p className="text-sm text-blue-700">
-                      Complete the student&apos;s debrief to finalize this flight session.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex gap-3">
-                <button
-                  onClick={() => router.push(`/dashboard/bookings/debrief/${booking.id}`)}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  Start Debrief
-                </button>
-                <button
-                  onClick={() => {
-                    if (displayInvoice?.id) {
-                      router.push(`/dashboard/invoices/view/${displayInvoice.id}`);
-                    } else {
-                      setShowSuccessModal(false);
-                    }
-                  }}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  Continue to Payment
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 } 

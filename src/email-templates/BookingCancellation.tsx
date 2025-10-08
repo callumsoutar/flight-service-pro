@@ -10,6 +10,10 @@ interface BookingCancellationProps {
   cancellationCategory?: string;
   cancelledBy?: string;
   dashboardUrl?: string;
+  schoolName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  tagline?: string;
 }
 
 export default function BookingCancellation({
@@ -19,6 +23,10 @@ export default function BookingCancellation({
   cancellationCategory,
   cancelledBy,
   dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://yourdomain.com',
+  schoolName,
+  contactEmail,
+  contactPhone,
+  tagline,
 }: BookingCancellationProps) {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-GB', {
@@ -39,7 +47,13 @@ export default function BookingCancellation({
   };
 
   return (
-    <EmailLayout title="Booking Cancelled - Aero Safety Flight School">
+    <EmailLayout
+      title={`Booking Cancelled - ${schoolName || 'Flight Desk Pro'}`}
+      schoolName={schoolName}
+      contactEmail={contactEmail}
+      contactPhone={contactPhone}
+      tagline={tagline}
+    >
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '40px' }}>
         <Text style={{ margin: '0 0 12px 0', fontSize: '32px', fontWeight: '700', color: '#dc2626', lineHeight: '1.2' }}>

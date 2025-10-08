@@ -2,7 +2,8 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
-  DialogTitle
+  DialogTitle,
+  DialogDescription
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -359,6 +360,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
         <DialogContent className="w-[800px] max-w-[98vw] mx-auto p-0 bg-white rounded-2xl shadow-xl border-0 max-h-[90vh] flex flex-col">
           <VisuallyHidden>
             <DialogTitle>Loading Task Details</DialogTitle>
+            <DialogDescription>Please wait while we load the task information</DialogDescription>
           </VisuallyHidden>
           <div className="space-y-4 p-4">
             <Skeleton className="h-8 w-3/4" />
@@ -376,6 +378,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
         <DialogContent className="w-[800px] max-w-[98vw] mx-auto p-0 bg-white rounded-2xl shadow-xl border-0 max-h-[90vh] flex flex-col">
           <VisuallyHidden>
             <DialogTitle>Task Not Found</DialogTitle>
+            <DialogDescription>The requested task could not be found</DialogDescription>
           </VisuallyHidden>
           <div className="text-center py-8">
             <p className="text-gray-500">Task not found</p>
@@ -390,6 +393,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       <DialogContent className="w-[750px] max-w-[95vw] mx-auto p-0 bg-white rounded-xl shadow-xl border-0 overflow-hidden flex flex-col max-h-[90vh]">
         <VisuallyHidden>
           <DialogTitle>Task Details</DialogTitle>
+          <DialogDescription>View and manage task information</DialogDescription>
         </VisuallyHidden>
 
         {/* Header */}
@@ -574,15 +578,15 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-slate-700">Assigned To Instructor</label>
                 <Select
-                  value={tempAssignedToInstructorId || undefined}
-                  onValueChange={setTempAssignedToInstructorId}
+                  value={tempAssignedToInstructorId || "unassigned"}
+                  onValueChange={(value) => setTempAssignedToInstructorId(value === "unassigned" ? "" : value)}
                   disabled={loadingInstructors}
                 >
                   <SelectTrigger className="w-full border-slate-200 focus:border-indigo-300 focus:ring-indigo-200">
                     <SelectValue placeholder={loadingInstructors ? "Loading..." : "Select instructor..."} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">
+                    <SelectItem value="unassigned">
                       <div className="flex items-center gap-2 text-sm text-slate-500">
                         Unassigned
                       </div>

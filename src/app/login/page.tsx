@@ -45,9 +45,9 @@ export default function LoginPage() {
         {/* Branding */}
         <div className="flex items-center gap-2 mb-8">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-700 to-blue-400 flex items-center justify-center">
-            <span className="text-white text-lg font-bold">A</span>
+            <span className="text-white text-lg font-bold">F</span>
           </div>
-          <span className="text-xl font-bold text-violet-700 tracking-tight">Aero Safety</span>
+          <span className="text-xl font-bold text-violet-700 tracking-tight">Flight Desk Pro</span>
         </div>
         {/* Heading */}
         <h1 className="text-2xl font-extrabold text-gray-900 mb-1 w-full text-left">Sign in to your account</h1>

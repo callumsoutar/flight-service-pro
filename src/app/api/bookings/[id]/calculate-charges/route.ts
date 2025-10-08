@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { getOrganizationTaxRate } from "@/lib/tax-rates";
 import { InvoiceService } from "@/lib/invoice-service";
+import { generateRequiredItems, matchInvoiceItems } from "@/lib/invoice-item-upsert";
 import { Booking } from "@/types/bookings";
 import { FlightLog } from "@/types/flight_logs";
 import { Invoice } from "@/types/invoices";
@@ -372,246 +373,119 @@ export async function POST(
     // Use checked_out_aircraft from flight_log instead of booking aircraft
     const aircraftReg = flightLog?.checked_out_aircraft?.registration || booking.aircraft?.registration || 'Aircraft';
 
-    // Use instruction type to determine flight category (more reliable than dual/solo time calculations)
-    const isSoloFlight = instructionType === 'solo';
-    const isDualFlight = instructionType === 'dual';
-    const isTrialFlight = instructionType === 'trial';
-
-    // 5. Get current invoice items
+    // 5. Get current invoice items (active only)
     const { data: currentItems } = await supabase
       .from("invoice_items")
-      .select("*")
-      .eq("invoice_id", invoice.id);
+      .select("id, description, quantity, unit_price, deleted_at")
+      .eq("invoice_id", invoice.id)
+      .is("deleted_at", null); // Only fetch non-deleted items
 
-    // Define item descriptions
-    const dualAircraftDesc = `Dual ${flightTypeName} - ${aircraftReg}`;
-    const dualInstructorDesc = `Dual ${flightTypeName} - ${instructorName}`;
-    const soloAircraftDesc = `Solo ${flightTypeName} - ${aircraftReg}`;
-    const standardAircraftDesc = `${flightTypeName} - ${aircraftReg}`;
-    const standardInstructorDesc = `${flightTypeName} - ${instructorName}`;
+    // 6. Generate required items based on flight type
+    const requiredItems = generateRequiredItems({
+      instructionType,
+      dualTime: roundToOneDecimal(dualTime),
+      soloTime: roundToOneDecimal(soloTime),
+      aircraftRate,
+      instructorRate,
+      soloAircraftRate,
+      flightTypeName,
+      aircraftReg,
+      instructorName,
+      taxRate: invoice.tax_rate
+    });
 
-    // Since we're clearing all items and recreating them, we don't need to find existing items
+    // 7. Match existing items to required items and determine actions
+    const actions = matchInvoiceItems(currentItems || [], requiredItems);
 
-    // 6. Create or update line items based on flight instruction type
-    const itemOperations = [];
+    // 8. Execute actions atomically
+    const operations = [];
 
-    // TODO: TRANSACTION SAFETY IMPROVEMENT NEEDED
-    // Current implementation deletes all items then recreates them, which is not atomic.
-    // If the insert fails after delete, invoice items are lost.
-    // Future improvement: Use a PostgreSQL function to handle this atomically, or
-    // implement a better upsert strategy that updates existing items instead of deleting.
-    // For now, we collect all inserts first, then delete only if inserts will succeed.
-
-    // IMPORTANT: Do NOT delete old items yet - we'll delete them only after successfully creating new ones
-
-    if (isSoloFlight) {
-      // SOLO FLIGHTS: Only create aircraft charge, no instructor charge
-      const calculatedAmounts = InvoiceService.calculateItemAmounts({
-        quantity: roundToOneDecimal(chargeTime),
-        unit_price: aircraftRate,
-        tax_rate: invoice.tax_rate
-      });
-
-      itemOperations.push(
-        supabase
-          .from("invoice_items")
-          .insert({
-            invoice_id: invoice.id,
-            description: soloAircraftDesc,
-            quantity: roundToOneDecimal(chargeTime),
-            unit_price: aircraftRate,
-            tax_rate: invoice.tax_rate,
-            amount: calculatedAmounts.amount,
-            tax_amount: calculatedAmounts.tax_amount,
-            line_total: calculatedAmounts.line_total,
-            rate_inclusive: calculatedAmounts.rate_inclusive,
-          })
-          .select("*")
-          .single()
-      );
-    } else if (isDualFlight) {
-      // DUAL FLIGHTS: Handle dual and solo segments separately
-
-      // Dual time items (aircraft + instructor)
-      if (dualTime > 0) {
-        // Dual aircraft
-        const dualAircraftAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(dualTime),
-          unit_price: aircraftRate,
-          tax_rate: invoice.tax_rate
+    for (const action of actions) {
+      if (action.action === 'update' && action.existingId) {
+        // UPDATE existing item
+        const required = action.data as { description: string; quantity: number; unit_price: number; tax_rate: number };
+        const calculatedAmounts = InvoiceService.calculateItemAmounts({
+          quantity: required.quantity,
+          unit_price: required.unit_price,
+          tax_rate: required.tax_rate
         });
 
-        itemOperations.push(
+        operations.push(
+          supabase
+            .from("invoice_items")
+            .update({
+              quantity: required.quantity,
+              unit_price: required.unit_price,
+              tax_rate: required.tax_rate,
+              amount: calculatedAmounts.amount,
+              tax_amount: calculatedAmounts.tax_amount,
+              line_total: calculatedAmounts.line_total,
+              rate_inclusive: calculatedAmounts.rate_inclusive,
+            })
+            .eq("id", action.existingId)
+            .select("*")
+            .single()
+        );
+      } else if (action.action === 'insert') {
+        // INSERT new item
+        const required = action.data as { description: string; quantity: number; unit_price: number; tax_rate: number; chargeable_id?: string | null };
+        const calculatedAmounts = InvoiceService.calculateItemAmounts({
+          quantity: required.quantity,
+          unit_price: required.unit_price,
+          tax_rate: required.tax_rate
+        });
+
+        operations.push(
           supabase
             .from("invoice_items")
             .insert({
               invoice_id: invoice.id,
-              description: dualAircraftDesc,
-              quantity: roundToOneDecimal(dualTime),
-              unit_price: aircraftRate,
-              tax_rate: invoice.tax_rate,
-              amount: dualAircraftAmounts.amount,
-              tax_amount: dualAircraftAmounts.tax_amount,
-              line_total: dualAircraftAmounts.line_total,
-              rate_inclusive: dualAircraftAmounts.rate_inclusive,
+              description: required.description,
+              quantity: required.quantity,
+              unit_price: required.unit_price,
+              tax_rate: required.tax_rate,
+              chargeable_id: required.chargeable_id || null,
+              amount: calculatedAmounts.amount,
+              tax_amount: calculatedAmounts.tax_amount,
+              line_total: calculatedAmounts.line_total,
+              rate_inclusive: calculatedAmounts.rate_inclusive,
             })
             .select("*")
             .single()
         );
-
-        // Dual instructor
-        const dualInstructorAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(dualTime),
-          unit_price: instructorRate,
-          tax_rate: invoice.tax_rate
-        });
-
-        itemOperations.push(
+      } else if (action.action === 'delete') {
+        // SOFT DELETE item
+        const itemId = (action.data as { id: string }).id;
+        operations.push(
           supabase
             .from("invoice_items")
-            .insert({
-              invoice_id: invoice.id,
-              description: dualInstructorDesc,
-              quantity: roundToOneDecimal(dualTime),
-              unit_price: instructorRate,
-              tax_rate: invoice.tax_rate,
-              amount: dualInstructorAmounts.amount,
-              tax_amount: dualInstructorAmounts.tax_amount,
-              line_total: dualInstructorAmounts.line_total,
-              rate_inclusive: dualInstructorAmounts.rate_inclusive,
+            .update({
+              deleted_at: new Date().toISOString(),
+              deleted_by: user.id
             })
-            .select("*")
-            .single()
-        );
-      }
-
-      // Solo time continuation (aircraft only)
-      if (soloTime > 0) {
-        const soloRate = soloAircraftRate || aircraftRate;
-        const soloAircraftAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(soloTime),
-          unit_price: soloRate,
-          tax_rate: invoice.tax_rate
-        });
-
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .insert({
-              invoice_id: invoice.id,
-              description: soloAircraftDesc,
-              quantity: roundToOneDecimal(soloTime),
-              unit_price: soloRate,
-              tax_rate: invoice.tax_rate,
-              amount: soloAircraftAmounts.amount,
-              tax_amount: soloAircraftAmounts.tax_amount,
-              line_total: soloAircraftAmounts.line_total,
-              rate_inclusive: soloAircraftAmounts.rate_inclusive,
-            })
-            .select("*")
-            .single()
-        );
-      }
-    } else {
-      // TRIAL FLIGHTS or FALLBACK: Create standard items
-
-      // Aircraft item
-      const aircraftAmounts = InvoiceService.calculateItemAmounts({
-        quantity: roundToOneDecimal(chargeTime),
-        unit_price: aircraftRate,
-        tax_rate: invoice.tax_rate
-      });
-
-      itemOperations.push(
-        supabase
-          .from("invoice_items")
-          .insert({
-            invoice_id: invoice.id,
-            description: standardAircraftDesc,
-            quantity: roundToOneDecimal(chargeTime),
-            unit_price: aircraftRate,
-            tax_rate: invoice.tax_rate,
-            amount: aircraftAmounts.amount,
-            tax_amount: aircraftAmounts.tax_amount,
-            line_total: aircraftAmounts.line_total,
-            rate_inclusive: aircraftAmounts.rate_inclusive,
-          })
-          .select("*")
-          .single()
-      );
-
-      // Instructor item (only for trial flights or when needed)
-      if (isTrialFlight || instructorRate > 0) {
-        const instructorAmounts = InvoiceService.calculateItemAmounts({
-          quantity: roundToOneDecimal(chargeTime),
-          unit_price: instructorRate,
-          tax_rate: invoice.tax_rate
-        });
-
-        itemOperations.push(
-          supabase
-            .from("invoice_items")
-            .insert({
-              invoice_id: invoice.id,
-              description: standardInstructorDesc,
-              quantity: roundToOneDecimal(chargeTime),
-              unit_price: instructorRate,
-              tax_rate: invoice.tax_rate,
-              amount: instructorAmounts.amount,
-              tax_amount: instructorAmounts.tax_amount,
-              line_total: instructorAmounts.line_total,
-              rate_inclusive: instructorAmounts.rate_inclusive,
-            })
-            .select("*")
-            .single()
+            .eq("id", itemId)
         );
       }
     }
 
-    // Execute line item operations (inserts) in parallel
-    const itemResults = await Promise.allSettled(itemOperations);
+    // Execute all operations
+    const results = await Promise.allSettled(operations);
 
-    // Check for errors in item operations
-    for (const result of itemResults) {
-      if (result.status === 'rejected') {
-        console.error('Line item operation failed:', result.reason);
-        return NextResponse.json({ error: "Failed to create new invoice items" }, { status: 500 });
-      }
+    // Check for errors
+    const errors = results.filter(r => r.status === 'rejected');
+    if (errors.length > 0) {
+      console.error('Invoice item operations failed:', errors);
+      return NextResponse.json({ 
+        error: "Failed to update invoice items" 
+      }, { status: 500 });
     }
 
-    // SAFE: Now that all new items have been successfully created, delete the old items
-    // This ensures we never lose invoice items due to failed inserts
-    if (currentItems && currentItems.length > 0) {
-      // Get the IDs of newly created items to avoid deleting them
-      const newItemIds = itemResults
-        .filter(r => r.status === 'fulfilled')
-        .map(r => (r as PromiseFulfilledResult<{ data: { id: string } }>).value?.data?.id)
-        .filter(Boolean);
-
-      if (newItemIds.length > 0) {
-        // Delete only items that are NOT in the new items list
-        const { error: deleteError } = await supabase
-          .from("invoice_items")
-          .delete()
-          .eq("invoice_id", invoice.id)
-          .not('id', 'in', `(${newItemIds.map(id => `'${id}'`).join(',')})`);
-
-        if (deleteError) {
-          console.warn('Failed to delete old invoice items:', deleteError);
-          // Don't fail the request - new items are created successfully
-          // Old items will be cleaned up on next calculation
-        }
-      } else {
-        // No new items were created successfully, something went wrong
-        console.error('No new invoice items were created - skipping delete of old items');
-      }
-    }
-
-    // 7. Fetch updated invoice items
+    // 9. Fetch updated invoice items
     const { data: updatedItems, error: itemsError } = await supabase
       .from("invoice_items")
       .select("*")
       .eq("invoice_id", invoice.id)
+      .is("deleted_at", null) // Only fetch active items
       .order("created_at", { ascending: true });
 
     if (itemsError) {

@@ -8,6 +8,45 @@ import DebriefReport from '@/email-templates/DebriefReport';
 import { Booking } from '@/types/bookings';
 import { User } from '@/types/users';
 import { Aircraft } from '@/types/aircraft';
+import { createClient } from '@/lib/supabase/server';
+
+interface EmailSettings {
+  schoolName: string;
+  contactEmail: string;
+  contactPhone: string;
+  description: string;
+}
+
+async function fetchEmailSettings(): Promise<EmailSettings> {
+  try {
+    const supabase = await createClient();
+    const { data: settings } = await supabase
+      .from('settings')
+      .select('setting_key, setting_value')
+      .eq('category', 'general')
+      .in('setting_key', ['school_name', 'contact_email', 'contact_phone', 'description']);
+
+    const settingsMap = (settings || []).reduce((acc, setting) => {
+      acc[setting.setting_key] = setting.setting_value;
+      return acc;
+    }, {} as Record<string, string>);
+
+    return {
+      schoolName: settingsMap.school_name || 'Flight Desk Pro',
+      contactEmail: settingsMap.contact_email || 'support@yourdomain.com',
+      contactPhone: settingsMap.contact_phone || '(123) 456-7890',
+      description: settingsMap.description || 'Professional Flight Training Excellence',
+    };
+  } catch (error) {
+    console.error('Error fetching email settings:', error);
+    return {
+      schoolName: 'Flight Desk Pro',
+      contactEmail: 'support@yourdomain.com',
+      contactPhone: '(123) 456-7890',
+      description: 'Professional Flight Training Excellence',
+    };
+  }
+}
 
 interface BookingEmailData {
   booking: Booking;
@@ -42,13 +81,16 @@ export async function sendBookingConfirmation({
     }
 
     const recipientEmail = to || member.email;
-    
+
     if (!recipientEmail) {
       return {
         success: false,
         error: 'No recipient email address provided',
       };
     }
+
+    // Fetch email settings
+    const emailSettings = await fetchEmailSettings();
 
     // Render the email template
     const emailHtml = await render(
@@ -60,6 +102,10 @@ export async function sendBookingConfirmation({
         lesson={lesson}
         flightType={flightType}
         dashboardUrl={process.env.NEXT_PUBLIC_APP_URL}
+        schoolName={emailSettings.schoolName}
+        contactEmail={emailSettings.contactEmail}
+        contactPhone={emailSettings.contactPhone}
+        tagline={emailSettings.description}
       />
     );
 
@@ -144,13 +190,16 @@ export async function sendBookingUpdate({
     }
 
     const recipientEmail = to || member.email;
-    
+
     if (!recipientEmail) {
       return {
         success: false,
         error: 'No recipient email address provided',
       };
     }
+
+    // Fetch email settings
+    const emailSettings = await fetchEmailSettings();
 
     // For now, reuse the confirmation template
     // You can create a separate BookingUpdate template later
@@ -163,6 +212,10 @@ export async function sendBookingUpdate({
         lesson={lesson}
         flightType={flightType}
         dashboardUrl={process.env.NEXT_PUBLIC_APP_URL}
+        schoolName={emailSettings.schoolName}
+        contactEmail={emailSettings.contactEmail}
+        contactPhone={emailSettings.contactPhone}
+        tagline={emailSettings.description}
       />
     );
 
@@ -241,6 +294,9 @@ export async function sendBookingCancellation({
       };
     }
 
+    // Fetch email settings
+    const emailSettings = await fetchEmailSettings();
+
     // Render the cancellation email template
     const emailHtml = await render(
       <BookingCancellation
@@ -250,6 +306,10 @@ export async function sendBookingCancellation({
         cancellationCategory={cancellationCategory}
         cancelledBy={cancelledBy}
         dashboardUrl={process.env.NEXT_PUBLIC_APP_URL}
+        schoolName={emailSettings.schoolName}
+        contactEmail={emailSettings.contactEmail}
+        contactPhone={emailSettings.contactPhone}
+        tagline={emailSettings.description}
       />
     );
 
@@ -370,6 +430,9 @@ export async function sendDebriefReport({
       };
     }
 
+    // Fetch email settings
+    const emailSettings = await fetchEmailSettings();
+
     // Render the email template
     const emailHtml = await render(
       <DebriefReport
@@ -378,6 +441,10 @@ export async function sendDebriefReport({
         lesson={lesson}
         flightExperiences={flightExperiences}
         dashboardUrl={process.env.NEXT_PUBLIC_APP_URL}
+        schoolName={emailSettings.schoolName}
+        contactEmail={emailSettings.contactEmail}
+        contactPhone={emailSettings.contactPhone}
+        tagline={emailSettings.description}
       />
     );
 

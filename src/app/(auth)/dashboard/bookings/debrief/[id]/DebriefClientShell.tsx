@@ -36,13 +36,15 @@ const DebriefClientShell: React.FC<DebriefClientShellProps> = ({ booking, member
     }
   }, [booking.id]);
 
-  const handleSaveAndContinue = async () => {
+  const handleSaveAndReview = async () => {
     if (debriefFormRef.current) {
       await debriefFormRef.current.saveAllFormData();
+      // Navigate to the debrief view page
+      router.push(`/dashboard/bookings/debrief/view/${booking.id}`);
     }
   };
 
-  const handleSaveAndViewInvoice = async () => {
+  const handleSaveAndInvoice = async () => {
     if (debriefFormRef.current) {
       await debriefFormRef.current.saveAllFormData();
       const invoiceId = debriefFormRef.current.getInvoiceId();
@@ -74,17 +76,17 @@ const DebriefClientShell: React.FC<DebriefClientShellProps> = ({ booking, member
           <Button
             variant="outline"
             className="h-10 px-6 text-base font-semibold border-gray-300 text-gray-700 hover:bg-gray-50 rounded-xl shadow-sm transition-all"
-            onClick={handleSaveAndContinue}
+            onClick={handleSaveAndReview}
           >
-            Save
+            Save & Review
           </Button>
           <Button
             className="h-10 px-6 text-base font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-indigo-300"
-            onClick={handleSaveAndViewInvoice}
-            title={hasInvoice ? "Save debrief and view invoice" : "Save debrief and go to check-in to create invoice"}
+            onClick={handleSaveAndInvoice}
+            title={hasInvoice ? "Save debrief and view invoice" : "Save debrief and create invoice"}
           >
+            Next: Invoice
             <Receipt className="w-4 h-4" />
-            {hasInvoice ? "Save & View Invoice" : "Save & Create Invoice"}
           </Button>
         </div>
       </div>

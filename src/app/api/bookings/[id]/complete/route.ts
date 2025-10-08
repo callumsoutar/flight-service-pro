@@ -3,6 +3,7 @@ import { createClient } from "@/lib/SupabaseServerClient";
 import { Booking } from "@/types/bookings";
 import { Invoice } from "@/types/invoices";
 import { InvoiceService } from "@/lib/invoice-service";
+import { updateAircraftOnBookingCompletion } from "@/lib/aircraft-update";
 
 interface CompleteBookingRequest {
   invoiceItems?: Array<{
@@ -138,28 +139,44 @@ export async function POST(
       return NextResponse.json({ error: `Failed to update invoice: ${invoiceUpdateError.message}` }, { status: 500 });
     }
 
-    // 7. Complete the booking using the main bookings API logic (this triggers aircraft meter updates)
-    const bookingUpdateResponse = await fetch(`${req.nextUrl.origin}/api/bookings`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": req.headers.get("Authorization") || "",
-        "Cookie": req.headers.get("Cookie") || "",
-      },
-      body: JSON.stringify({
-        id: bookingId,
-        status: "complete",
-      }),
-    });
+    // 7. Update booking status to 'complete'
+    const { error: bookingUpdateError } = await supabase
+      .from("bookings")
+      .update({ status: "complete" })
+      .eq("id", bookingId);
 
-    if (!bookingUpdateResponse.ok) {
-      const errorData = await bookingUpdateResponse.json();
-      return NextResponse.json({ error: `Failed to complete booking: ${errorData.error}` }, { status: 500 });
+    if (bookingUpdateError) {
+      return NextResponse.json({ error: `Failed to complete booking: ${bookingUpdateError.message}` }, { status: 500 });
     }
 
-    const { booking: completedBooking } = await bookingUpdateResponse.json();
+    // 8. Update aircraft meters based on flight log data
+    try {
+      await updateAircraftOnBookingCompletion(supabase, bookingId);
+    } catch (aircraftError) {
+      console.error('[Complete Booking] Failed to update aircraft meters:', aircraftError);
+      // Don't fail the booking completion if aircraft update fails
+      // The booking is complete, but aircraft meters might be out of sync
+      // This will be logged for manual correction
+    }
 
-    // 8. Fetch updated invoice with all totals
+    // 9. Fetch the completed booking
+    const { data: completedBooking, error: fetchBookingError } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("id", bookingId)
+      .single();
+
+    if (fetchBookingError) {
+      console.error('[Complete Booking] Failed to fetch completed booking:', fetchBookingError);
+      // Return success anyway since the booking was completed
+      return NextResponse.json({
+        booking: booking, // Return original booking data
+        invoice: invoice,
+        success: true,
+      });
+    }
+
+    // 10. Fetch updated invoice with all totals
     const { data: updatedInvoice } = await supabase
       .from("invoices")
       .select("*")
@@ -167,8 +184,8 @@ export async function POST(
       .single();
 
     return NextResponse.json({
-      booking: completedBooking,
-      invoice: updatedInvoice,
+      booking: completedBooking || booking,
+      invoice: updatedInvoice || invoice,
       success: true,
     });
 

@@ -944,6 +944,11 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                               mode="single"
                               selected={startDate ?? undefined}
                               onSelect={date => setStartDate(date ?? null)}
+                              disabled={(date) => {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                return date < today;
+                              }}
                               initialFocus
                             />
                           </PopoverContent>
@@ -981,6 +986,11 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                               mode="single"
                               selected={endDate ?? undefined}
                               onSelect={date => setEndDate(date ?? null)}
+                              disabled={(date) => {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                return date < today || (startDate ? date < startDate : false);
+                              }}
                               initialFocus
                             />
                           </PopoverContent>

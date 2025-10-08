@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { sendBookingConfirmation, sendBookingUpdate } from "@/lib/email/booking-emails";
+import { updateAircraftOnBookingCompletion } from "@/lib/aircraft-update";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export async function GET(req: NextRequest) {
@@ -461,7 +462,6 @@ export async function PATCH(req: NextRequest) {
   }
 
   // Handle aircraft updates for booking completion or meter corrections
-  // First, check if there's a flight_log with checked_out_aircraft_id
   const { data: flightLog } = await supabase
     .from("flight_logs")
     .select("checked_out_aircraft_id, hobbs_start, hobbs_end, tach_start, tach_end, total_hours_end")
@@ -479,9 +479,9 @@ export async function PATCH(req: NextRequest) {
         await handleMeterCorrection(supabase, id, { ...existingBooking, ...flightLog }, updates, user.id);
       }
     } catch (aircraftError) {
-      console.error('Failed to update aircraft:', aircraftError);
-      // Don't fail the booking update if aircraft update fails - log the error
-      // The booking is already updated, but aircraft meters might be out of sync
+      console.error('Failed to update aircraft meters:', aircraftError);
+      // Don't fail the booking update if aircraft update fails
+      // The booking is already updated, but aircraft meters might need manual correction
     }
   }
 
@@ -604,78 +604,7 @@ type BookingUpdatesForAircraft = {
   status?: string;
 };
 
-async function updateAircraftOnBookingCompletion(
-  supabase: SupabaseClient,
-  bookingId: string
-) {
-  // Get flight log with total_hours data and booking start_time
-  const { data: flightLog, error: flightLogError } = await supabase
-    .from('flight_logs')
-    .select('checked_out_aircraft_id, hobbs_end, tach_end, total_hours_end, bookings!inner(start_time)')
-    .eq('booking_id', bookingId)
-    .single();
-
-  if (flightLogError || !flightLog) {
-    throw new Error('Flight log not found');
-  }
-
-  const aircraftId = flightLog.checked_out_aircraft_id;
-  const finalHobbsEnd = flightLog.hobbs_end;
-  const finalTachEnd = flightLog.tach_end;
-  const newTotalHours = flightLog.total_hours_end; // Use pre-calculated value!
-  const bookingData = flightLog as unknown as { bookings?: { start_time: string }[] };
-  const bookingStartTime = bookingData.bookings?.[0]?.start_time;
-
-  // Validate that we have the required data
-  if (!finalHobbsEnd || !finalTachEnd || !newTotalHours) {
-    // Skip aircraft update - missing required data
-    console.warn(`Skipping aircraft update for booking ${bookingId} - missing required flight log data`);
-    return;
-  }
-
-  if (!bookingStartTime) {
-    console.warn(`Skipping aircraft update for booking ${bookingId} - booking start_time not found`);
-    return;
-  }
-
-  // SAFETY CHECK: Look for any completed flights AFTER this booking's start time
-  // If there are later flights, we should NOT update the aircraft's current meters and total_hours
-  // because that would set them backwards in time
-  const { data: laterFlights, error: laterFlightsError } = await supabase
-    .from('flight_logs')
-    .select('total_hours_end, bookings!inner(start_time, status)')
-    .eq('checked_out_aircraft_id', aircraftId)
-    .eq('bookings.status', 'complete')
-    .gt('bookings.start_time', bookingStartTime)
-    .limit(1);
-
-  if (laterFlightsError) {
-    console.warn('Error checking for later flights:', laterFlightsError);
-    // Continue with update despite error - better to update than to skip
-  } else if (laterFlights && laterFlights.length > 0) {
-    // There are completed flights AFTER this one
-    // Do NOT update aircraft current meters and total_hours
-    console.warn(`Not updating aircraft ${aircraftId} meters for booking ${bookingId} - there are ${laterFlights.length} completed flight(s) after this booking's time (${bookingStartTime})`);
-    console.warn('This is a historical booking completion. Aircraft meters will not be updated to prevent going backwards in time.');
-    // Exit without updating aircraft
-    return;
-  }
-
-  // Safe to update: This is either the most recent flight, or there are no completed flights after it
-  const { error: updateError } = await supabase
-    .from('aircraft')
-    .update({
-      current_hobbs: finalHobbsEnd,
-      current_tach: finalTachEnd,
-      total_hours: newTotalHours,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', aircraftId);
-
-  if (updateError) {
-    throw new Error(`Failed to update aircraft: ${updateError.message}`);
-  }
-}
+// Aircraft update logic moved to @/lib/aircraft-update.ts for reusability
 
 function isMeterCorrection(existingBooking: BookingForAircraftUpdate, updates: BookingUpdatesForAircraft): boolean {
   // Check if any meter readings are being updated

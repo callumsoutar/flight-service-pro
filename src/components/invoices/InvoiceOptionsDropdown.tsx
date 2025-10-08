@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Mail, Download, Printer, Pencil, Loader2, Trash2, Eye } from "lucide-react";
+import { ChevronDown, Mail, Download, Printer, Pencil, Loader2, Trash2, Eye, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { useCurrentUserRoles } from "@/hooks/use-user-roles";
@@ -147,52 +147,37 @@ export default function InvoiceOptionsDropdown({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        {/* Edit mode: Show View Invoice option for non-draft invoices */}
-        {mode === 'edit' && status !== 'draft' && (
+        {/* Section 1: Invoice Actions */}
+        {(mode === 'view' && isAdminOrOwner && status !== 'paid') || (mode === 'edit' && status !== 'draft') ? (
           <>
-            <DropdownMenuItem onClick={() => router.push(`/dashboard/invoices/view/${invoiceId}`)}>
-              <Eye className="w-4 h-4 mr-2" />
-              View Invoice
-            </DropdownMenuItem>
+            {mode === 'view' && isAdminOrOwner && status !== 'paid' && (
+              <DropdownMenuItem onClick={() => router.push(`/dashboard/invoices/edit/${invoiceId}`)}>
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
+            )}
+            {mode === 'edit' && status !== 'draft' && (
+              <DropdownMenuItem onClick={() => router.push(`/dashboard/invoices/view/${invoiceId}`)}>
+                <Eye className="w-4 h-4 mr-2" />
+                View Invoice
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
           </>
-        )}
+        ) : null}
 
-        {/* Edit mode: Show Delete option */}
-        {mode === 'edit' && isAdminOrOwner && onDelete && (
-          <>
-            <DropdownMenuItem
-              onClick={onDelete}
-              className="text-red-600 focus:bg-red-50 hover:bg-red-50 group"
-            >
-              <Trash2 className="w-4 h-4 mr-2 text-red-600 group-hover:text-red-700" />
-              <span>Delete Invoice</span>
-            </DropdownMenuItem>
-          </>
-        )}
-
-        {/* View mode: Show Edit option (not for paid invoices) */}
-        {mode === 'view' && isAdminOrOwner && status !== 'paid' && (
-          <>
-            <DropdownMenuItem onClick={() => router.push(`/dashboard/invoices/edit/${invoiceId}`)}>
-              <Pencil className="w-4 h-4 mr-2" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-          </>
-        )}
-
-        {/* View Booking link (both modes) */}
+        {/* Section 2: Related Content */}
         {bookingId && (
           <>
             <DropdownMenuItem onClick={() => router.push(`/dashboard/bookings/view/${bookingId}`)}>
+              <Calendar className="w-4 h-4 mr-2" />
               View Booking
             </DropdownMenuItem>
             <DropdownMenuSeparator />
           </>
         )}
 
-        {/* Email, Download, Print (both modes) - only show if not draft */}
+        {/* Section 3: Export & Communication */}
         {status !== 'draft' && (
           <>
             <DropdownMenuItem onClick={handleEmailInvoice} disabled={isSendingEmail}>
@@ -203,7 +188,6 @@ export default function InvoiceOptionsDropdown({
               )}
               {isSendingEmail ? 'Sending...' : 'Email'}
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleDownloadPDF} disabled={isDownloading}>
               {isDownloading ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -219,6 +203,20 @@ export default function InvoiceOptionsDropdown({
                 <Printer className="w-4 h-4 mr-2" />
               )}
               {isPrinting ? 'Generating PDF...' : 'Print'}
+            </DropdownMenuItem>
+          </>
+        )}
+
+        {/* Section 4: Dangerous Actions */}
+        {mode === 'edit' && isAdminOrOwner && onDelete && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={onDelete}
+              className="text-red-600 focus:bg-red-50 hover:bg-red-50 group"
+            >
+              <Trash2 className="w-4 h-4 mr-2 text-red-600 group-hover:text-red-700" />
+              <span>Delete Invoice</span>
             </DropdownMenuItem>
           </>
         )}

@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { ClipboardList, Clock, Plane } from "lucide-react";
+import { ClipboardList, Clock, Plane, ChevronDown, ChevronUp } from "lucide-react";
 import { useOrganizationTaxRate } from "@/hooks/use-tax-rate";
 
 interface CheckInDetailsProps {
@@ -91,6 +90,7 @@ export default function CheckInDetails({
   // Solo flight type state
   const [selectedSoloFlightType, setSelectedSoloFlightType] = useState<string>("");
   const [soloChargeRate, setSoloChargeRate] = useState<string | null>(null);
+  const [isSoloSectionExpanded, setIsSoloSectionExpanded] = useState<boolean>(false);
 
   // Dynamic tax rate from organization settings or fallback
   const { taxRate, isLoading: taxRateLoading } = useOrganizationTaxRate();
@@ -111,20 +111,20 @@ export default function CheckInDetails({
   useEffect(() => {
     if (initialEndHobbs !== undefined && initialEndHobbs !== null) {
       setEndHobbs(String(initialEndHobbs));
-    } else if (startHobbs && !endHobbs) {
-      // Pre-fill with start value if no initial end value and field is empty
-      setEndHobbs(startHobbs);
+    } else if (startHobbs) {
+      // Pre-fill with start value if no initial end value
+      setEndHobbs(prev => prev || startHobbs);
     }
-  }, [initialEndHobbs, startHobbs, endHobbs]);
+  }, [initialEndHobbs, startHobbs]);
 
   useEffect(() => {
     if (initialEndTacho !== undefined && initialEndTacho !== null) {
       setEndTacho(String(initialEndTacho));
-    } else if (startTacho && !endTacho) {
-      // Pre-fill with start value if no initial end value and field is empty
-      setEndTacho(startTacho);
+    } else if (startTacho) {
+      // Pre-fill with start value if no initial end value
+      setEndTacho(prev => prev || startTacho);
     }
-  }, [initialEndTacho, startTacho, endTacho]);
+  }, [initialEndTacho, startTacho]);
 
   useEffect(() => {
     setSoloEndHobbs(initialSoloEndHobbs !== undefined && initialSoloEndHobbs !== null ? String(initialSoloEndHobbs) : "");
@@ -599,12 +599,22 @@ export default function CheckInDetails({
       {/* Solo Flight Continuation */}
       {showSoloInput && (
         <div className="border-t pt-6 space-y-4">
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsSoloSectionExpanded(!isSoloSectionExpanded)}
+            className="flex items-center gap-2 w-full hover:opacity-70 transition-opacity"
+          >
             <Clock className="w-4 h-4 text-orange-600" />
             <h3 className="font-medium text-orange-900">Solo Flight Continuation</h3>
-          </div>
+            {isSoloSectionExpanded ? (
+              <ChevronUp className="w-4 h-4 text-orange-600 ml-auto" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-orange-600 ml-auto" />
+            )}
+          </button>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {isSoloSectionExpanded && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium mb-2">Solo Flight Type</label>
               <Select value={selectedSoloFlightType} onValueChange={handleSoloFlightTypeChange}>
@@ -647,6 +657,7 @@ export default function CheckInDetails({
               )}
             </div>
           </div>
+          )}
         </div>
       )}
       {/* Calculate Charges */}
@@ -664,14 +675,14 @@ export default function CheckInDetails({
           </div>
         )}
 
-        <Button
-          className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+        <button
+          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm text-sm"
           onClick={handleCalculateCharges}
           disabled={!aircraftRateExclusive || (requiresInstructor && (!instructorRateExclusive || !selectedInstructor)) || !selectedFlightType || (soloEndHobbs !== "" && parseFloat(soloEndHobbs) <= parseFloat(endHobbs)) || (soloTime > 0 && (!selectedSoloFlightType || !soloAircraftRateExclusive))}
         >
-          <ClipboardList className="w-4 h-4 mr-2" />
+          <ClipboardList className="w-4 h-4" />
           Calculate Flight Charges
-        </Button>
+        </button>
       </div>
       <style jsx global>{`
         input[type=number].no-spinner::-webkit-inner-spin-button, 

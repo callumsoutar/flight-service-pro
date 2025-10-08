@@ -99,111 +99,68 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Fetch invoices
+    // Fetch ALL transactions for this user (this is the source of truth)
+    const { data: transactions, error: transactionsError } = await supabase
+      .from("transactions")
+      .select(`
+        id,
+        created_at,
+        type,
+        amount,
+        description,
+        status,
+        metadata
+      `)
+      .eq("user_id", user_id)
+      .eq("status", "completed")
+      .order("created_at", { ascending: true });
+
+    if (transactionsError) {
+      console.error("Error fetching transactions:", transactionsError);
+      return NextResponse.json({ error: "Failed to fetch transactions" }, { status: 500 });
+    }
+
+    // Fetch payments to get payment details (for reference numbers and methods)
+    const { data: payments, error: paymentsError } = await supabase
+      .from("payments")
+      .select(`
+        id,
+        transaction_id,
+        payment_number,
+        payment_reference,
+        payment_method,
+        notes,
+        invoice_id,
+        invoices!payments_invoice_id_fkey (
+          invoice_number
+        )
+      `)
+      .order("created_at", { ascending: true });
+
+    if (paymentsError) {
+      console.error("Error fetching payments:", paymentsError);
+      return NextResponse.json({ error: "Failed to fetch payments" }, { status: 500 });
+    }
+
+    // Fetch invoices to get invoice details
     const { data: invoices, error: invoicesError } = await supabase
       .from("invoices")
-      .select("id, created_at, invoice_number, reference, total_amount")
+      .select("id, invoice_number, reference")
       .eq("user_id", user_id)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: true });
+      .is("deleted_at", null);
 
     if (invoicesError) {
       console.error("Error fetching invoices:", invoicesError);
       return NextResponse.json({ error: "Failed to fetch invoices" }, { status: 500 });
     }
 
-    // Fetch invoice-related payments
-    const { data: invoicePayments, error: invoicePaymentsError } = await supabase
-      .from("payments")
-      .select(`
-        id, 
-        created_at, 
-        payment_number, 
-        payment_reference, 
-        payment_method, 
-        amount,
-        notes,
-        invoice_id,
-        invoices!payments_invoice_id_fkey (
-          id,
-          invoice_number,
-          user_id
-        )
-      `)
-      .not("invoice_id", "is", null)
-      .order("created_at", { ascending: true });
-
-    if (invoicePaymentsError) {
-      console.error("Error fetching invoice payments:", invoicePaymentsError);
-      return NextResponse.json({ error: "Failed to fetch invoice payments" }, { status: 500 });
-    }
-
-    // Fetch standalone credit payments (via transactions)
-    const { data: creditTransactions, error: creditTransactionsError } = await supabase
-      .from("transactions")
-      .select(`
-        id,
-        created_at,
-        amount,
-        description,
-        metadata,
-        payments!payments_transaction_id_fkey (
-          id,
-          payment_number,
-          payment_reference,
-          payment_method,
-          notes,
-          invoice_id
-        )
-      `)
-      .eq("user_id", user_id)
-      .eq("type", "credit")
-      .eq("status", "completed")
-      .order("created_at", { ascending: true });
-
-    if (creditTransactionsError) {
-      console.error("Error fetching credit transactions:", creditTransactionsError);
-      return NextResponse.json({ error: "Failed to fetch credit transactions" }, { status: 500 });
-    }
-
-    // Filter invoice payments for this user and transform the invoices array to a single object
-    const userInvoicePayments: PaymentWithInvoice[] = (invoicePayments || [])
-      .filter((p: PaymentQueryResult) => {
-        return p.invoices && p.invoices.length > 0 && p.invoices[0].user_id === user_id;
-      })
-      .map((p: PaymentQueryResult): PaymentWithInvoice => ({
-        ...p,
-        invoices: p.invoices && p.invoices.length > 0 ? p.invoices[0] : null
-      }));
-
-    // Extract standalone credit payments (payments without invoice_id)
-    const standaloneCreditPayments = (creditTransactions || [])
-      .filter((t: CreditTransaction) => {
-        // Only include if it has a payment record and that payment has no invoice
-        return t.payments && t.payments.length > 0 && t.payments[0].invoice_id === null;
-      })
-      .map((t: CreditTransaction) => ({
-        id: t.payments![0].id,
-        created_at: t.created_at,
-        payment_number: t.payments![0].payment_number,
-        payment_reference: t.payments![0].payment_reference,
-        payment_method: t.payments![0].payment_method,
-        amount: t.amount,
-        notes: t.payments![0].notes || t.description,
-        invoices: null,
-      }));
-
-    // Combine all payments
-    const userPayments = [...userInvoicePayments, ...standaloneCreditPayments];
-
     // Fetch credit notes
     const { data: creditNotes, error: creditNotesError } = await supabase
       .from("credit_notes")
-      .select("id, applied_date, credit_note_number, reason, total_amount, status")
+      .select("id, credit_note_number, reason")
       .eq("user_id", user_id)
       .eq("status", "applied")
-      .is("deleted_at", null)
-      .order("applied_date", { ascending: true });
+      .is("deleted_at", null);
 
     if (creditNotesError) {
       console.error("Error fetching credit notes:", creditNotesError);
@@ -224,79 +181,108 @@ export async function GET(req: NextRequest) {
 
     const currentBalance = userData?.account_balance || 0;
 
-    // Combine all entries into a unified array
+    // Create lookup maps
+    const paymentMap = new Map(
+      (payments || []).map(p => [p.transaction_id, p])
+    );
+    const invoiceMap = new Map(
+      (invoices || []).map(i => [i.id, i])
+    );
+    const creditNoteMap = new Map(
+      (creditNotes || []).map(cn => [cn.id, cn])
+    );
+
+    // Build statement entries from transactions
     const allEntries: Omit<AccountStatementEntry, 'balance'>[] = [];
 
-    // Add invoices (positive amounts = user owes)
-    (invoices || []).forEach((invoice: Invoice) => {
-      allEntries.push({
-        date: invoice.created_at,
-        reference: invoice.invoice_number,
-        description: invoice.reference || 'Invoice',
-        amount: invoice.total_amount,
-        entry_type: 'invoice',
-        entry_id: invoice.id,
-      });
-    });
+    (transactions || []).forEach((transaction) => {
+      let reference = '';
+      let description = transaction.description || '';
+      let entry_type: 'invoice' | 'payment' | 'credit_note' | 'opening_balance' = 'invoice';
 
-    // Add payments (negative amounts = user pays/receives credit)
-    userPayments.forEach((payment: PaymentWithInvoice) => {
-      const invoiceRef = payment.invoices?.invoice_number || '';
-      let paymentDesc = payment.notes || '';
-      
-      // If no notes, generate a description
-      if (!paymentDesc) {
-        if (invoiceRef) {
-          paymentDesc = `Payment of invoice ${invoiceRef}`;
+      // Parse metadata to get related IDs
+      const metadata = transaction.metadata as any;
+      const invoiceId = metadata?.invoice_id;
+      const creditNoteId = metadata?.credit_note_id;
+
+      if (transaction.type === 'debit') {
+        // This is an invoice transaction
+        entry_type = 'invoice';
+        const invoice = invoiceId ? invoiceMap.get(invoiceId) : null;
+        reference = invoice?.invoice_number || 'Invoice';
+        description = invoice?.reference || description || 'Invoice';
+      } else if (transaction.type === 'credit') {
+        // Check if this is a payment or credit note
+        const payment = paymentMap.get(transaction.id);
+        
+        if (creditNoteId) {
+          // Credit note transaction
+          entry_type = 'credit_note';
+          const creditNote = creditNoteMap.get(creditNoteId);
+          reference = creditNote?.credit_note_number || 'Credit Note';
+          description = creditNote?.reason || description || 'Credit Note';
+        } else if (payment) {
+          // Payment transaction
+          entry_type = 'payment';
+          reference = payment.payment_number || payment.payment_reference || 'Payment';
+          
+          // Build description
+          if (payment.notes) {
+            description = payment.notes;
+          } else if (payment.invoice_id) {
+            const invoice = invoiceMap.get(payment.invoice_id);
+            const invoiceNum = invoice?.invoice_number || payment.invoice_id;
+            description = `Payment for invoice ${invoiceNum}`;
+          } else {
+            description = `Credit payment via ${payment.payment_method}`;
+          }
         } else {
-          // Standalone credit payment
-          paymentDesc = `Credit payment via ${payment.payment_method}`;
+          // Generic credit transaction
+          entry_type = 'payment';
+          reference = 'Credit';
+          description = description || 'Account credit';
         }
       }
-      
+
+      // Add entry with correct sign convention:
+      // - Debit (invoice) = positive amount (increases what user owes)
+      // - Credit (payment/credit note) = negative amount (decreases what user owes)
       allEntries.push({
-        date: payment.created_at,
-        reference: payment.payment_number || payment.payment_reference || 'Payment',
-        description: paymentDesc,
-        amount: -payment.amount, // Negative because it reduces balance (credits account)
-        entry_type: 'payment',
-        entry_id: payment.id,
+        date: transaction.created_at,
+        reference,
+        description,
+        amount: transaction.type === 'debit' ? transaction.amount : -transaction.amount,
+        entry_type,
+        entry_id: transaction.id,
       });
     });
 
-    // Add credit notes (negative amounts = user gets credit)
-    (creditNotes || []).forEach((cn: CreditNote) => {
-      allEntries.push({
-        date: cn.applied_date,
-        reference: cn.credit_note_number,
-        description: cn.reason || 'Credit Note',
-        amount: -cn.total_amount, // Negative because it reduces balance
-        entry_type: 'credit_note',
-        entry_id: cn.id,
-      });
-    });
-
-    // Sort by date
+    // Sort by date (should already be sorted, but ensure it)
     allEntries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    // Calculate running balance
-    // Start from current balance and work backwards
-    let runningBalance = currentBalance;
+    // Calculate running balance FORWARD from opening balance = 0
+    let runningBalance = 0;
     
     // Cast to full AccountStatementEntry[] to add balance property
     const entriesWithBalance = allEntries as AccountStatementEntry[];
     
-    // Work backwards from the end to calculate opening balance
-    for (let i = entriesWithBalance.length - 1; i >= 0; i--) {
+    // Calculate opening balance by working backwards from current balance
+    // Opening + sum(all amounts) = Current
+    // Therefore: Opening = Current - sum(all amounts)
+    const totalChanges = allEntries.reduce((sum, entry) => sum + entry.amount, 0);
+    const openingBalance = currentBalance - totalChanges;
+    
+    // Now calculate forward from opening balance
+    runningBalance = openingBalance;
+    
+    for (let i = 0; i < entriesWithBalance.length; i++) {
       const entry = entriesWithBalance[i];
+      runningBalance = runningBalance + entry.amount;
       entry.balance = runningBalance;
-      runningBalance = runningBalance - entry.amount;
     }
 
-    const openingBalance = runningBalance;
-
-    // Add opening balance entry if there are transactions
-    if (entriesWithBalance.length > 0 && openingBalance !== 0) {
+    // Add opening balance entry if there are transactions OR if opening balance is non-zero
+    if (entriesWithBalance.length > 0 || openingBalance !== 0) {
       const firstDate = entriesWithBalance[0]?.date || new Date().toISOString();
       const openingDate = new Date(firstDate);
       openingDate.setDate(openingDate.getDate() - 1); // One day before first transaction

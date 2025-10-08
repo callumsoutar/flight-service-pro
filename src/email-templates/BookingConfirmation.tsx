@@ -13,6 +13,10 @@ interface BookingConfirmationProps {
   lesson?: { name: string } | null;
   flightType?: { name: string } | null;
   dashboardUrl?: string;
+  schoolName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  tagline?: string;
 }
 
 export default function BookingConfirmation({
@@ -23,11 +27,21 @@ export default function BookingConfirmation({
   lesson,
   flightType,
   dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://yourdomain.com',
+  schoolName,
+  contactEmail,
+  contactPhone,
+  tagline,
 }: BookingConfirmationProps) {
   const isConfirmed = booking.status === 'confirmed';
-  
+
   return (
-    <EmailLayout title="Booking Confirmation - Aero Safety Flight School">
+    <EmailLayout
+      title={`Booking Confirmation - ${schoolName || 'Flight Desk Pro'}`}
+      schoolName={schoolName}
+      contactEmail={contactEmail}
+      contactPhone={contactPhone}
+      tagline={tagline}
+    >
       {/* Success Header */}
       <div style={{ textAlign: 'center', marginBottom: '40px' }}>
         <Text style={{ margin: '0 0 12px 0', fontSize: '32px', fontWeight: '700', color: '#111827', lineHeight: '1.2' }}>
@@ -112,7 +126,7 @@ export default function BookingConfirmation({
           Safe skies ahead! ✈️
         </Text>
         <Text style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>
-          Thank you for choosing Aero Safety Flight School for your aviation journey.
+          Thank you for choosing {schoolName || 'Flight Desk Pro'} for your aviation journey.
         </Text>
       </div>
     </EmailLayout>

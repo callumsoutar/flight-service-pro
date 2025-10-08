@@ -32,6 +32,10 @@ interface DebriefReportProps {
   } | null;
   flightExperiences?: unknown[];
   dashboardUrl?: string;
+  schoolName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  tagline?: string;
 }
 
 export default function DebriefReport({
@@ -39,6 +43,10 @@ export default function DebriefReport({
   lessonProgress,
   lesson,
   dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://yourdomain.com',
+  schoolName,
+  contactEmail,
+  contactPhone,
+  tagline,
 }: DebriefReportProps) {
   const getStatusColor = (status?: string) => {
     switch (status) {
@@ -59,7 +67,13 @@ export default function DebriefReport({
   const statusStyles = getStatusColor(lessonProgress.status || '');
 
   return (
-    <EmailLayout title="Flight Debrief Report - Aero Safety Flight School">
+    <EmailLayout
+      title={`Flight Debrief Report - ${schoolName || 'Flight Desk Pro'}`}
+      schoolName={schoolName}
+      contactEmail={contactEmail}
+      contactPhone={contactPhone}
+      tagline={tagline}
+    >
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '32px' }}>
         <Text style={{ margin: '0 0 12px 0', fontSize: '32px', fontWeight: '700', color: '#111827', lineHeight: '1.2' }}>

@@ -238,9 +238,9 @@ function AcceptInvitePageContent() {
         {/* Branding */}
         <div className="flex items-center gap-2 mb-8">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-700 to-blue-400 flex items-center justify-center">
-            <span className="text-white text-lg font-bold">A</span>
+            <span className="text-white text-lg font-bold">F</span>
           </div>
-          <span className="text-xl font-bold text-violet-700 tracking-tight">Aero Safety</span>
+          <span className="text-xl font-bold text-violet-700 tracking-tight">Flight Desk Pro</span>
         </div>
         
         {/* Heading */}
@@ -248,9 +248,9 @@ function AcceptInvitePageContent() {
           {type === 'recovery' ? 'Set Your Password' : 'Set Up Your Account'}
         </h1>
         <p className="text-gray-700 mb-6 w-full text-left">
-          {userEmail 
-            ? `Welcome! ${type === 'recovery' ? 'Set up your password for' : 'You\'ve been invited to join Aero Safety. Set up your password for'} ${userEmail}` 
-            : `Welcome! ${type === 'recovery' ? 'Set up your password below.' : 'You\'ve been invited to join Aero Safety. Set up your password below.'}`
+          {userEmail
+            ? `Welcome! ${type === 'recovery' ? 'Set up your password for' : 'You\'ve been invited to join Flight Desk Pro. Set up your password for'} ${userEmail}`
+            : `Welcome! ${type === 'recovery' ? 'Set up your password below.' : 'You\'ve been invited to join Flight Desk Pro. Set up your password below.'}`
           }
         </p>
         

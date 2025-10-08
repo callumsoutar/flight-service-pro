@@ -201,16 +201,16 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
                         Priority Level
                         <span className="text-red-500">*</span>
                       </label>
-                      <Select value={editPriority} onValueChange={val => setEditPriority(val)}>
+                      <Select value={editPriority || "medium"} onValueChange={val => setEditPriority(val)}>
                         <SelectTrigger className="w-full border-slate-200 focus:border-orange-300 focus:ring-orange-200">
-                          <SelectValue placeholder="Select priority" />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           {OBSERVATION_PRIORITIES.map((s) => (
                             <SelectItem key={s} value={s} className="capitalize">
                               <div className="flex items-center gap-2">
                                 <div className={`w-2 h-2 rounded-full ${
-                                  s === 'low' ? 'bg-green-500' : 
+                                  s === 'low' ? 'bg-green-500' :
                                   s === 'medium' ? 'bg-yellow-500' : 'bg-red-500'
                                 }`} />
                                 {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -225,9 +225,9 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
                         Stage
                         <span className="text-red-500">*</span>
                       </label>
-                      <Select value={editStage} onValueChange={val => setEditStage(val as ObservationStage)}>
+                      <Select value={editStage || "open"} onValueChange={val => setEditStage(val as ObservationStage)}>
                         <SelectTrigger className="w-full border-slate-200 focus:border-orange-300 focus:ring-orange-200">
-                          <SelectValue placeholder="Select stage" />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           {OBSERVATION_STAGES.map((t) => (

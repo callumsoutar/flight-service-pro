@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckCircle, MessageCircle, ListChecks, ArrowRightCircle, UserCircle2, ClipboardList, Sparkles, Plane, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import type { Aircraft } from "@/types/aircraft";
@@ -39,7 +40,9 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
     const [aircraft, setAircraft] = useState<Aircraft | null>(null);
     const [aircraftLoading, setAircraftLoading] = useState(false);
     const [lesson, setLesson] = useState<Lesson | null>(null);
-    const [lessonLoading, setLessonLoading] = useState(false);
+    const [allLessons, setAllLessons] = useState<Lesson[]>([]);
+    const [allLessonsLoading, setAllLessonsLoading] = useState(false);
+    const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
     
     // State for lesson progress
     const [lessonProgress, setLessonProgress] = useState<LessonProgress | null>(null);
@@ -83,23 +86,46 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
       fetchAircraft();
     }, [flightLog?.checked_out_aircraft_id]);
 
-    // Fetch lesson by lesson_id
+    // Fetch all lessons for the selector
+    useEffect(() => {
+      const fetchAllLessons = async () => {
+        setAllLessonsLoading(true);
+        try {
+          const res = await fetch('/api/lessons');
+          const data = await res.json();
+          setAllLessons(data.lessons || []);
+        } catch {
+          setAllLessons([]);
+        } finally {
+          setAllLessonsLoading(false);
+        }
+      };
+      fetchAllLessons();
+    }, []);
+
+    // Initialize selected lesson from booking or lesson progress
+    useEffect(() => {
+      if (lessonProgress?.lesson_id) {
+        setSelectedLessonId(lessonProgress.lesson_id);
+      } else if (booking?.lesson_id) {
+        setSelectedLessonId(booking.lesson_id);
+      }
+    }, [booking?.lesson_id, lessonProgress?.lesson_id]);
+
+    // Fetch lesson details when selected lesson changes
     useEffect(() => {
       const fetchLesson = async () => {
-        if (!booking?.lesson_id) return;
-        setLessonLoading(true);
+        if (!selectedLessonId) return;
         try {
-          const res = await fetch(`/api/lessons?id=${booking.lesson_id}`);
+          const res = await fetch(`/api/lessons?id=${selectedLessonId}`);
           const data = await res.json();
           setLesson(data.lesson || null);
         } catch {
           setLesson(null);
-        } finally {
-          setLessonLoading(false);
         }
       };
       fetchLesson();
-    }, [booking?.lesson_id]);
+    }, [selectedLessonId]);
 
     // Fetch lesson progress by booking_id
     useEffect(() => {
@@ -190,7 +216,7 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
             body: JSON.stringify({
               user_id: booking.user_id,
               booking_id: booking.id,
-              lesson_id: booking.lesson_id,
+              lesson_id: selectedLessonId || booking.lesson_id,
               instructor_id: booking.instructor_id,
               syllabus_id: lesson?.syllabus_id || null,
               status: lessonStatus,
@@ -259,6 +285,7 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
           },
           body: JSON.stringify({
             id: lessonProgress.id,
+            lesson_id: selectedLessonId || booking.lesson_id,
             instructor_id: booking.instructor_id,
             syllabus_id: lesson?.syllabus_id || null,
             status: lessonStatus,
@@ -330,35 +357,39 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
           <div className="flex-[2] flex flex-col gap-6 min-w-0">
             {/* Lesson Assessment */}
             <Card>
-              <CardHeader className="flex flex-row items-center gap-2 pb-2">
+              <CardHeader className="flex flex-row items-center gap-2 pb-3">
                 <CheckCircle className="w-5 h-5 text-green-600 mr-1" />
                 <CardTitle className="text-lg">Lesson Assessment</CardTitle>
+                <span className="text-xs text-gray-500 ml-auto">Required</span>
               </CardHeader>
-              <CardContent className="flex flex-col gap-6 pt-0 pb-4">
-                <div className="flex gap-4 items-center">
+              <CardContent className="pt-0 pb-5">
+                <div className="flex flex-col gap-2">
                   <label className="text-sm font-medium text-gray-700">Lesson Status</label>
-                  <Button
-                    className={lessonStatus === 'pass' ? "bg-green-600 hover:bg-green-700 text-white border-green-600" : "border-green-600 text-green-600 hover:bg-green-50"}
-                    variant={lessonStatus === 'pass' ? "default" : "outline"}
-                    onClick={() => setLessonStatus('pass')}
-                  >
-                    Pass
-                  </Button>
-                  <Button
-                    variant={lessonStatus === 'not yet competent' ? "default" : "outline"}
-                    className={lessonStatus === 'not yet competent' ? "bg-red-600 hover:bg-red-700 text-white border-red-600" : "border-red-500 text-red-600 hover:bg-red-50"}
-                    onClick={() => setLessonStatus('not yet competent')}
-                  >
-                    Not Yet Competent
-                  </Button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      className={lessonStatus === 'pass' ? "bg-green-600 hover:bg-green-700 text-white border-green-600 h-12 text-base" : "border-2 border-green-600 text-green-600 hover:bg-green-50 h-12 text-base"}
+                      variant={lessonStatus === 'pass' ? "default" : "outline"}
+                      onClick={() => setLessonStatus('pass')}
+                    >
+                      ✓ Pass
+                    </Button>
+                    <Button
+                      variant={lessonStatus === 'not yet competent' ? "default" : "outline"}
+                      className={lessonStatus === 'not yet competent' ? "bg-red-600 hover:bg-red-700 text-white border-red-600 h-12 text-base" : "border-2 border-red-500 text-red-600 hover:bg-red-50 h-12 text-base"}
+                      onClick={() => setLessonStatus('not yet competent')}
+                    >
+                      Not Yet Competent
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
             {/* Instructor Comments */}
             <Card>
-              <CardHeader className="flex flex-row items-center gap-2 pb-2">
+              <CardHeader className="flex flex-row items-center gap-2 pb-3">
                 <MessageCircle className="w-5 h-5 text-blue-600 mr-1" />
                 <CardTitle className="text-lg">Instructor Comments</CardTitle>
+                <span className="text-xs text-gray-500 ml-auto">Auto-saves</span>
               </CardHeader>
               <CardContent className="pt-0 pb-4">
                 {lessonProgressLoading ? (
@@ -368,28 +399,31 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
                     value={instructorComments}
                     onChange={handleInstructorCommentsChange}
                     onBlur={saveInstructorComments}
-                    placeholder="Provide detailed feedback on the student's performance during this lesson..."
+                    placeholder="Quick feedback: What went well? What needs work? Use Tab to move to next section..."
                     className="min-h-[120px]"
                   />
                 )}
               </CardContent>
             </Card>
             {/* Lesson Breakdown */}
-            <Card>
+            <Card className="overflow-hidden">
               <CardHeader
-                className="flex flex-row items-center gap-2 pb-2 cursor-pointer hover:bg-gray-50 transition-colors"
+                className="flex flex-row items-center gap-2 pb-3 pt-3 cursor-pointer hover:bg-gray-50 transition-colors border-b"
                 onClick={() => setIsLessonBreakdownExpanded(!isLessonBreakdownExpanded)}
               >
                 <ListChecks className="w-5 h-5 text-violet-600 mr-1" />
                 <CardTitle className="text-lg flex-1">Lesson Breakdown</CardTitle>
+                <span className="text-xs text-gray-500 mr-2">
+                  {isLessonBreakdownExpanded ? 'Click to collapse' : 'Click to expand'}
+                </span>
                 {isLessonBreakdownExpanded ? (
-                  <ChevronUp className="w-5 h-5 text-gray-500" />
+                  <ChevronUp className="w-5 h-5 text-gray-400" />
                 ) : (
-                  <ChevronDown className="w-5 h-5 text-gray-500" />
+                  <ChevronDown className="w-5 h-5 text-gray-400" />
                 )}
               </CardHeader>
               {isLessonBreakdownExpanded && (
-                <CardContent className="flex flex-col gap-4 pt-0 pb-4">
+                <CardContent className="flex flex-col gap-4 pt-4 pb-4">
                   <div>
                     <label htmlFor="lesson-highlights" className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
                       <Sparkles className="w-4 h-4 text-yellow-500" />
@@ -399,8 +433,8 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
                       id="lesson-highlights"
                       value={lessonHighlights}
                       onChange={(e) => setLessonHighlights(e.target.value)}
-                      className="mb-2"
-                      placeholder="What went particularly well during this lesson?"
+                      className="mb-2 min-h-[80px]"
+                      placeholder="e.g., Excellent landing technique, good radio communication..."
                     />
                   </div>
                   <div>
@@ -412,8 +446,8 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
                       id="airmanship"
                       value={airmanship}
                       onChange={(e) => setAirmanship(e.target.value)}
-                      className="mb-2"
-                      placeholder="Assessment of general airmanship skills displayed..."
+                      className="mb-2 min-h-[80px]"
+                      placeholder="e.g., Good situational awareness, proper checklist usage..."
                     />
                   </div>
                   <div>
@@ -425,33 +459,37 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
                       id="areas-for-improvement"
                       value={areasForImprovement}
                       onChange={(e) => setAreasForImprovement(e.target.value)}
-                      className="flex-1"
-                      placeholder="Areas that need attention..."
+                      className="flex-1 min-h-[80px]"
+                      placeholder="e.g., Work on crosswind landings, improve fuel calculations..."
                     />
                   </div>
                 </CardContent>
               )}
             </Card>
             {/* Next Steps */}
-            <Card>
+            <Card className="overflow-hidden">
               <CardHeader
-                className="flex flex-row items-center gap-2 pb-2 cursor-pointer hover:bg-gray-50 transition-colors"
+                className="flex flex-row items-center gap-2 pb-3 pt-3 cursor-pointer hover:bg-gray-50 transition-colors border-b"
                 onClick={() => setIsNextStepsExpanded(!isNextStepsExpanded)}
               >
                 <ArrowRightCircle className="w-5 h-5 text-indigo-600 mr-1" />
                 <CardTitle className="text-lg flex-1">Next Steps</CardTitle>
+                <span className="text-xs text-gray-500 mr-2">
+                  {isNextStepsExpanded ? 'Click to collapse' : 'Click to expand'}
+                </span>
                 {isNextStepsExpanded ? (
-                  <ChevronUp className="w-5 h-5 text-gray-500" />
+                  <ChevronUp className="w-5 h-5 text-gray-400" />
                 ) : (
-                  <ChevronDown className="w-5 h-5 text-gray-500" />
+                  <ChevronDown className="w-5 h-5 text-gray-400" />
                 )}
               </CardHeader>
               {isNextStepsExpanded && (
-                <CardContent className="pt-0 pb-4">
+                <CardContent className="pt-4 pb-4">
                   <Textarea
                     value={nextSteps}
                     onChange={(e) => setNextSteps(e.target.value)}
-                    placeholder="Recommended next actions..."
+                    placeholder="e.g., Practice circuit patterns solo, review emergency procedures..."
+                    className="min-h-[100px]"
                   />
                 </CardContent>
               )}
@@ -497,14 +535,34 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
                     {/* Duration */}
                     <div className="text-xs text-muted-foreground mt-2">Duration</div>
                     <div className="font-medium">{flightLog?.flight_time !== null && flightLog?.flight_time !== undefined ? `${flightLog.flight_time} hours` : "-"}</div>
+                    {/* Purpose */}
+                    <div className="text-xs text-muted-foreground mt-2">Purpose</div>
+                    <div className="font-medium">{booking.purpose || "-"}</div>
                     {/* Lesson */}
-                    <div className="text-xs text-muted-foreground mt-2">Lesson</div>
-                    {lessonLoading ? (
+                    <div className="text-xs text-muted-foreground mt-2 flex items-center gap-2">
+                      Lesson
+                      {selectedLessonId !== booking.lesson_id && (
+                        <span className="text-xs text-orange-600 font-medium">(Modified)</span>
+                      )}
+                    </div>
+                    {allLessonsLoading ? (
                       <div className="font-medium text-muted-foreground">Loading...</div>
-                    ) : lesson ? (
-                      <div className="font-medium">{lesson.name}</div>
                     ) : (
-                      <div className="font-medium text-muted-foreground">-</div>
+                      <Select
+                        value={selectedLessonId || undefined}
+                        onValueChange={(value) => setSelectedLessonId(value)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a lesson" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allLessons.map((lessonOption) => (
+                            <SelectItem key={lessonOption.id} value={lessonOption.id}>
+                              {lessonOption.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     )}
                   </div>
                 </div>
@@ -512,21 +570,30 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
             </Card>
             {/* Flight Details */}
             <Card>
-              <CardHeader className="flex flex-row items-center gap-2 pb-2">
+              <CardHeader className="flex flex-row items-center gap-2 pb-3">
                 <ClipboardList className="w-5 h-5 text-gray-700 mr-1" />
                 <CardTitle className="text-lg">Flight Details</CardTitle>
+                <span className="text-xs text-gray-500 ml-auto">Optional</span>
               </CardHeader>
-              <CardContent className="flex flex-col gap-4 pt-0 pb-4">
-                <Textarea
-                  value={weatherConditions}
-                  onChange={(e) => setWeatherConditions(e.target.value)}
-                  placeholder="Weather Conditions: Weather during the flight..."
-                />
-                <Textarea
-                  value={safetyObservations}
-                  onChange={(e) => setSafetyObservations(e.target.value)}
-                  placeholder="Safety Observations: Any safety-related observations..."
-                />
+              <CardContent className="flex flex-col gap-3 pt-0 pb-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Weather Conditions</label>
+                  <Textarea
+                    value={weatherConditions}
+                    onChange={(e) => setWeatherConditions(e.target.value)}
+                    placeholder="e.g., Clear skies, 10kt winds, visibility 10km..."
+                    className="min-h-[70px]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Safety Observations</label>
+                  <Textarea
+                    value={safetyObservations}
+                    onChange={(e) => setSafetyObservations(e.target.value)}
+                    placeholder="e.g., Good pre-flight checks, proper use of safety equipment..."
+                    className="min-h-[70px]"
+                  />
+                </div>
               </CardContent>
             </Card>
           </div>

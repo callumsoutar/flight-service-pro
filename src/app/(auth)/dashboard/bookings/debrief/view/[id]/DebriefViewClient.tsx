@@ -3,10 +3,11 @@
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuGroup } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Mail, Eye, User, Printer, ChevronDown } from "lucide-react";
+import { Mail, Eye, User, Printer, ChevronDown, ChevronLeft, Download, Loader2 } from "lucide-react";
 import { MessageCircle, ListChecks, ArrowRightCircle, UserCircle2, ClipboardList, Plane, Star, Navigation, TrendingUp, Target, Cloud, Shield, Clock } from "lucide-react";
 import React, { useState } from "react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import type { Booking } from "@/types/bookings";
 import type { User as UserType } from "@/types/users";
 import type { Aircraft } from "@/types/aircraft";
@@ -54,7 +55,10 @@ export default function DebriefViewClient({
   flightExperiences,
   experienceTypes,
 }: DebriefViewClientProps) {
+  const router = useRouter();
   const [isEmailLoading, setIsEmailLoading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const handleSendEmail = async () => {
     if (!booking.user?.email) {
@@ -86,8 +90,45 @@ export default function DebriefViewClient({
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    setIsPrinting(true);
+    try {
+      const response = await fetch(`/api/bookings/${booking.id}/debrief-pdf`);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to generate PDF' }));
+        throw new Error(errorData.error || 'Failed to generate PDF');
+      }
+
+      // Get the PDF blob
+      const blob = await response.blob();
+
+      // Create a blob URL
+      const url = window.URL.createObjectURL(blob);
+
+      // Open PDF in a new window
+      const printWindow = window.open(url, '_blank');
+
+      if (printWindow) {
+        // Wait for PDF to load, then trigger print dialog
+        printWindow.onload = () => {
+          printWindow.print();
+          // Cleanup the blob URL after a delay to ensure print dialog has opened
+          setTimeout(() => {
+            window.URL.revokeObjectURL(url);
+          }, 100);
+        };
+      } else {
+        // Fallback if popup was blocked
+        window.URL.revokeObjectURL(url);
+        toast.error('Please allow popups to print the debrief');
+      }
+    } catch (error) {
+      console.error('Error printing PDF:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to print PDF');
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   const handleViewBooking = () => {
@@ -100,52 +141,115 @@ export default function DebriefViewClient({
     }
   };
 
+  const handleDownloadPDF = async () => {
+    setIsDownloading(true);
+    try {
+      const response = await fetch(`/api/bookings/${booking.id}/debrief-pdf`);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to generate PDF' }));
+        throw new Error(errorData.error || 'Failed to generate PDF');
+      }
+
+      // Get the PDF blob
+      const blob = await response.blob();
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+
+      // Generate filename
+      const studentName = booking.user?.first_name && booking.user?.last_name
+        ? `${booking.user.first_name}-${booking.user.last_name}`
+        : 'Student';
+      const date = lessonProgress?.date
+        ? new Date(lessonProgress.date).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+      a.download = `Debrief-${studentName}-${date}.pdf`;
+
+      document.body.appendChild(a);
+      a.click();
+
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success('Debrief PDF downloaded successfully');
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to download PDF');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <div className="w-full min-h-screen bg-gray-50">
       <div className="w-full max-w-5xl mx-auto px-4 py-8">
+        {/* Page Header with Actions */}
+        <div className="flex items-center justify-between mb-6 print:hidden">
+          <Button
+            variant="ghost"
+            onClick={() => router.back()}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Back
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-10 px-4 text-sm font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 transition-colors flex items-center gap-2">
+                Options
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  onClick={handleSendEmail}
+                  disabled={isEmailLoading}
+                >
+                  <Mail className="w-4 h-4 mr-2" />
+                  {isEmailLoading ? 'Sending...' : 'Send Email'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadPDF} disabled={isDownloading}>
+                  {isDownloading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-2" />
+                  )}
+                  {isDownloading ? 'Generating PDF...' : 'Download PDF'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handlePrint} disabled={isPrinting}>
+                  {isPrinting ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Printer className="w-4 h-4 mr-2" />
+                  )}
+                  {isPrinting ? 'Generating PDF...' : 'Print'}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleViewBooking}>
+                  <Eye className="w-4 h-4 mr-2" />
+                  View Booking
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleViewMember}>
+                  <User className="w-4 h-4 mr-2" />
+                  View Member
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
         {/* Header Section - Enhanced */}
         <div className="bg-white rounded-2xl shadow-sm border p-8 mb-8">
           <div className="flex flex-col gap-6">
             {/* Title Row */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Plane className="w-8 h-8 text-blue-600" />
-                <h1 className="text-3xl font-bold text-gray-900">Flight Debrief Report</h1>
-              </div>
-              <div className="flex items-center gap-3 print:hidden">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="h-10 px-4 text-sm font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 transition-colors flex items-center gap-2">
-                      Options
-                      <ChevronDown className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem
-                        onClick={handleSendEmail}
-                        disabled={isEmailLoading}
-                      >
-                        <Mail className="w-4 h-4 mr-2" />
-                        {isEmailLoading ? 'Sending...' : 'Send Email'}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={handlePrint}>
-                        <Printer className="w-4 h-4 mr-2" />
-                        Print
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={handleViewBooking}>
-                        <Eye className="w-4 h-4 mr-2" />
-                        View Booking
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={handleViewMember}>
-                        <User className="w-4 h-4 mr-2" />
-                        View Member
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+            <div className="flex items-center gap-3">
+              <Plane className="w-8 h-8 text-blue-600" />
+              <h1 className="text-3xl font-bold text-gray-900">Flight Debrief Report</h1>
             </div>
 
             {/* Student and Instructor Info */}
