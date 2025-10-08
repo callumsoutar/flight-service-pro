@@ -4,11 +4,8 @@ import {
   FileText,
   DollarSign,
   Calendar,
-  Shield,
   GraduationCap,
   Settings as SettingsIcon,
-  Users,
-  Bell,
   Check,
   ChevronDown,
   CreditCard
@@ -26,23 +23,17 @@ import { SettingsProvider } from "@/contexts/SettingsContext";
 const InvoicingTab = lazy(() => import("@/components/settings/InvoicingTab"));
 const ChargesTab = lazy(() => import("@/components/settings/ChargesTab"));
 const BookingsTab = lazy(() => import("@/components/settings/BookingsTab"));
-const PermissionsTab = lazy(() => import("@/components/settings/PermissionsTab"));
 const TrainingTab = lazy(() => import("@/components/settings/TrainingTab"));
 const MembershipsTab = lazy(() => import("@/components/settings/MembershipsTab"));
 const GeneralTab = lazy(() => import("@/components/settings/GeneralTab"));
-const UsersTab = lazy(() => import("@/components/settings/UsersTab"));
-const NotificationsTab = lazy(() => import("@/components/settings/NotificationsTab"));
 
 const tabItems = [
   { id: "general", label: "General", icon: SettingsIcon },
   { id: "invoicing", label: "Invoicing", icon: FileText },
   { id: "charges", label: "Charges", icon: DollarSign },
   { id: "bookings", label: "Bookings", icon: Calendar },
-  { id: "permissions", label: "Permissions", icon: Shield },
   { id: "training", label: "Training", icon: GraduationCap },
   { id: "memberships", label: "Memberships", icon: CreditCard },
-  { id: "users", label: "Users", icon: Users },
-  { id: "notifications", label: "Notifications", icon: Bell },
 ];
 
 export default function SettingsClient() {
@@ -149,13 +140,6 @@ export default function SettingsClient() {
               </Suspense>
             )}
           </Tabs.Content>
-          <Tabs.Content value="permissions" className="h-full w-full">
-            {selectedTab === "permissions" && (
-              <Suspense fallback={<div className="flex items-center justify-center py-8">Loading...</div>}>
-                <PermissionsTab />
-              </Suspense>
-            )}
-          </Tabs.Content>
           <Tabs.Content value="training" className="h-full w-full">
             {selectedTab === "training" && (
               <Suspense fallback={<div className="flex items-center justify-center py-8">Loading...</div>}>
@@ -167,20 +151,6 @@ export default function SettingsClient() {
             {selectedTab === "memberships" && (
               <Suspense fallback={<div className="flex items-center justify-center py-8">Loading...</div>}>
                 <MembershipsTab />
-              </Suspense>
-            )}
-          </Tabs.Content>
-          <Tabs.Content value="users" className="h-full w-full">
-            {selectedTab === "users" && (
-              <Suspense fallback={<div className="flex items-center justify-center py-8">Loading...</div>}>
-                <UsersTab />
-              </Suspense>
-            )}
-          </Tabs.Content>
-          <Tabs.Content value="notifications" className="h-full w-full">
-            {selectedTab === "notifications" && (
-              <Suspense fallback={<div className="flex items-center justify-center py-8">Loading...</div>}>
-                <NotificationsTab />
               </Suspense>
             )}
           </Tabs.Content>

@@ -531,7 +531,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                   }}
                 >
                   <SelectTrigger className="w-full border-slate-200 focus:border-indigo-300 focus:ring-indigo-200">
-                    <SelectValue />
+                    <SelectValue placeholder="Select category..." />
                   </SelectTrigger>
                   <SelectContent>
                     {TASK_CATEGORIES.map((c) => (
@@ -574,7 +574,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-slate-700">Assigned To Instructor</label>
                 <Select
-                  value={tempAssignedToInstructorId}
+                  value={tempAssignedToInstructorId || undefined}
                   onValueChange={setTempAssignedToInstructorId}
                   disabled={loadingInstructors}
                 >
@@ -582,6 +582,11 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                     <SelectValue placeholder={loadingInstructors ? "Loading..." : "Select instructor..."} />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="">
+                      <div className="flex items-center gap-2 text-sm text-slate-500">
+                        Unassigned
+                      </div>
+                    </SelectItem>
                     {instructors.map((instructor) => (
                       <SelectItem key={instructor.id} value={instructor.id}>
                         <div className="flex items-center gap-2 text-sm">

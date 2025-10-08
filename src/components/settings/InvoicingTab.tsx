@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { FileText, DollarSign, Calendar, Settings } from "lucide-react";
+import { FileText, DollarSign } from "lucide-react";
 import * as Tabs from "@radix-ui/react-tabs";
 import TaxRateManager from "./TaxRateManager";
 import InvoiceTemplateSettings from "./InvoiceTemplateSettings";
@@ -8,8 +8,6 @@ import InvoiceTemplateSettings from "./InvoiceTemplateSettings";
 const invoicingTabs = [
   { id: "tax-rates", label: "Tax Rates", icon: DollarSign },
   { id: "invoice-config", label: "Invoice Configuration", icon: FileText },
-  { id: "payment-terms", label: "Payment Terms", icon: Calendar },
-  { id: "templates", label: "Templates", icon: Settings },
 ];
 
 export default function InvoicingTab() {
@@ -48,26 +46,6 @@ export default function InvoicingTab() {
 
           <Tabs.Content value="invoice-config" className="outline-none">
             <InvoiceTemplateSettings />
-          </Tabs.Content>
-
-          <Tabs.Content value="payment-terms" className="outline-none">
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Calendar className="w-12 h-12 text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Payment Terms</h3>
-              <p className="text-sm text-gray-500 max-w-md">
-                Set default payment terms and due dates. This feature is coming soon.
-              </p>
-            </div>
-          </Tabs.Content>
-
-          <Tabs.Content value="templates" className="outline-none">
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Settings className="w-12 h-12 text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Invoice Templates</h3>
-              <p className="text-sm text-gray-500 max-w-md">
-                Customize invoice templates and branding. This feature is coming soon.
-              </p>
-            </div>
           </Tabs.Content>
         </div>
       </Tabs.Root>

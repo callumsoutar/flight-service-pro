@@ -6,16 +6,16 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { searchParams } = new URL(req.url);
   const table_name = searchParams.get('table_name');
-  const row_id = searchParams.get('row_id');
+  const record_id = searchParams.get('row_id') || searchParams.get('record_id'); // Support both params for backwards compat
   const include_users = searchParams.get('include_users') === 'true';
 
   let query = supabase
     .from('audit_logs')
     .select('*')
-    .order('changed_at', { ascending: false });
+    .order('created_at', { ascending: false }); // Fixed: was changed_at, now created_at
 
   if (table_name) query = query.eq('table_name', table_name);
-  if (row_id) query = query.eq('row_id', row_id);
+  if (record_id) query = query.eq('record_id', record_id); // Fixed: was row_id, now record_id
 
   const { data, error } = await query;
   if (error) {
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
   // If include_users is requested, fetch user data in a single query
   if (include_users && data) {
-    const userIds = Array.from(new Set(data.map((log: AuditLog) => log.changed_by).filter(Boolean)));
+    const userIds = Array.from(new Set(data.map((log: AuditLog) => log.user_id).filter(Boolean))); // Fixed: was changed_by, now user_id
 
     if (userIds.length > 0) {
       const { data: usersData, error: usersError } = await supabase

@@ -29,8 +29,8 @@ import {
 } from '@/hooks/use-flight-authorization';
 import type { FlightAuthorization } from '@/types/flight_authorizations';
 import { toast } from 'sonner';
-import FlightAuthorizationSearch from '@/components/flight-authorizations/FlightAuthorizationSearch';
-import FlightAuthorizationTable from '@/components/flight-authorizations/FlightAuthorizationTable';
+import FlightAuthorizationSearch from '@/components/flight-authorization/FlightAuthorizationSearch';
+import FlightAuthorizationTable from '@/components/flight-authorization/FlightAuthorizationTable';
 
 interface FlightAuthorizationsClientProps {
   pendingAuthorizations: FlightAuthorization[];

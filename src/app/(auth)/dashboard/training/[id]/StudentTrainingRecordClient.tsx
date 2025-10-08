@@ -354,8 +354,10 @@ export default function StudentTrainingRecordClient({ memberId }: StudentTrainin
             <User className="w-6 h-6 text-indigo-600" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-              {student.first_name} {student.last_name}
+            <h1 className="text-3xl font-bold tracking-tight">
+              <Link href={`/dashboard/members/view/${memberId}`} className="text-gray-900 hover:text-indigo-600 transition-colors">
+                {student.first_name} {student.last_name}
+              </Link>
             </h1>
             <p className="text-gray-600 text-lg">Training Record</p>
           </div>

@@ -449,15 +449,6 @@ export default function LandingFeesConfig() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <h4 className="font-medium text-gray-900">{fee.name}</h4>
-                      {fee.is_taxable ? (
-                        <Badge variant="default" className="text-xs bg-green-100 text-green-800">
-                          Taxable
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
-                          Tax Exempt
-                        </Badge>
-                      )}
                       {!fee.is_active && (
                         <Badge variant="outline" className="text-xs text-gray-500">
                           Inactive

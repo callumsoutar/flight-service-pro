@@ -13,10 +13,10 @@ interface BookingHistoryCollapseProps {
 interface AuditLog {
   id: string;
   table_name: string;
-  row_id: string;
+  record_id: string; // Fixed: was row_id, now matches DB column
   action: string;
-  changed_by?: string | null;
-  changed_at: string;
+  user_id?: string | null; // Fixed: was changed_by, now matches DB column
+  created_at: string; // Fixed: was changed_at, now matches DB column
   old_data?: Record<string, unknown> | null;
   new_data?: Record<string, unknown> | null;
   column_changes?: Record<string, { old: unknown; new: unknown }> | null;
@@ -144,10 +144,10 @@ export default function BookingHistoryCollapse({ bookingId, lessons }: BookingHi
                     {logsToShow.map((log, i) => (
                       <TableRow key={log.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                         <TableCell className="align-top text-xs text-muted-foreground whitespace-nowrap">
-                          {new Date(log.changed_at).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}
+                          {new Date(log.created_at).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}
                         </TableCell>
                         <TableCell className="align-top text-xs font-medium text-primary whitespace-nowrap">
-                          {log.changed_by && users[log.changed_by] ? `${users[log.changed_by].first_name} ${users[log.changed_by].last_name}` : <span className="text-muted-foreground">Unknown</span>}
+                          {log.user_id && users[log.user_id] ? `${users[log.user_id].first_name} ${users[log.user_id].last_name}` : <span className="text-muted-foreground">Unknown</span>}
                         </TableCell>
                         <TableCell className="align-top text-xs text-gray-900 whitespace-pre-line">{renderDescription(log)}</TableCell>
                       </TableRow>

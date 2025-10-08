@@ -583,193 +583,116 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
         </Card>
       )}
 
-      {/* Progress Summary */}
+      {/* Syllabus Management */}
       {selectedSyllabusId && (
-        <Card className="rounded-md">
-          <CardHeader>
+        <Card className="rounded-md shadow-sm">
+          <CardHeader className="pb-4 border-b border-slate-100">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <CardTitle className="flex items-center gap-2">
-                <Target className="w-5 h-5" />
-                {enrolledSyllabi.length > 1 ? 'Training Progress' : enrolledSyllabi.find(s => s.id === selectedSyllabusId)?.name}
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Target className="w-5 h-5 text-indigo-600" />
+                Syllabus Management
               </CardTitle>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 {enrolledSyllabi.length > 1 && (
-                  <>
-                    <span className="text-sm font-medium text-gray-700">Syllabus:</span>
-                    <Select value={selectedSyllabusId} onValueChange={setSelectedSyllabusId}>
-                      <SelectTrigger className="w-[200px]">
-                        <SelectValue placeholder="Select syllabus" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {enrolledSyllabi.map((syllabus) => (
-                          <SelectItem key={syllabus.id} value={syllabus.id}>
-                            {syllabus.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </>
+                  <Select value={selectedSyllabusId} onValueChange={setSelectedSyllabusId}>
+                    <SelectTrigger className="w-[200px] h-9">
+                      <SelectValue placeholder="Select syllabus" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {enrolledSyllabi.map((syllabus) => (
+                        <SelectItem key={syllabus.id} value={syllabus.id}>
+                          {syllabus.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
-                {/* Add enrollment button - show if there are syllabi available for enrollment */}
                 {syllabi.filter(s => !enrolledSyllabi.some(es => es.id === s.id)).length > 0 && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setEnrollModalOpen(true)}
-                    className="h-8 w-8 p-0 border-dashed border-gray-300 hover:border-indigo-400 hover:bg-indigo-50"
+                    className="h-9 border-dashed"
                     title="Enroll in additional syllabus"
                   >
-                    <Plus className="w-4 h-4 text-gray-500 hover:text-indigo-600" />
+                    <Plus className="w-4 h-4 mr-1.5" />
+                    Add Syllabus
                   </Button>
                 )}
               </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {/* Progress Bar Section */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-600">Lesson Completion</span>
-                  <span className="text-sm font-semibold text-gray-900">{progressStats.passed}/{progressStats.total} lessons</span>
-                </div>
-                <div className="text-center mb-3">
-                  <span className="text-sm font-medium text-indigo-600">{progressStats.percentage}% Complete</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div
-                    className="bg-indigo-600 h-3 rounded-full transition-all duration-300"
-                    style={{ width: `${progressStats.percentage}%` }}
-                  ></div>
-                </div>
+          <CardContent className="space-y-6 pt-6 pb-8">
+            {/* Current Syllabus Info */}
+            <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-semibold text-slate-900">
+                  {enrolledSyllabi.find(s => s.id === selectedSyllabusId)?.name}
+                </h3>
+                <span className="text-2xl font-bold text-indigo-600">{progressStats.percentage}%</span>
               </div>
 
-              {/* Enrollment Details Section */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-gray-100">
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-600">Enrolled:</span>
-                    <div className="flex flex-col">
-                      <span className="text-sm text-gray-900">
-                        {currentEnrollment?.enrolled_at ?
-                          format(new Date(currentEnrollment.enrolled_at), 'MMM d, yyyy') :
-                          'Unknown'
-                        }
-                      </span>
-                      {currentEnrollment?.enrolled_at && (
-                        <span className="text-xs text-gray-500">
-                          {differenceInDays(new Date(), new Date(currentEnrollment.enrolled_at))} days ago
-                        </span>
-                      )}
-                    </div>
-                  </div>
+              <div className="w-full bg-slate-200 rounded-full h-2.5 mb-3">
+                <div
+                  className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+                  style={{ width: `${progressStats.percentage}%` }}
+                ></div>
+              </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-600">{progressStats.passed} of {progressStats.total} lessons completed</span>
+                {currentEnrollment?.enrolled_at && (
+                  <span className="text-slate-500">
+                    Enrolled {format(new Date(currentEnrollment.enrolled_at), 'MMM d, yyyy')}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Details Grid */}
+            <div className="w-full sm:w-2/3 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {/* Primary Instructor */}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-slate-600 uppercase tracking-wide">Primary Instructor</label>
+                  <Select
+                    value={currentEnrollment?.primary_instructor_id || ""}
+                    onValueChange={handleInstructorChange}
+                    disabled={updatingInstructor}
+                  >
+                    <SelectTrigger className="h-11 border-0 border-b-2 border-slate-200 rounded-none bg-transparent hover:border-indigo-400 focus:border-indigo-600 transition-colors px-0 font-medium text-left w-full">
+                      <SelectValue placeholder="Select instructor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allInstructors.map(instructor => (
+                        <SelectItem key={instructor.id} value={instructor.id}>
+                          {instructor.first_name} {instructor.last_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-600">Primary Instructor:</span>
-                  {editingInstructor ? (
-                    <div className="flex items-center gap-2">
-                      <Select
-                        defaultValue={currentEnrollment?.primary_instructor_id || ""}
-                        onValueChange={handleInstructorChange}
-                        disabled={updatingInstructor}
-                      >
-                        <SelectTrigger className="w-[160px] h-8">
-                          <SelectValue placeholder="Select instructor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allInstructors.map(instructor => (
-                            <SelectItem key={instructor.id} value={instructor.id}>
-                              {instructor.first_name} {instructor.last_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditingInstructor(false)}
-                        disabled={updatingInstructor}
-                        className="h-8 w-8 p-0"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-900">
-                        {currentEnrollment?.primary_instructor_id ?
-                          (() => {
-                            const instructor = allInstructors.find(i => i.id === currentEnrollment.primary_instructor_id);
-                            return instructor ? `${instructor.first_name} ${instructor.last_name}` : 'Unknown';
-                          })() :
-                          'Not assigned'
-                        }
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditingInstructor(true)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Edit3 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-600">Aircraft Type:</span>
-                  {editingAircraftType ? (
-                    <div className="flex items-center gap-2">
-                      <Select
-                        defaultValue={currentEnrollment?.aircraft_type || ""}
-                        onValueChange={handleAircraftTypeChange}
-                        disabled={updatingAircraftType}
-                      >
-                        <SelectTrigger className="w-[180px] h-8">
-                          <SelectValue placeholder="Select aircraft type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {aircraftTypes.map(aircraftType => (
-                            <SelectItem key={aircraftType.id} value={aircraftType.id}>
-                              {aircraftType.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditingAircraftType(false)}
-                        disabled={updatingAircraftType}
-                        className="h-8 w-8 p-0"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-900">
-                        {currentEnrollment?.aircraft_type ?
-                          (() => {
-                            const aircraftType = aircraftTypes.find(at => at.id === currentEnrollment.aircraft_type);
-                            return aircraftType ? aircraftType.name : 'Unknown';
-                          })() :
-                          'Not assigned'
-                        }
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditingAircraftType(true)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Edit3 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  )}
+                {/* Aircraft Type */}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-slate-600 uppercase tracking-wide">Aircraft Type</label>
+                  <Select
+                    value={currentEnrollment?.aircraft_type || ""}
+                    onValueChange={handleAircraftTypeChange}
+                    disabled={updatingAircraftType}
+                  >
+                    <SelectTrigger className="h-11 border-0 border-b-2 border-slate-200 rounded-none bg-transparent hover:border-indigo-400 focus:border-indigo-600 transition-colors px-0 font-medium text-left w-full">
+                      <SelectValue placeholder="Select aircraft type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {aircraftTypes.map(aircraftType => (
+                        <SelectItem key={aircraftType.id} value={aircraftType.id}>
+                          {aircraftType.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>

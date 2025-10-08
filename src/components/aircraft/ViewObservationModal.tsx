@@ -65,8 +65,15 @@ export const ViewObservationModal: React.FC<ViewObservationModalProps> = ({ open
     if (observation) {
       setEditName(observation.name);
       setEditDescription(observation.description || "");
-      setEditPriority(observation.priority || "medium");
-      setEditStage(observation.stage);
+      // Normalize priority value
+      const normalizedPriority = (observation.priority || "medium").toLowerCase().trim();
+      const validPriority = OBSERVATION_PRIORITIES.includes(normalizedPriority) ? normalizedPriority : "medium";
+      setEditPriority(validPriority);
+      // Normalize stage value to ensure it matches the expected ObservationStage type
+      const normalizedStage = (observation.stage || "open").toLowerCase().trim() as ObservationStage;
+      // Validate it's a valid stage, fallback to 'open' if not
+      const validStage = OBSERVATION_STAGES.includes(normalizedStage) ? normalizedStage : "open";
+      setEditStage(validStage);
     }
   }, [observation]);
 

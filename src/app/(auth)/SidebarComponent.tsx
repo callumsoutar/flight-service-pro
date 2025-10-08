@@ -201,12 +201,11 @@ export function SidebarComponent() {
       {/* Portal-based Submenu */}
       {showStaffSubmenu && typeof window !== 'undefined' && createPortal(
         <div
-          className="fixed w-48 rounded-lg shadow-xl submenu-container"
+          className="fixed w-48 rounded-lg shadow-xl submenu-container bg-purple-700"
           style={{
             zIndex: 10000,
             top: submenuPosition.top,
             left: submenuPosition.left,
-            background: '#7c3aed',
             border: '1px solid rgba(255,255,255,0.1)',
           }}
           onMouseEnter={() => {

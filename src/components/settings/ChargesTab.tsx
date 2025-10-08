@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Plane, Clock, DollarSign, PlaneLanding } from "lucide-react";
+import { Plane, DollarSign, PlaneLanding } from "lucide-react";
 import * as Tabs from "@radix-ui/react-tabs";
 import FlightTypesConfig from "./FlightTypesConfig";
 import ChargeablesConfig from "./ChargeablesConfig";
@@ -8,7 +8,6 @@ import LandingFeesConfig from "./LandingFeesConfig";
 
 const chargeTabs = [
   { id: "aircraft", label: "Aircraft Rates", icon: Plane },
-  { id: "instructor", label: "Instructor Rates", icon: Clock },
   { id: "landing", label: "Landing Fees", icon: PlaneLanding },
   { id: "additional", label: "Additional Charges", icon: DollarSign },
 ];
@@ -45,16 +44,6 @@ export default function ChargesTab() {
         <div className="flex-1 overflow-auto">
           <Tabs.Content value="aircraft" className="outline-none">
             <FlightTypesConfig />
-          </Tabs.Content>
-
-          <Tabs.Content value="instructor" className="outline-none">
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Clock className="w-12 h-12 text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Instructor Rates</h3>
-              <p className="text-sm text-gray-500 max-w-md">
-                Set hourly rates for different types of instruction. This feature is coming soon.
-              </p>
-            </div>
           </Tabs.Content>
 
           <Tabs.Content value="landing" className="outline-none">

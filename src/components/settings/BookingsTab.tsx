@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Calendar, Clock, AlertTriangle, Settings } from "lucide-react";
+import { Calendar, Clock, AlertTriangle } from "lucide-react";
 import * as Tabs from "@radix-ui/react-tabs";
 import CancellationCategoriesConfig from "./CancellationCategoriesConfig";
 import TimeSlotConfiguration from "./TimeSlotConfiguration";
@@ -10,7 +10,6 @@ const bookingTabs = [
   { id: "booking-rules", label: "Booking Rules", icon: Calendar },
   { id: "time-slots", label: "Time Slots", icon: Clock },
   { id: "cancellations", label: "Cancellations", icon: AlertTriangle },
-  { id: "workflow", label: "Workflow", icon: Settings },
 ];
 
 export default function BookingsTab() {
@@ -53,16 +52,6 @@ export default function BookingsTab() {
 
           <Tabs.Content value="cancellations" className="outline-none">
             <CancellationCategoriesConfig />
-          </Tabs.Content>
-
-          <Tabs.Content value="workflow" className="outline-none">
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Settings className="w-12 h-12 text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Booking Workflow</h3>
-              <p className="text-sm text-gray-500 max-w-md">
-                Configure the booking approval and confirmation process. This feature is coming soon.
-              </p>
-            </div>
           </Tabs.Content>
         </div>
       </Tabs.Root>
