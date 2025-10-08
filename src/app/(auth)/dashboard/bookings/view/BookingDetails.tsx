@@ -57,6 +57,7 @@ interface BookingDetailsProps {
   lessons: { id: string; name: string }[];
   flightTypes: { id: string; name: string; instruction_type?: string }[];
   bookings: Booking[]; // All bookings for conflict checking
+  isRestrictedUser?: boolean;
 }
 
 // Helper to generate 30-min interval times (24-hour coverage)
@@ -126,13 +127,15 @@ function convertInstructorForHook(instructor?: unknown): InstructorForHook {
   return null;
 }
 
-export default function BookingDetails({ booking, members, instructors, aircraft, lessons, flightTypes, bookings }: BookingDetailsProps) {
+export default function BookingDetails({ booking, members, instructors, aircraft, lessons, flightTypes, bookings, isRestrictedUser: serverIsRestrictedUser }: BookingDetailsProps) {
   // Check if booking is read-only (completed bookings cannot be edited)
   const isReadOnly = booking.status === 'complete';
   const router = useRouter();
 
-  // Check if user has restricted access (member/student)
-  const { isRestricted: isRestrictedUser, isLoading: isRoleLoading } = useIsRestrictedUser();
+  // Use server-provided isRestrictedUser if available, otherwise fall back to client hook
+  const { isRestricted: clientIsRestrictedUser, isLoading: clientIsRoleLoading } = useIsRestrictedUser();
+  const isRestrictedUser = serverIsRestrictedUser !== undefined ? serverIsRestrictedUser : clientIsRestrictedUser;
+  const isRoleLoading = serverIsRestrictedUser !== undefined ? false : clientIsRoleLoading;
 
   // Prevent hydration mismatch by ensuring component is mounted
   const [mounted, setMounted] = useState(false);

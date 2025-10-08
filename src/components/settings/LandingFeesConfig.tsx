@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,13 +8,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Search, Plus, AlertCircle, PlaneLanding, Trash2 } from "lucide-react";
-import { ChargeableWithAircraftRates, CHARGEABLE_TYPE_LABELS } from "@/types/chargeables";
+import { ChargeableWithAircraftRates } from "@/types/chargeables";
 import { AircraftType } from "@/types/aircraft_types";
 
 interface LandingFeeFormData {
   name: string;
   description: string;
-  rate: string;
+  chargeable_type_id: string; // Will always be landing_fee type
   is_taxable: boolean;
   is_active: boolean;
 }
@@ -23,6 +23,7 @@ export default function LandingFeesConfig() {
   const [landingFees, setLandingFees] = useState<ChargeableWithAircraftRates[]>([]);
   const [selectedFee, setSelectedFee] = useState<ChargeableWithAircraftRates | null>(null);
   const [aircraftTypes, setAircraftTypes] = useState<AircraftType[]>([]);
+  const [landingFeeTypeId, setLandingFeeTypeId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +35,7 @@ export default function LandingFeesConfig() {
   const [editFormData, setEditFormData] = useState<LandingFeeFormData>({
     name: "",
     description: "",
-    rate: "",
+    chargeable_type_id: "",
     is_taxable: true,
     is_active: true,
   });
@@ -42,7 +43,7 @@ export default function LandingFeesConfig() {
   const [addFormData, setAddFormData] = useState<LandingFeeFormData>({
     name: "",
     description: "",
-    rate: "",
+    chargeable_type_id: "",
     is_taxable: true,
     is_active: true,
   });
@@ -91,53 +92,81 @@ export default function LandingFeesConfig() {
     }
   };
 
+  const fetchLandingFeeTypeId = async () => {
+    try {
+      const response = await fetch("/api/chargeable-types");
+      if (response.ok) {
+        const data = await response.json();
+        const landingFeeType = data.chargeable_types?.find((t: { code: string }) => t.code === 'landing_fee');
+        if (landingFeeType) {
+          setLandingFeeTypeId(landingFeeType.id);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch landing fee type:", err);
+    }
+  };
+
   useEffect(() => {
     fetchLandingFees();
     fetchTaxRate();
     fetchAircraftTypes();
+    fetchLandingFeeTypeId();
   }, []);
+
+  const calculateTaxInclusiveRate = useCallback((rate: number, isTaxable: boolean = true) => {
+    if (!isTaxable) return rate;
+    return rate * (1 + taxRate);
+  }, [taxRate]);
+
+  const calculateTaxExclusiveRate = useCallback((inclusiveRate: number, isTaxable: boolean = true) => {
+    if (!isTaxable) return inclusiveRate;
+    return inclusiveRate / (1 + taxRate);
+  }, [taxRate]);
 
   useEffect(() => {
     if (selectedFee) {
       setEditFormData({
         name: selectedFee.name,
         description: selectedFee.description || "",
-        rate: selectedFee.rate.toString(),
+        chargeable_type_id: selectedFee.chargeable_type_id,
         is_taxable: selectedFee.is_taxable,
         is_active: selectedFee.is_active ?? true,
       });
 
-      // Initialize aircraft rates for landing fees
+      // Initialize aircraft rates for landing fees (convert to inclusive)
       if (selectedFee.landing_fee_rates) {
         const rates: Record<string, string> = {};
         selectedFee.landing_fee_rates.forEach(r => {
-          rates[r.aircraft_type_id] = r.rate.toString();
+          const inclusive = calculateTaxInclusiveRate(r.rate, selectedFee.is_taxable);
+          rates[r.aircraft_type_id] = inclusive.toFixed(2);
         });
         setAircraftRates(rates);
       } else {
         setAircraftRates({});
       }
     }
-  }, [selectedFee]);
+  }, [selectedFee, taxRate, calculateTaxInclusiveRate]);
 
   const resetAddForm = () => {
     setAddFormData({
       name: "",
       description: "",
-      rate: "",
+      chargeable_type_id: landingFeeTypeId,
       is_taxable: true,
       is_active: true,
     });
   };
 
   const handleAdd = async () => {
-    if (!addFormData.name.trim() || !addFormData.rate) {
-      setError("Name and rate are required");
+    if (!addFormData.name.trim()) {
+      setError("Name is required");
       return;
     }
 
     try {
       setSaving(true);
+      // Landing fees don't use the default rate - set to 0
       const response = await fetch("/api/chargeables", {
         method: "POST",
         headers: {
@@ -145,8 +174,8 @@ export default function LandingFeesConfig() {
         },
         body: JSON.stringify({
           ...addFormData,
-          type: "landing_fee",
-          rate: parseFloat(addFormData.rate),
+          chargeable_type_id: landingFeeTypeId,
+          rate: 0,
         }),
       });
 
@@ -174,6 +203,10 @@ export default function LandingFeesConfig() {
       const rateValue = aircraftRates[aircraftTypeId];
       if (!rateValue || rateValue.trim() === '') continue;
 
+      // Convert inclusive input to exclusive for storage
+      const inclusiveRate = parseFloat(rateValue);
+      const exclusiveRate = calculateTaxExclusiveRate(inclusiveRate, editFormData.is_taxable);
+
       const existingRate = existingRates.find(r => r.aircraft_type_id === aircraftTypeId);
 
       if (existingRate) {
@@ -184,7 +217,7 @@ export default function LandingFeesConfig() {
           body: JSON.stringify({
             chargeable_id: chargeableId,
             aircraft_type_id: aircraftTypeId,
-            rate: parseFloat(rateValue),
+            rate: exclusiveRate,
           }),
         });
       } else {
@@ -195,7 +228,7 @@ export default function LandingFeesConfig() {
           body: JSON.stringify({
             chargeable_id: chargeableId,
             aircraft_type_id: aircraftTypeId,
-            rate: parseFloat(rateValue),
+            rate: exclusiveRate,
           }),
         });
       }
@@ -216,13 +249,21 @@ export default function LandingFeesConfig() {
   const handleEdit = async () => {
     if (!selectedFee) return;
 
-    if (!editFormData.name.trim() || !editFormData.rate) {
-      setError("Name and rate are required");
+    if (!editFormData.name.trim()) {
+      setError("Name is required");
+      return;
+    }
+
+    // Validate that at least one aircraft rate is set
+    const hasAircraftRates = Object.values(aircraftRates).some(rate => rate && rate.trim() !== '');
+    if (!hasAircraftRates) {
+      setError("At least one aircraft-specific rate must be set");
       return;
     }
 
     try {
       setSaving(true);
+      // Landing fees don't use the default rate - set to 0
       const response = await fetch("/api/chargeables", {
         method: "PATCH",
         headers: {
@@ -231,8 +272,8 @@ export default function LandingFeesConfig() {
         body: JSON.stringify({
           id: selectedFee.id,
           ...editFormData,
-          type: "landing_fee",
-          rate: parseFloat(editFormData.rate),
+          chargeable_type_id: landingFeeTypeId,
+          rate: 0,
         }),
       });
 
@@ -249,7 +290,7 @@ export default function LandingFeesConfig() {
 
       // Update selected fee to reflect changes
       const updatedFees = landingFees.map(f =>
-        f.id === selectedFee.id ? { ...f, ...editFormData, rate: parseFloat(editFormData.rate) } : f
+        f.id === selectedFee.id ? { ...f, ...editFormData } : f
       );
       const updatedSelected = updatedFees.find(f => f.id === selectedFee.id);
       if (updatedSelected) {
@@ -295,19 +336,6 @@ export default function LandingFeesConfig() {
       fee.description?.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-NZ', {
-      style: 'currency',
-      currency: 'NZD',
-      minimumFractionDigits: 2,
-    }).format(amount);
-  };
-
-  const calculateTaxInclusiveRate = (rate: number, isTaxable: boolean = true) => {
-    if (!isTaxable) return rate;
-    return rate * (1 + taxRate);
-  };
-
   if (loading) {
     return (
       <div className="text-center py-8">
@@ -350,20 +378,8 @@ export default function LandingFeesConfig() {
                     onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })}
                     placeholder="e.g., Wellington International"
                   />
-                </div>
-                <div>
-                  <Label htmlFor="add-rate">Default Rate (NZD, Tax Exclusive)</Label>
-                  <Input
-                    id="add-rate"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={addFormData.rate}
-                    onChange={(e) => setAddFormData({ ...addFormData, rate: e.target.value })}
-                    placeholder="0.00"
-                  />
                   <div className="mt-1 text-xs text-gray-500">
-                    You can set aircraft-specific rates after creating
+                    You&apos;ll set aircraft-specific rates after creating
                   </div>
                 </div>
                 <div>
@@ -398,7 +414,7 @@ export default function LandingFeesConfig() {
                   </Button>
                   <Button
                     onClick={handleAdd}
-                    disabled={saving || !addFormData.name.trim() || !addFormData.rate}
+                    disabled={saving || !addFormData.name.trim()}
                   >
                     {saving ? "Creating..." : "Create"}
                   </Button>
@@ -487,28 +503,12 @@ export default function LandingFeesConfig() {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="edit-rate">Default Rate (NZD, Tax Exclusive)</Label>
-                <Input
-                  id="edit-rate"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={editFormData.rate}
-                  onChange={(e) => setEditFormData({ ...editFormData, rate: e.target.value })}
-                  placeholder="0.00"
-                />
-                <div className="mt-2 text-xs text-gray-500">
-                  Used when no aircraft-specific rate is set below
-                </div>
-              </div>
-
               {/* Aircraft-specific rates */}
               {aircraftTypes.length > 0 && (
                 <div className="border rounded-lg p-4 bg-gray-50">
-                  <Label className="mb-3 block">Aircraft-Specific Rates</Label>
+                  <Label className="mb-3 block">Aircraft-Specific Rates (Tax Inclusive)</Label>
                   <div className="text-xs text-gray-500 mb-3">
-                    Set different rates for each aircraft type. Leave blank to use default rate.
+                    Set rates for each aircraft type. At least one rate is required.
                   </div>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {aircraftTypes.map((aircraftType) => (
@@ -523,7 +523,7 @@ export default function LandingFeesConfig() {
                           min="0"
                           value={aircraftRates[aircraftType.id] || ''}
                           onChange={(e) => setAircraftRates({ ...aircraftRates, [aircraftType.id]: e.target.value })}
-                          placeholder={editFormData.rate || '0.00'}
+                          placeholder="0.00"
                           className="flex-1"
                         />
                       </div>
@@ -565,7 +565,7 @@ export default function LandingFeesConfig() {
             <div className="mt-4 pt-4 border-t">
               <Button
                 onClick={handleEdit}
-                disabled={saving || !editFormData.name.trim() || !editFormData.rate}
+                disabled={saving || !editFormData.name.trim()}
                 className="w-full"
               >
                 {saving ? "Saving..." : "Save Changes"}

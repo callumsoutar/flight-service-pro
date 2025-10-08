@@ -10,11 +10,24 @@ const MembershipTypeSchema = z.object({
   duration_months: z.number().int().min(1, "Duration must be at least 1 month"),
   benefits: z.array(z.string()).default([]),
   is_active: z.boolean().default(true),
+  chargeable_id: z.string().uuid().nullable().optional(), // Optional: can select existing or create new
+});
+
+const UpdateMembershipTypeSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).optional(),
+  code: z.string().min(1).optional(),
+  description: z.string().optional(),
+  price: z.number().min(0).optional(),
+  duration_months: z.number().int().min(1).optional(),
+  benefits: z.array(z.string()).optional(),
+  is_active: z.boolean().optional(),
+  chargeable_id: z.string().uuid().nullable().optional(),
 });
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
-  
+
   // Auth check
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -26,7 +39,15 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from("membership_types")
-    .select("*")
+    .select(`
+      *,
+      chargeables (
+        id,
+        name,
+        rate,
+        is_taxable
+      )
+    `)
     .order("name");
 
   if (activeOnly) {
@@ -45,7 +66,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
-  
+
   // Auth check - RLS policies will handle role-based authorization
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -56,10 +77,65 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const validatedData = MembershipTypeSchema.parse(body);
 
+    let chargeableId = validatedData.chargeable_id;
+
+    // If no chargeable_id provided, create a new chargeable
+    if (!chargeableId) {
+      // Get the membership_fee chargeable type
+      const { data: chargeableType } = await supabase
+        .from("chargeable_types")
+        .select("id")
+        .eq("code", "membership_fee")
+        .single();
+
+      if (!chargeableType) {
+        return NextResponse.json(
+          { error: "Membership fee chargeable type not found" },
+          { status: 500 }
+        );
+      }
+
+      // Create a new chargeable for this membership type
+      const { data: newChargeable, error: chargeableError } = await supabase
+        .from("chargeables")
+        .insert([{
+          name: `${validatedData.name} Fee`,
+          description: `Membership fee for ${validatedData.name}`,
+          chargeable_type_id: chargeableType.id,
+          rate: validatedData.price,
+          is_taxable: false, // Membership fees typically not taxable
+          is_active: validatedData.is_active,
+        }])
+        .select()
+        .single();
+
+      if (chargeableError || !newChargeable) {
+        console.error("Error creating chargeable:", chargeableError);
+        return NextResponse.json(
+          { error: "Failed to create associated chargeable" },
+          { status: 500 }
+        );
+      }
+
+      chargeableId = newChargeable.id;
+    }
+
+    // Create the membership type with the chargeable_id
     const { data, error } = await supabase
       .from("membership_types")
-      .insert([validatedData])
-      .select()
+      .insert([{
+        ...validatedData,
+        chargeable_id: chargeableId,
+      }])
+      .select(`
+        *,
+        chargeables (
+          id,
+          name,
+          rate,
+          is_taxable
+        )
+      `)
       .single();
 
     if (error) {
@@ -77,4 +153,62 @@ export async function POST(req: NextRequest) {
     console.error("Error creating membership type:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-} 
+}
+
+export async function PATCH(req: NextRequest) {
+  const supabase = await createClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await req.json();
+    const validatedData = UpdateMembershipTypeSchema.parse(body);
+
+    const updateData: Record<string, unknown> = {};
+    if (validatedData.name !== undefined) updateData.name = validatedData.name;
+    if (validatedData.code !== undefined) updateData.code = validatedData.code;
+    if (validatedData.description !== undefined) updateData.description = validatedData.description;
+    if (validatedData.price !== undefined) updateData.price = validatedData.price;
+    if (validatedData.duration_months !== undefined) updateData.duration_months = validatedData.duration_months;
+    if (validatedData.benefits !== undefined) updateData.benefits = validatedData.benefits;
+    if (validatedData.is_active !== undefined) updateData.is_active = validatedData.is_active;
+    if (validatedData.chargeable_id !== undefined) updateData.chargeable_id = validatedData.chargeable_id;
+
+    const { data, error } = await supabase
+      .from("membership_types")
+      .update(updateData)
+      .eq("id", validatedData.id)
+      .select(`
+        *,
+        chargeables (
+          id,
+          name,
+          rate,
+          is_taxable
+        )
+      `)
+      .single();
+
+    if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json({ error: "Name or code already exists" }, { status: 409 });
+      }
+      throw error;
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: "Membership type not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ membership_type: data });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors }, { status: 400 });
+    }
+    console.error("Error updating membership type:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}

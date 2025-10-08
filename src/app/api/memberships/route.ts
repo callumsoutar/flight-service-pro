@@ -5,6 +5,7 @@ import { Membership } from "@/types/memberships";
 import { calculateDefaultMembershipExpiry } from '@/lib/membership-year-utils';
 import { DEFAULT_MEMBERSHIP_YEAR_CONFIG } from '@/lib/membership-defaults';
 import { MembershipYearConfig } from '@/types/settings';
+import { createMembershipInvoice } from '@/lib/membership-invoice-utils';
 
 const CreateMembershipSchema = z.object({
   user_id: z.string().uuid(),
@@ -26,23 +27,29 @@ const RenewMembershipSchema = z.object({
 });
 
 // Helper function to calculate membership status
-function calculateMembershipStatus(membership: Pick<Membership, 'expiry_date' | 'grace_period_days' | 'fee_paid'>) {
+function calculateMembershipStatus(
+  membership: Pick<Membership, 'expiry_date' | 'grace_period_days'>,
+  invoiceStatus?: string | null
+) {
   const now = new Date();
   const expiryDate = new Date(membership.expiry_date);
   const gracePeriodEnd = new Date(expiryDate.getTime() + (membership.grace_period_days * 24 * 60 * 60 * 1000));
-  
-  if (!membership.fee_paid) {
+
+  // Check if fee is paid via invoice status
+  const feePaid = invoiceStatus === 'paid';
+
+  if (!feePaid) {
     return "unpaid";
   }
-  
+
   if (now <= expiryDate) {
     return "active";
   }
-  
+
   if (now <= gracePeriodEnd) {
     return "grace";
   }
-  
+
   return "expired";
 }
 
@@ -63,13 +70,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
   }
 
-  // Fetch memberships with membership type details
+  // Fetch memberships with membership type details and invoice status
   const { data: memberships, error } = await supabase
     .from("memberships")
     .select(`
       *,
       membership_types!memberships_membership_type_id_fkey (
         id, name, code, description, price, duration_months, benefits
+      ),
+      invoices!memberships_invoice_id_fkey (
+        id, status, invoice_number
       )
     `)
     .eq("user_id", user_id)
@@ -84,11 +94,13 @@ export async function GET(req: NextRequest) {
     // Return summary with status calculation
     // Include unpaid memberships as current - they just need payment
     const current_membership = memberships?.find(m => {
-      const status = calculateMembershipStatus(m);
+      const invoiceStatus = m.invoices?.status;
+      const status = calculateMembershipStatus(m, invoiceStatus);
       return status === "active" || status === "grace" || status === "unpaid";
     });
 
-    const status = current_membership ? calculateMembershipStatus(current_membership) : "none";
+    const invoiceStatus = current_membership?.invoices?.status;
+    const status = current_membership ? calculateMembershipStatus(current_membership, invoiceStatus) : "none";
     
     let days_until_expiry = null;
     let grace_period_remaining = null;
@@ -187,7 +199,6 @@ export async function POST(req: NextRequest) {
         renewal_of: currentMembership.id, // Link to previous membership
         auto_renew: validatedData.auto_renew ?? currentMembership.auto_renew,
         grace_period_days: currentMembership.grace_period_days,
-        fee_paid: false, // New membership starts unpaid
         notes: validatedData.notes,
         updated_by: user.id,
       };
@@ -208,10 +219,32 @@ export async function POST(req: NextRequest) {
         .update({ is_active: false })
         .eq("id", currentMembership.id);
 
-      // TODO: Create invoice if requested (will be implemented in future phase)
+      // Create invoice if requested
+      let invoiceId = null;
       if (validatedData.create_invoice && membershipType.price > 0) {
-        // Invoice creation will be implemented here
-        console.log('Invoice creation for renewal not yet implemented');
+        try {
+          const invoiceResult = await createMembershipInvoice({
+            userId: currentMembership.user_id,
+            membershipTypeId: membershipType.id,
+            membershipTypeName: membershipType.name,
+            membershipTypeCode: membershipType.code,
+            price: membershipType.price,
+            expiryDate: new Date(expiryDate)
+          });
+
+          if (invoiceResult) {
+            invoiceId = invoiceResult.invoiceId;
+
+            // Link invoice to membership
+            await supabase
+              .from("memberships")
+              .update({ invoice_id: invoiceId })
+              .eq("id", newMembership.id);
+          }
+        } catch (error) {
+          console.error('Failed to create membership invoice:', error);
+          // Don't fail the renewal - invoice can be created manually
+        }
       }
 
       return NextResponse.json({ membership: newMembership }, { status: 201 });
@@ -254,7 +287,6 @@ export async function POST(req: NextRequest) {
         expiry_date: expiryDate.toISOString().split('T')[0], // Date only
         purchased_date: new Date().toISOString(),
         auto_renew: validatedData.auto_renew,
-        fee_paid: false, // Starts unpaid
         notes: validatedData.notes,
         updated_by: user.id,
       };
@@ -269,10 +301,32 @@ export async function POST(req: NextRequest) {
         throw error;
       }
 
-      // TODO: Create invoice if requested (will be implemented in future phase)
+      // Create invoice if requested
+      let invoiceId = null;
       if (validatedData.create_invoice && membershipType.price > 0) {
-        // Invoice creation will be implemented here
-        console.log('Invoice creation for new membership not yet implemented');
+        try {
+          const invoiceResult = await createMembershipInvoice({
+            userId: validatedData.user_id,
+            membershipTypeId: membershipType.id,
+            membershipTypeName: membershipType.name,
+            membershipTypeCode: membershipType.code,
+            price: membershipType.price,
+            expiryDate: new Date(expiryDate)
+          });
+
+          if (invoiceResult) {
+            invoiceId = invoiceResult.invoiceId;
+
+            // Link invoice to membership
+            await supabase
+              .from("memberships")
+              .update({ invoice_id: invoiceId })
+              .eq("id", data.id);
+          }
+        } catch (error) {
+          console.error('Failed to create membership invoice:', error);
+          // Don't fail the creation - invoice can be created manually
+        }
       }
 
       return NextResponse.json({ membership: data }, { status: 201 });

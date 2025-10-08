@@ -340,6 +340,7 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
                 lessons={lessons}
                 flightTypes={flightTypes}
                 bookings={allBookings}
+                isRestrictedUser={isRestrictedUser}
               />
             ) : (
               <div className="p-8 text-center text-muted-foreground">Booking not found.</div>

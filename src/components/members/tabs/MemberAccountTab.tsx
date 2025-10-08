@@ -1,66 +1,72 @@
 import { useEffect, useState } from "react";
 import { Loader2, DollarSign, FileText } from "lucide-react";
-import { columns as baseColumns } from "@/components/invoices/columns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useRouter } from "next/navigation";
-import type { Invoice } from "@/types/invoices";
 import type { User } from "@/types/users";
+import type { Invoice } from "@/types/invoices";
 
 interface MemberAccountTabProps {
   memberId: string;
+  member?: User;
 }
 
-export default function MemberAccountTab({ memberId }: MemberAccountTabProps) {
+interface AccountStatementEntry {
+  date: string;
+  reference: string;
+  description: string;
+  amount: number;
+  balance: number;
+  entry_type: 'invoice' | 'payment' | 'credit_note' | 'opening_balance';
+  entry_id: string;
+}
+
+export default function MemberAccountTab({ memberId, member }: MemberAccountTabProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // --- Invoices Table State ---
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [invoicesLoading, setInvoicesLoading] = useState(true);
-  const [invoicesError, setInvoicesError] = useState<string | null>(null);
-  const router = useRouter();
+  // --- Account Statement State ---
+  const [statement, setStatement] = useState<AccountStatementEntry[]>([]);
+  const [statementLoading, setStatementLoading] = useState(true);
+  const [statementError, setStatementError] = useState<string | null>(null);
+  const [closingBalance, setClosingBalance] = useState<number>(0);
 
-  const [user, setUser] = useState<User | null>(null);
-  const [userLoading, setUserLoading] = useState(true);
-  const [userError, setUserError] = useState<string | null>(null);
+  // --- Invoices State (for outstanding count) ---
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
 
   useEffect(() => {
     if (!memberId) return;
     setLoading(true);
     setError(null);
-    // Note: Transaction loading removed as transactions state is not used
     setLoading(false);
   }, [memberId]);
 
+  // Fetch account statement
   useEffect(() => {
     if (!memberId) return;
-    setInvoicesLoading(true);
-    setInvoicesError(null);
+    setStatementLoading(true);
+    setStatementError(null);
+    fetch(`/api/account-statement?user_id=${memberId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        setStatement(Array.isArray(data.statement) ? data.statement : []);
+        setClosingBalance(data.closing_balance || 0);
+      })
+      .catch(e => setStatementError(e.message || "Failed to load account statement"))
+      .finally(() => setStatementLoading(false));
+  }, [memberId]);
+
+  // Fetch invoices for outstanding count
+  useEffect(() => {
+    if (!memberId) return;
     fetch(`/api/invoices?user_id=${memberId}`)
       .then(res => res.json())
       .then(data => setInvoices(Array.isArray(data.invoices) ? data.invoices : []))
-      .catch(e => setInvoicesError(e.message || "Failed to load invoices"))
-      .finally(() => setInvoicesLoading(false));
+      .catch(e => console.error("Failed to load invoices:", e));
   }, [memberId]);
 
-  useEffect(() => {
-    if (!memberId) return;
-    setUserLoading(true);
-    setUserError(null);
-    fetch(`/api/users?id=${memberId}`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data.users) && data.users.length > 0) {
-          setUser(data.users[0]);
-        } else {
-          setUser(null);
-        }
-      })
-      .catch(e => setUserError(e.message || "Failed to load user"))
-      .finally(() => setUserLoading(false));
-  }, [memberId]);
-
-  const balance = user?.account_balance ?? 0;
+  const balance = member?.account_balance ?? 0;
 
   // Outstanding invoices: count pending/overdue invoices
   const outstandingInvoicesCount = invoices.filter(invoice => 
@@ -68,17 +74,42 @@ export default function MemberAccountTab({ memberId }: MemberAccountTabProps) {
     (invoice.status === 'pending' || invoice.status === 'overdue')
   ).length;
 
-  // Remove the user column for this context
-  const columns = baseColumns.filter(col => (col as { accessorKey?: string }).accessorKey !== "user_id");
-
-  // Only show invoices for this member
-  const memberInvoices = invoices.filter(inv => inv.user_id === memberId);
-
-  // Pagination state for invoices table
+  // Pagination state for statement table
   const [page, setPage] = useState(0);
-  const pageSize = 5;
-  const pageCount = Math.ceil(memberInvoices.length / pageSize);
-  const paginatedInvoices = memberInvoices.slice(page * pageSize, (page + 1) * pageSize);
+  const pageSize = 10;
+  const pageCount = Math.ceil(statement.length / pageSize);
+  const paginatedStatement = statement.slice(page * pageSize, (page + 1) * pageSize);
+
+  // Helper function to format date
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-NZ', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric' 
+    });
+  };
+
+  // Helper function to format currency
+  const formatCurrency = (amount: number) => {
+    return `$${Math.abs(amount).toFixed(2)}`;
+  };
+
+  // Helper function to get entry type badge
+  const getEntryTypeBadge = (type: string) => {
+    switch (type) {
+      case 'invoice':
+        return <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">Invoice</span>;
+      case 'payment':
+        return <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">Payment</span>;
+      case 'credit_note':
+        return <span className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded">Credit Note</span>;
+      case 'opening_balance':
+        return <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">Opening</span>;
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="flex flex-col gap-8">
@@ -87,10 +118,8 @@ export default function MemberAccountTab({ memberId }: MemberAccountTabProps) {
         <div className="flex-1 flex flex-col items-center justify-center">
           <DollarSign className="w-6 h-6 mb-1 text-green-500" />
           <div className="text-xs text-muted-foreground">Account Balance</div>
-          {loading || userLoading ? (
+          {!member ? (
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground my-2" />
-          ) : error || userError ? (
-            <div className="text-destructive text-sm">{error || userError}</div>
           ) : (
             <div className="flex flex-col items-center">
               {balance < 0 ? (
@@ -125,71 +154,133 @@ export default function MemberAccountTab({ memberId }: MemberAccountTabProps) {
           )}
         </div>
       </div>
-      {/* Invoices Table */}
+
+      {/* Account Statement Table */}
       <div>
-        <h3 className="text-base font-semibold mb-2 flex items-center gap-2">
-          Invoices
+        <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
+          Account Statement
         </h3>
-        <div className="rounded-md border overflow-x-auto bg-white">
-          {invoicesLoading ? (
-            <div className="p-6 text-center text-muted-foreground">Loading invoices...</div>
-          ) : invoicesError ? (
-            <div className="p-6 text-center text-destructive">{invoicesError}</div>
-          ) : memberInvoices.length === 0 ? (
-            <div className="p-6 text-center text-muted-foreground">No invoices found for this member.</div>
+        <div className="rounded-md border overflow-x-auto bg-white shadow-sm">
+          {statementLoading ? (
+            <div className="p-8 text-center text-muted-foreground">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+              <p>Loading account statement...</p>
+            </div>
+          ) : statementError ? (
+            <div className="p-8 text-center text-destructive">{statementError}</div>
+          ) : statement.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">No transactions found for this member.</div>
           ) : (
             <>
-              <Table className="min-w-full text-sm">
+              <Table className="min-w-full">
                 <TableHeader>
-                  <TableRow>
-                    {columns.map((col, idx) => (
-                      <TableHead key={idx} className="whitespace-nowrap">{typeof col.header === "function" ? (typeof (col as { accessorKey?: string }).accessorKey === 'string' ? (col as { accessorKey: string }).accessorKey : "") : col.header}</TableHead>
-                    ))}
+                  <TableRow className="bg-gray-50">
+                    <TableHead className="font-semibold">Date</TableHead>
+                    <TableHead className="font-semibold">Reference</TableHead>
+                    <TableHead className="font-semibold">Description</TableHead>
+                    <TableHead className="font-semibold text-right">Total</TableHead>
+                    <TableHead className="font-semibold text-right">Balance</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedInvoices.map((inv) => (
-                    <TableRow
-                      key={inv.id}
-                      className="hover:bg-blue-50 cursor-pointer"
-                      onClick={() => router.push(`/dashboard/invoices/view/${inv.id}`)}
-                    >
-                      {columns.map((col, idx) => {
-                        let cell: React.ReactNode;
-                        if (typeof col.cell === "function") {
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          cell = col.cell({ row: { original: inv } } as any) as React.ReactNode;
-                        } else if (typeof (col as { accessorKey?: string }).accessorKey === "string") {
-                          const accessorKey = (col as { accessorKey: string }).accessorKey;
-                          cell = (inv as unknown as Record<string, unknown>)[accessorKey] as React.ReactNode;
-                        } else {
-                          cell = null;
-                        }
-                        return <TableCell key={idx} className="whitespace-nowrap">{cell}</TableCell>;
-                      })}
-                    </TableRow>
-                  ))}
+                  {paginatedStatement.map((entry, index) => {
+                    const isOpeningBalance = entry.entry_type === 'opening_balance';
+                    const isDebit = entry.amount > 0; // Positive = invoice (debit)
+                    
+                    return (
+                      <TableRow 
+                        key={`${entry.entry_id}-${index}`}
+                        className={isOpeningBalance ? "bg-blue-50 font-semibold" : "hover:bg-gray-50"}
+                      >
+                        <TableCell className="whitespace-nowrap">
+                          {formatDate(entry.date)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-medium">
+                          <div className="flex items-center gap-2">
+                            {entry.reference}
+                            {!isOpeningBalance && getEntryTypeBadge(entry.entry_type)}
+                          </div>
+                        </TableCell>
+                        <TableCell>{entry.description}</TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          {isOpeningBalance ? (
+                            <span className="text-gray-500">—</span>
+                          ) : isDebit ? (
+                            <span className="text-red-600 font-medium">
+                              {formatCurrency(entry.amount)}
+                            </span>
+                          ) : (
+                            <span className="text-green-600 font-medium">
+                              {formatCurrency(entry.amount)}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap font-semibold">
+                          {entry.balance < 0 ? (
+                            <span className="text-green-600">
+                              ${Math.abs(entry.balance).toFixed(2)} CR
+                            </span>
+                          ) : entry.balance > 0 ? (
+                            <span className="text-red-600">
+                              ${entry.balance.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-gray-600">$0.00</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {/* Closing Balance Row */}
+                  <TableRow className="bg-blue-100 font-bold border-t-2 border-blue-300">
+                    <TableCell colSpan={3} className="text-right uppercase tracking-wide">
+                      Closing Balance
+                    </TableCell>
+                    <TableCell className="text-right">—</TableCell>
+                    <TableCell className="text-right text-lg">
+                      {closingBalance < 0 ? (
+                        <span className="text-green-700">
+                          ${Math.abs(closingBalance).toFixed(2)} CR
+                        </span>
+                      ) : closingBalance > 0 ? (
+                        <span className="text-red-700">
+                          ${closingBalance.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-700">$0.00</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
-              <div className="flex items-center justify-end space-x-2 py-4 px-4 pb-2">
-                <button
-                  className="px-3 py-1 rounded border text-sm disabled:opacity-50 mx-2"
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                >
-                  Previous
-                </button>
-                <span className="text-sm text-muted-foreground">
-                  Page {page + 1} of {pageCount}
-                </span>
-                <button
-                  className="px-3 py-1 rounded border text-sm disabled:opacity-50 mx-2"
-                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-                  disabled={page >= pageCount - 1}
-                >
-                  Next
-                </button>
-              </div>
+              
+              {/* Pagination */}
+              {statement.length > pageSize && (
+                <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
+                  <div className="text-sm text-muted-foreground">
+                    Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, statement.length)} of {statement.length} entries
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      className="px-3 py-1 rounded border text-sm disabled:opacity-50 hover:bg-white transition-colors"
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      disabled={page === 0}
+                    >
+                      Previous
+                    </button>
+                    <span className="text-sm text-muted-foreground px-2">
+                      Page {page + 1} of {pageCount}
+                    </span>
+                    <button
+                      className="px-3 py-1 rounded border text-sm disabled:opacity-50 hover:bg-white transition-colors"
+                      onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                      disabled={page >= pageCount - 1}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

@@ -401,14 +401,30 @@ export class InvoiceService {
 
   /**
    * Update invoice totals and sync transaction amounts atomically
+   * This uses the atomic database function to ensure invoice totals and transactions stay in sync
    */
   static async updateInvoiceTotalsWithTransactionSync(invoiceId: string): Promise<void> {
     const supabase = await createClient();
     
-    // Use application-layer calculation instead of database function
-    await this.updateInvoiceTotals(supabase, invoiceId);
+    // Use atomic database function to update totals AND create/sync transaction
+    const { data: result, error } = await supabase.rpc('update_invoice_totals_atomic', {
+      p_invoice_id: invoiceId
+    });
     
-    // For now, we'll handle transaction sync separately if needed
-    // The main issue was the rounding, which is now fixed in updateInvoiceTotals
+    if (error) {
+      throw new Error(`Failed to update invoice totals atomically: ${error.message}`);
+    }
+    
+    if (!result.success) {
+      throw new Error(`Invoice totals update failed: ${result.error}`);
+    }
+    
+    console.log(`Invoice ${invoiceId} totals updated atomically:`, {
+      subtotal: result.subtotal,
+      tax_total: result.tax_total,
+      total_amount: result.total_amount,
+      transaction_created: result.transaction_created,
+      transaction_id: result.transaction_id
+    });
   }
 }

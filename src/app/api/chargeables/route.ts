@@ -19,16 +19,40 @@ export async function GET(req: NextRequest) {
   const aircraft_type_id = searchParams.get("aircraft_type_id") || "";
   const include_rates = searchParams.get("include_rates") === "true";
 
-  // Fetch chargeables (only non-voided)
+  // If filtering by type, first get the chargeable_type_id
+  let chargeableTypeId: string | null = null;
+  if (type) {
+    const { data: chargeableType } = await supabase
+      .from("chargeable_types")
+      .select("id")
+      .eq("code", type)
+      .single();
+
+    if (chargeableType) {
+      chargeableTypeId = chargeableType.id;
+    }
+  }
+
+  // Fetch chargeables (only non-voided) with chargeable_types join
   let query = supabase
     .from("chargeables")
-    .select("*")
+    .select(`
+      *,
+      chargeable_types (
+        id,
+        code,
+        name,
+        description
+      )
+    `)
     .is("voided_at", null)
     .order("name", { ascending: true });
 
-  if (type) {
-    query = query.eq("type", type);
+  // Filter by chargeable_type_id if type was specified
+  if (chargeableTypeId) {
+    query = query.eq("chargeable_type_id", chargeableTypeId);
   }
+
   if (q) {
     query = query.or(
       `name.ilike.%${q}%,description.ilike.%${q}%`
@@ -45,7 +69,7 @@ export async function GET(req: NextRequest) {
   // If aircraft_type_id is provided, fetch aircraft-specific rates for landing fees
   if (aircraft_type_id && chargeables.length > 0) {
     const landingFeeIds = chargeables
-      .filter(c => c.type === 'landing_fee')
+      .filter(c => c.chargeable_types?.code === 'landing_fee')
       .map(c => c.id);
 
     if (landingFeeIds.length > 0) {
@@ -58,7 +82,7 @@ export async function GET(req: NextRequest) {
       // Map rates to chargeables, override base rate with aircraft-specific rate
       if (rates && rates.length > 0) {
         chargeables = chargeables.map(c => {
-          if (c.type === 'landing_fee') {
+          if (c.chargeable_types?.code === 'landing_fee') {
             const aircraftRate = rates.find(r => r.chargeable_id === c.id);
             if (aircraftRate) {
               return { ...c, rate: aircraftRate.rate };
@@ -73,7 +97,7 @@ export async function GET(req: NextRequest) {
   // If include_rates is true, fetch all landing fee rates for config UI
   if (include_rates) {
     const landingFeeIds = chargeables
-      .filter(c => c.type === 'landing_fee')
+      .filter(c => c.chargeable_types?.code === 'landing_fee')
       .map(c => c.id);
 
     if (landingFeeIds.length > 0) {
@@ -84,7 +108,7 @@ export async function GET(req: NextRequest) {
 
       // Attach rates to their respective chargeables
       chargeables = chargeables.map(c => {
-        if (c.type === 'landing_fee' && rates) {
+        if (c.chargeable_types?.code === 'landing_fee' && rates) {
           return { ...c, landing_fee_rates: rates.filter(r => r.chargeable_id === c.id) };
         }
         return c;
@@ -105,18 +129,29 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, description, type, rate, is_taxable, is_active } = body;
+    const { name, description, chargeable_type_id, rate, is_taxable, is_active } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    if (!type) {
-      return NextResponse.json({ error: "Type is required" }, { status: 400 });
+    if (!chargeable_type_id) {
+      return NextResponse.json({ error: "Chargeable type is required" }, { status: 400 });
     }
 
     if (rate === undefined || rate === null) {
       return NextResponse.json({ error: "Rate is required" }, { status: 400 });
+    }
+
+    // Verify chargeable_type_id exists
+    const { data: typeExists } = await supabase
+      .from("chargeable_types")
+      .select("id")
+      .eq("id", chargeable_type_id)
+      .single();
+
+    if (!typeExists) {
+      return NextResponse.json({ error: "Invalid chargeable type" }, { status: 400 });
     }
 
     const { data, error } = await supabase
@@ -124,12 +159,20 @@ export async function POST(req: NextRequest) {
       .insert([{
         name,
         description: description || null,
-        type,
+        chargeable_type_id,
         rate: Number(rate),
         is_taxable: is_taxable ?? true, // Default to taxable
         is_active: is_active ?? true
       }])
-      .select()
+      .select(`
+        *,
+        chargeable_types (
+          id,
+          code,
+          name,
+          description
+        )
+      `)
       .single();
 
     if (error) {
@@ -152,7 +195,7 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, name, description, type, rate, is_taxable, is_active } = body;
+    const { id, name, description, chargeable_type_id, rate, is_taxable, is_active } = body;
 
     if (!id) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
@@ -161,14 +204,26 @@ export async function PATCH(req: NextRequest) {
     const updateData: {
       name?: string;
       description?: string | null;
-      type?: string;
+      chargeable_type_id?: string;
       rate?: number;
       is_taxable?: boolean;
       is_active?: boolean;
     } = {};
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description || null;
-    if (type !== undefined) updateData.type = type;
+    if (chargeable_type_id !== undefined) {
+      // Verify chargeable_type_id exists
+      const { data: typeExists } = await supabase
+        .from("chargeable_types")
+        .select("id")
+        .eq("id", chargeable_type_id)
+        .single();
+
+      if (!typeExists) {
+        return NextResponse.json({ error: "Invalid chargeable type" }, { status: 400 });
+      }
+      updateData.chargeable_type_id = chargeable_type_id;
+    }
     if (rate !== undefined) updateData.rate = Number(rate);
     if (is_taxable !== undefined) updateData.is_taxable = is_taxable;
     if (is_active !== undefined) updateData.is_active = is_active;
@@ -178,7 +233,15 @@ export async function PATCH(req: NextRequest) {
       .update(updateData)
       .eq("id", id)
       .is("voided_at", null)
-      .select();
+      .select(`
+        *,
+        chargeable_types (
+          id,
+          code,
+          name,
+          description
+        )
+      `);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

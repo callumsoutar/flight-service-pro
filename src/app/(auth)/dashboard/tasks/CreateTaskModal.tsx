@@ -7,21 +7,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { 
-  Calendar as CalendarIcon, 
-  User, 
+import {
+  Calendar as CalendarIcon,
+  User,
   // AlertTriangle,
-  // CheckCircle, 
-  Clock, 
-  Plus,
-  FileText,
-  AlertCircle,
-  Flag,
-  Tag
+  // CheckCircle,
+  Plus
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -203,65 +197,68 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) handleClose(); }}>
-      <DialogContent className="w-[800px] max-w-[98vw] mx-auto p-0 bg-white rounded-2xl shadow-xl border-0 max-h-[90vh] flex flex-col">
+      <DialogContent className="w-[750px] max-w-[95vw] mx-auto p-0 bg-white rounded-xl shadow-xl border-0 overflow-hidden flex flex-col max-h-[90vh]">
         <VisuallyHidden>
           <DialogTitle>Create New Task</DialogTitle>
         </VisuallyHidden>
-        
+
         {/* Header */}
-        <div className="flex items-center gap-4 pb-6 border-b border-gray-200 px-8 pt-8 flex-shrink-0">
-          <div className="w-10 h-10 bg-gradient-to-br from-green-100 to-green-200 rounded-lg flex items-center justify-center flex-shrink-0">
-            <Plus className="w-5 h-5 text-green-700" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-semibold text-gray-900">Create New Task</h2>
-            <p className="text-sm text-gray-500 mt-1">Add a new task to your workflow</p>
+        <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center w-9 h-9 bg-indigo-100 rounded-lg">
+              <Plus className="w-4 h-4 text-indigo-600" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-xl font-semibold text-slate-900">Create New Task</h2>
+              <p className="text-slate-600 text-xs">Add a new task to your workflow</p>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-4 py-4 px-8 overflow-y-auto flex-1">
+        {/* Scrollable content area */}
+        <div className="overflow-y-auto flex-1 px-6 py-4">
           <form onSubmit={handleCreateTask} className="space-y-4">
-            {/* Title - No Label */}
-            <div className="pb-2">
+            {/* Title field */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700 flex items-center gap-1">
+                Task Name
+                <span className="text-red-500">*</span>
+              </label>
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full text-lg font-semibold border-none shadow-none bg-transparent p-0 focus:ring-0 focus:border-none"
-                autoFocus
-                placeholder="Enter task title..."
                 required
+                className="border-slate-200 focus:border-indigo-300 focus:ring-indigo-200"
+                placeholder="Enter task name..."
+                autoFocus
               />
             </div>
 
             {/* Description */}
-            <div className="pb-2">
-              <label className="text-sm font-medium text-gray-700 mb-3 block flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Description
-              </label>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Description</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full min-h-[80px] px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Add description..."
+                placeholder="Provide additional details about this task..."
+                className="w-full min-h-[70px] px-3 py-2 border border-slate-200 rounded-md resize-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 text-sm"
               />
             </div>
 
-            {/* Status, Priority, Category Grid */}
-            <div className="grid grid-cols-3 gap-6 pb-2">
-              {/* Status */}
-              <div className="pb-2">
-                <label className="text-sm font-medium text-gray-700 mb-1.5 block flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4" />
+            {/* Status, Priority, and Category in a row */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-1">
                   Status
+                  <span className="text-red-500">*</span>
                 </label>
-                <Select 
-                  value={status} 
+                <Select
+                  value={status}
                   onValueChange={(val) => {
                     setStatus(val as TaskStatus);
                   }}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-full border-slate-200 focus:border-indigo-300 focus:ring-indigo-200">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -274,27 +271,26 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 </Select>
               </div>
 
-              {/* Priority */}
-              <div className="pb-2">
-                <label className="text-sm font-medium text-gray-700 mb-1.5 block flex items-center gap-2">
-                  <Flag className="w-4 h-4" />
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-1">
                   Priority
+                  <span className="text-red-500">*</span>
                 </label>
-                <Select 
-                  value={priority} 
+                <Select
+                  value={priority}
                   onValueChange={(val) => {
                     setPriority(val as TaskPriority);
                   }}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-full border-slate-200 focus:border-indigo-300 focus:ring-indigo-200">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {TASK_PRIORITIES.map((p) => (
-                      <SelectItem key={p} value={p}>
+                      <SelectItem key={p} value={p} className="capitalize">
                         <div className="flex items-center gap-2">
                           <div className={`w-2 h-2 rounded-full ${
-                            p === 'low' ? 'bg-green-500' : 
+                            p === 'low' ? 'bg-green-500' :
                             p === 'medium' ? 'bg-yellow-500' : 'bg-red-500'
                           }`} />
                           {p.charAt(0).toUpperCase() + p.slice(1)}
@@ -305,19 +301,15 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 </Select>
               </div>
 
-              {/* Category */}
-              <div className="pb-2">
-                <label className="text-sm font-medium text-gray-700 mb-1.5 block flex items-center gap-2">
-                  <Tag className="w-4 h-4" />
-                  Category
-                </label>
-                <Select 
-                  value={category} 
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700">Category</label>
+                <Select
+                  value={category}
                   onValueChange={(val) => {
                     setCategory(val as TaskCategory);
                   }}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-full border-slate-200 focus:border-indigo-300 focus:ring-indigo-200">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -332,21 +324,19 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             </div>
 
             {/* Due Date and Assigned To */}
-            <div className="grid grid-cols-2 gap-6 pb-2">
-              {/* Due Date */}
-              <div className="pb-2">
-                <label className="text-sm font-medium text-gray-700 mb-1.5 block flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
-                  Due Date
-                </label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700">Due Date</label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      className="w-full justify-start text-left font-normal"
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal border-slate-200 hover:border-slate-300"
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dueDate ? format(dueDate, 'PPP') : 'Pick a date'}
+                      <CalendarIcon className="mr-2 h-4 w-4 text-slate-500" />
+                      <span className="text-sm">
+                        {dueDate ? format(dueDate, 'PPP') : 'Pick a date'}
+                      </span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -360,31 +350,22 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 </Popover>
               </div>
 
-              {/* Assigned To */}
-              <div className="pb-2">
-                <label className="text-sm font-medium text-gray-700 mb-1.5 block flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Assigned To Instructor
-                </label>
-                <Select 
-                  value={assignedToInstructorId} 
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700">Assigned To Instructor</label>
+                <Select
+                  value={assignedToInstructorId}
                   onValueChange={setAssignedToInstructorId}
                   disabled={loadingInstructors}
                 >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={loadingInstructors ? "Loading instructors..." : "Select an instructor..."} />
+                  <SelectTrigger className="w-full border-slate-200 focus:border-indigo-300 focus:ring-indigo-200">
+                    <SelectValue placeholder={loadingInstructors ? "Loading..." : "Select instructor..."} />
                   </SelectTrigger>
                   <SelectContent>
                     {instructors.map((instructor) => (
                       <SelectItem key={instructor.id} value={instructor.id}>
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4" />
+                        <div className="flex items-center gap-2 text-sm">
+                          <User className="w-3 h-3" />
                           {instructor.first_name} {instructor.last_name}
-                          {instructor.status !== 'active' && (
-                            <Badge variant="secondary" className="text-xs">
-                              {instructor.status}
-                            </Badge>
-                          )}
                         </div>
                       </SelectItem>
                     ))}
@@ -393,7 +374,6 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               </div>
             </div>
 
-            
             {/* Error display */}
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3">
@@ -401,30 +381,25 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               </div>
             )}
 
-            {/* Action buttons */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleClose}
-                className="px-6 py-2.5 border-gray-300 text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={isCreating || !title || !status || !priority || !category || !dueDate}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm"
-              >
-                {isCreating ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Creating...
-                  </>
-                ) : (
-                  'Create Task'
-                )}
-              </Button>
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end pt-4 border-t border-slate-200">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleClose}
+                  className="text-slate-700 border-slate-300 hover:bg-slate-50"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isCreating || !title || !status || !priority || !category || !dueDate}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm"
+                >
+                  {isCreating ? "Creating..." : "Create Task"}
+                </Button>
+              </div>
             </div>
           </form>
         </div>

@@ -26,15 +26,15 @@ const generateTimeOptions = () => {
 export default function BusinessHoursConfig() {
   const generalSettings = useGeneralSettings();
   const updateMutation = useUpdateSetting();
-  
+
   // Extract business hours from general settings
-  const businessHours = {
+  const businessHours = React.useMemo(() => ({
     open_time: generalSettings.business_open_time || '09:00:00',
     close_time: generalSettings.business_close_time || '17:00:00',
     is_24_hours: generalSettings.business_is_24_hours || false,
     is_closed: generalSettings.business_is_closed || false,
-  };
-  
+  }), [generalSettings]);
+
   const isLoading = !generalSettings;
   const error = null; // Settings context handles errors
 
@@ -48,13 +48,11 @@ export default function BusinessHoursConfig() {
 
   // Initialize state based on current business hours
   useEffect(() => {
-    if (businessHours) {
-      setOpenTime(businessHours.open_time.substring(0, 5));
-      setCloseTime(businessHours.close_time.substring(0, 5));
-      setIsClosed(businessHours.is_closed);
-      setIs24Hours(businessHours.is_24_hours);
-      setHasChanges(false);
-    }
+    setOpenTime(businessHours.open_time.substring(0, 5));
+    setCloseTime(businessHours.close_time.substring(0, 5));
+    setIsClosed(businessHours.is_closed);
+    setIs24Hours(businessHours.is_24_hours);
+    setHasChanges(false);
   }, [businessHours]);
 
   const handleTimeChange = (field: string, value: string | boolean) => {

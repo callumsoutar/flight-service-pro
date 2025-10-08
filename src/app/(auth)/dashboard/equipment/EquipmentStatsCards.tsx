@@ -1,19 +1,18 @@
 "use client";
 import React from "react";
 import { Wrench, Users, CheckCircle, XCircle } from "lucide-react";
-import type { Equipment } from '@/types/equipment';
+import type { Equipment, EquipmentIssuance } from '@/types/equipment';
 
 interface EquipmentStatsCardsProps {
-  equipment: Equipment[] | undefined | null;
-  openIssuanceByEquipmentId: Record<string, unknown>;
+  equipment: Equipment[];
+  openIssuanceByEquipmentId: Record<string, EquipmentIssuance>;
 }
 
 export default function EquipmentStatsCards({ equipment, openIssuanceByEquipmentId }: EquipmentStatsCardsProps) {
-  const safeEquipment = Array.isArray(equipment) ? equipment : [];
-  const total = safeEquipment.length;
-  const issued = safeEquipment.filter(eq => openIssuanceByEquipmentId[eq.id]).length;
-  const retired = safeEquipment.filter(eq => eq.status === "retired").length;
-  const available = safeEquipment.filter(eq => !openIssuanceByEquipmentId[eq.id] && eq.status === "active").length;
+  const total = equipment.length;
+  const issued = equipment.filter(eq => openIssuanceByEquipmentId[eq.id]).length;
+  const retired = equipment.filter(eq => eq.status === "retired").length;
+  const available = equipment.filter(eq => !openIssuanceByEquipmentId[eq.id] && eq.status === "active").length;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">

@@ -8,9 +8,8 @@ import type { Invoice } from "@/types/invoices";
 import type { InvoiceItem } from "@/types/invoice_items";
 import { format } from "date-fns";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, ChevronDown, Pencil, X, Check, Trash2, ChevronRight, Copy, ArrowLeft } from "lucide-react";
+import { Calendar as CalendarIcon, Pencil, X, Check, Trash2, ChevronRight, CheckCircle2 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import type { Chargeable } from '@/types/chargeables';
 import MemberSelect from '@/components/invoices/MemberSelect';
@@ -29,7 +28,7 @@ import {
 import { useOrganizationTaxRate } from "@/hooks/use-tax-rate";
 import { InvoiceCalculations } from "@/lib/invoice-calculations";
 import { roundToTwoDecimals } from "@/lib/utils";
-import Link from "next/link";
+import InvoiceActionsToolbar from "@/components/invoices/InvoiceActionsToolbar";
 
 interface InvoiceEditClientProps {
   id?: string;           // undefined for new invoices
@@ -259,7 +258,7 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
 
   const startEditItem = (item: InvoiceItem) => {
     setEditingItemId(item.id);
-    setEditRate(item.unit_price);
+    setEditRate(item.rate_inclusive || item.unit_price);
     setEditQuantity(item.quantity);
   };
 
@@ -270,12 +269,17 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
   const saveEditItem = async (item: InvoiceItem) => {
     setAdding(true);
     try {
+      // Convert tax-inclusive rate back to tax-exclusive unit_price
+      // editRate is displayed as tax-inclusive, but backend expects tax-exclusive unit_price
+      const taxRate = item.tax_rate || invoice?.tax_rate || organizationTaxRate;
+      const taxExclusiveUnitPrice = editRate / (1 + taxRate);
+      
       const res = await fetch("/api/invoice_items", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: item.id,
-          unit_price: editRate,
+          unit_price: taxExclusiveUnitPrice, // Send tax-exclusive price
           quantity: editQuantity,
         }),
       });
@@ -297,23 +301,27 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
   // Draft item editing functions for new invoice mode
   const startDraftItemEdit = (item: InvoiceItem) => {
     setEditingItemId(item.id);
-    setEditRate(item.unit_price);
+    setEditRate(item.rate_inclusive || item.unit_price);
     setEditQuantity(item.quantity);
   };
 
   const saveDraftItemEdit = (item: InvoiceItem, idx: number) => {
     try {
+      // Convert tax-inclusive rate back to tax-exclusive unit_price
+      // editRate is displayed as tax-inclusive, but calculations expect tax-exclusive unit_price
+      const taxExclusiveUnitPrice = editRate / (1 + organizationTaxRate);
+      
       // Use InvoiceCalculations for currency-safe calculations
       const calculatedAmounts = InvoiceCalculations.calculateItemAmounts({
         quantity: editQuantity,
-        unit_price: editRate,
+        unit_price: taxExclusiveUnitPrice, // Use tax-exclusive price
         tax_rate: organizationTaxRate
       });
 
       setDraftItems(prev => prev.map((draftItem, index) =>
         index === idx ? {
           ...draftItem,
-          unit_price: editRate,
+          unit_price: taxExclusiveUnitPrice, // Store tax-exclusive price
           quantity: editQuantity,
           rate_inclusive: calculatedAmounts.rate_inclusive,
           amount: calculatedAmounts.amount,
@@ -494,7 +502,7 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
       const result = await response.json();
       if (result.id) {
         toast.success('Invoice approved');
-        router.replace(`/dashboard/invoices/edit/${result.id}`);
+        router.replace(`/dashboard/invoices/view/${result.id}`);
       } else {
         throw new Error(result.error || 'Failed to approve invoice');
       }
@@ -543,29 +551,16 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
     return (
       <div className="flex flex-col gap-8 p-6 md:p-10 max-w-4xl mx-auto">
         {/* New invoice header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <Link href="/dashboard/invoices" className="text-indigo-600 hover:underline text-base flex items-center gap-1">
-              <ArrowLeft className="w-4 h-4" /> Back to Invoices
-            </Link>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={createInvoiceWithItems}
-              disabled={saveLoading || !selectedMember || draftItems.length === 0}
-            >
-              {saveLoading ? 'Saving...' : 'Save Draft'}
-            </Button>
-            <Button
-              onClick={approveInvoice}
-              disabled={approveLoading || !selectedMember || draftItems.length === 0}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {approveLoading ? 'Approving...' : 'Approve'}
-            </Button>
-          </div>
-        </div>
+        <InvoiceActionsToolbar
+          mode="new"
+          onSave={createInvoiceWithItems}
+          onApprove={approveInvoice}
+          saveDisabled={!selectedMember || draftItems.length === 0}
+          approveDisabled={!selectedMember || draftItems.length === 0}
+          saveLoading={saveLoading}
+          approveLoading={approveLoading}
+          showApprove={true}
+        />
         
         {/* Invoice form with draft state */}
         <Card className="p-8 shadow-md">
@@ -803,60 +798,21 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
   return (
     <div className="flex flex-col gap-8 p-6 md:p-10 max-w-4xl mx-auto">
       {/* Top Action/Header Row */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-2 text-lg font-semibold text-muted-foreground">
-            <a href="/dashboard/invoices" className="text-indigo-600 hover:underline text-base flex items-center gap-1">
-              <ArrowLeft className="w-4 h-4" /> Back to Invoices
-            </a>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="px-6 py-2 rounded-md bg-blue-100 text-blue-700 font-semibold hover:bg-blue-200 transition disabled:opacity-50 cursor-pointer"
-            onClick={handleSave}
-            disabled={!dirty || saveLoading}
-          >
-            {saveLoading ? 'Saving...' : 'Save'}
-          </button>
-          {invoice.status === 'draft' && (
-            <button
-              type="button"
-              className="px-6 py-2 rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
-              onClick={handleApprove}
-              disabled={approveLoading}
-            >
-              {approveLoading ? 'Approving...' : 'Approve'}
-            </button>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center gap-2 px-4 py-2 rounded-md border border-gray-200 bg-white text-gray-700 font-semibold hover:bg-gray-50 transition cursor-pointer"
-              >
-                Options
-                <ChevronDown className="w-4 h-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem>
-                <Copy className="w-4 h-4 mr-2" />
-                Duplicate Invoice
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => setDeleteDialogOpen(true)}
-                className="text-red-600 focus:bg-red-50 hover:bg-red-50 group"
-              >
-                <Trash2 className="w-4 h-4 mr-2 text-red-600 group-hover:text-red-700" />
-                <span>Delete Invoice</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <InvoiceActionsToolbar
+        mode="edit"
+        invoiceId={invoice.id}
+        invoiceNumber={invoice.invoice_number}
+        status={invoice.status}
+        onSave={handleSave}
+        onApprove={handleApprove}
+        onDelete={() => setDeleteDialogOpen(true)}
+        saveDisabled={!dirty}
+        approveDisabled={false}
+        saveLoading={saveLoading}
+        approveLoading={approveLoading}
+        showApprove={invoice.status === 'draft'}
+        bookingId={invoice.booking_id}
+      />
       <Card className="p-8 shadow-md">
         {/* Card Header: Invoice Number and Status Badge */}
         <div className="flex items-center justify-between mb-6">
@@ -865,22 +821,28 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
             <div className="font-bold text-2xl tracking-wider">{invoice.invoice_number}</div>
           </div>
           {invoice?.status && (
-            <Badge
-              className="large"
-              variant={(() => {
-                switch (invoice.status) {
-                  case 'draft': return 'secondary';
-                  case 'pending': return 'secondary';
-                  case 'paid': return 'default';
-                  case 'overdue': return 'destructive';
-                  case 'cancelled': return 'outline';
-                  case 'refunded': return 'outline';
-                  default: return 'outline';
-                }
-              })()}
-            >
-              {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-            </Badge>
+            invoice.status === 'paid' ? (
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-50 border-2 border-green-500">
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+                <span className="font-semibold text-green-700 uppercase tracking-wide">Paid</span>
+              </div>
+            ) : (
+              <Badge
+                className="large"
+                variant={(() => {
+                  switch (invoice.status) {
+                    case 'draft': return 'secondary';
+                    case 'pending': return 'secondary';
+                    case 'overdue': return 'destructive';
+                    case 'cancelled': return 'outline';
+                    case 'refunded': return 'outline';
+                    default: return 'outline';
+                  }
+                })()}
+              >
+                {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+              </Badge>
+            )
           )}
         </div>
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 mb-8">
@@ -945,7 +907,7 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
         <div className="w-full border rounded-lg overflow-hidden mb-4">
           <div className="grid grid-cols-6 gap-0 bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-600">
             <div className="col-span-2 pl-2">Item</div>
-            <div className="col-span-1 text-right">Subtotal (incl. tax)</div>
+            <div className="col-span-1 text-right">Rate (incl. tax)</div>
             <div className="col-span-1 flex justify-center">Qty</div>
             <div className="col-span-1 text-right">Total</div>
             <div className="col-span-1 flex justify-center">Edit</div>
@@ -974,7 +936,7 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
                       onChange={e => setEditRate(Number(e.target.value))}
                     />
                   ) : (
-                    <span>${((item.rate_inclusive || item.unit_price || 0) * (item.quantity || 1)).toFixed(2)}</span>
+                    <span>${(item.rate_inclusive || item.unit_price || 0).toFixed(2)}</span>
                   )}
                 </div>
                 <div className="col-span-1 flex items-center justify-center">
@@ -1065,21 +1027,19 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
         {saveLoading && <div className="text-center text-muted-foreground py-2">Saving...</div>}
       </Card>
       {/* Notes Section */}
-      <div className="bg-card rounded-xl border border-border shadow-md w-full">
+      <div className="bg-card rounded-lg border border-border shadow-sm w-full">
         <Collapsible defaultOpen={false} className="w-full">
-          <CollapsibleTrigger className="flex items-center gap-2 px-4 py-2 font-semibold text-base bg-muted/80 rounded-t-xl hover:bg-muted transition w-full group border-b border-border">
-            <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-90" />
+          <CollapsibleTrigger className="flex items-center gap-2 px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition w-full">
+            <ChevronRight className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
             <span>Notes</span>
           </CollapsibleTrigger>
-          <CollapsibleContent className="p-0">
-            <div className="p-8">
-              <textarea
-                className="w-full min-h-[100px] rounded-lg border border-border bg-background/80 px-4 py-3 text-sm text-foreground shadow-inner focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[2px] outline-none align-top resize-vertical transition placeholder:text-muted-foreground"
-                placeholder="Add notes for this invoice..."
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-              />
-            </div>
+          <CollapsibleContent className="px-4 pb-4">
+            <textarea
+              className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-vertical transition placeholder:text-muted-foreground"
+              placeholder="Add notes for this invoice..."
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+            />
           </CollapsibleContent>
         </Collapsible>
       </div>

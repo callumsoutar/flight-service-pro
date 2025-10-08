@@ -132,7 +132,7 @@ export async function POST(
     // 2. Get aircraft data to calculate total_hours progression
     const { data: aircraft, error: aircraftError } = await supabase
       .from('aircraft')
-      .select('total_time_method, total_hours, current_hobbs, current_tach')
+      .select('id, total_time_method, total_hours, current_hobbs, current_tach')
       .eq('id', booking.aircraft_id || booking.flight_logs?.[0]?.checked_out_aircraft_id)
       .single();
 

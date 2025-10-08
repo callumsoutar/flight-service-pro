@@ -13,16 +13,13 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-import { 
+import {
   Calendar as CalendarIcon,
-  Edit,
   User,
   Eye,
-  FileText,
-  AlertCircle,
-  Flag,
-  Tag,
-  Clock
+  Clock,
+  CheckCircle,
+  PlayCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -76,9 +73,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
 }) => {
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(false);
-
-  // Individual field edit states (only for title)
-  const [editingTitle, setEditingTitle] = useState(false);
 
   // Temporary edit values
   const [tempTitle, setTempTitle] = useState("");
@@ -228,9 +222,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     setTempDueDate(task.due_date ? new Date(task.due_date) : undefined);
     setTempAssignedToInstructorId(task.assigned_to_instructor?.id || "");
     
-    // Reset title edit state
-    setEditingTitle(false);
-    
     setIsDirty(false);
   };
 
@@ -262,17 +253,104 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       const confirmLeave = window.confirm('You have unsaved changes. Are you sure you want to close without saving?');
       if (!confirmLeave) return;
     }
-    
-    
+
     // Reset to original values if closing without saving
     if (isDirty && task) {
       cancelChanges();
     }
-    
-    // Reset title edit state
-    setEditingTitle(false);
-    
+
     onClose();
+  };
+
+  const handleQuickStatusChange = async (newStatus: TaskStatus) => {
+    if (!task) return;
+
+    setSaving(true);
+    try {
+      const updates: Partial<Task> = {
+        status: newStatus,
+      };
+
+      // If marking as completed, add completed_date
+      if (newStatus === 'completed') {
+        updates.completed_date = new Date().toISOString();
+      }
+
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) throw new Error('Failed to update task');
+
+      const data = await response.json();
+      setTask(data.task);
+      onTaskUpdate?.(data.task);
+
+      const statusLabel = getStatusDisplayText(newStatus);
+      toast.success(`Task marked as ${statusLabel}!`);
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      toast.error('Failed to update task status');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const formatDateInfo = (dateString: string | null | undefined) => {
+    if (!dateString) return { text: "No due date", color: "text-gray-500", bgColor: "bg-gray-100", borderColor: "border-gray-200", isOverdue: false };
+
+    const date = new Date(dateString);
+    date.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const diffTime = date.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      const daysOverdue = Math.abs(diffDays);
+      return {
+        text: daysOverdue === 1 ? "1 day overdue" : `${daysOverdue} days overdue`,
+        color: "text-red-700",
+        bgColor: "bg-red-100",
+        borderColor: "border-red-200",
+        isOverdue: true
+      };
+    } else if (diffDays === 0) {
+      return {
+        text: "Due today",
+        color: "text-orange-700",
+        bgColor: "bg-orange-100",
+        borderColor: "border-orange-200",
+        isOverdue: false
+      };
+    } else if (diffDays === 1) {
+      return {
+        text: "Due tomorrow",
+        color: "text-yellow-700",
+        bgColor: "bg-yellow-100",
+        borderColor: "border-yellow-200",
+        isOverdue: false
+      };
+    } else if (diffDays <= 7) {
+      return {
+        text: `Due in ${diffDays} days`,
+        color: "text-blue-700",
+        bgColor: "bg-blue-100",
+        borderColor: "border-blue-200",
+        isOverdue: false
+      };
+    } else {
+      return {
+        text: `Due in ${diffDays} days`,
+        color: "text-gray-700",
+        bgColor: "bg-gray-100",
+        borderColor: "border-gray-200",
+        isOverdue: false
+      };
+    }
   };
 
   if (loading) {
@@ -309,244 +387,285 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[900px] max-w-[98vw] mx-auto p-0 bg-white rounded-2xl shadow-xl border-0 max-h-[90vh] flex flex-col">
+      <DialogContent className="w-[750px] max-w-[95vw] mx-auto p-0 bg-white rounded-xl shadow-xl border-0 overflow-hidden flex flex-col max-h-[90vh]">
         <VisuallyHidden>
           <DialogTitle>Task Details</DialogTitle>
         </VisuallyHidden>
-        
-        {/* Header */}
-        <div className="flex items-center gap-4 pb-6 border-b border-gray-200 px-8 pt-8 flex-shrink-0">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center flex-shrink-0">
-            <Eye className="w-5 h-5 text-blue-700" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-semibold text-gray-900">Task Details</h2>
-            <p className="text-sm text-gray-500 mt-1">Click any field to edit</p>
-          </div>
-        </div>
 
-        <div className="space-y-4 py-4 px-8 overflow-y-auto flex-1">
-          {/* Title - No Label */}
-          <div className="pb-2">
-            {editingTitle ? (
-              <Input
-                value={tempTitle}
-                onChange={(e) => setTempTitle(e.target.value)}
-                className="w-full text-lg font-semibold border-none shadow-none bg-transparent p-0 focus:ring-0 focus:border-none"
-                autoFocus
-                onBlur={() => setEditingTitle(false)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    setEditingTitle(false);
-                  } else if (e.key === 'Escape') {
-                    setTempTitle(task?.title || '');
-                    setEditingTitle(false);
-                  }
-                }}
-              />
-            ) : (
-              <div 
-                className="group p-4 rounded-lg bg-gray-50 cursor-pointer border border-gray-200 hover:border-gray-300 transition-all"
-                onClick={() => setEditingTitle(true)}
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900">{task.title}</h3>
-                  <Edit className="w-4 h-4 text-gray-400" />
-                </div>
+        {/* Header */}
+        <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center w-9 h-9 bg-indigo-100 rounded-lg">
+              <Eye className="w-4 h-4 text-indigo-600" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-xl font-semibold text-slate-900">Task Details</h2>
+              <p className="text-slate-600 text-xs">View and manage task information</p>
+            </div>
+            {task && (
+              <div className="flex items-center gap-2">
+                <Badge className={`${
+                  task.status === 'completed' ? 'bg-green-100 text-green-800 border-green-200' :
+                  task.status === 'inProgress' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                  task.status === 'overdue' ? 'bg-red-100 text-red-800 border-red-200' :
+                  'bg-purple-100 text-purple-800 border-purple-200'
+                } border text-xs`}>
+                  {getStatusDisplayText(task.status)}
+                </Badge>
+                {task.priority && (
+                  <Badge className={`${
+                    task.priority === 'high' ? 'bg-red-100 text-red-800 border-red-200' :
+                    task.priority === 'medium' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                    'bg-green-100 text-green-800 border-green-200'
+                  } border text-xs`}>
+                    Priority: {task.priority}
+                  </Badge>
+                )}
               </div>
             )}
           </div>
+          {task && task.due_date && (() => {
+            const dueDateInfo = formatDateInfo(task.due_date);
+            if (dueDateInfo.isOverdue || dueDateInfo.text === 'Due today' || dueDateInfo.text === 'Due tomorrow') {
+              return (
+                <div className="flex items-center gap-1 text-xs text-slate-500 mt-2 ml-11">
+                  <Clock className="w-3 h-3" />
+                  {dueDateInfo.text}
+                </div>
+              );
+            }
+          })()}
+        </div>
 
-          {/* Description */}
-          <div className="pb-2">
-            <label className="text-sm font-medium text-gray-700 mb-1.5 block flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Description
-            </label>
-            <textarea
-              value={tempDescription}
-              onChange={(e) => setTempDescription(e.target.value)}
-              className="w-full min-h-[80px] px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Add description..."
-            />
-          </div>
-
-          {/* Status, Priority, Category Grid */}
-          <div className="grid grid-cols-3 gap-6 pb-2">
-            {/* Status */}
-            <div className="pb-2">
-              <label className="text-sm font-medium text-gray-700 mb-1.5 block flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" />
-                Status
+        {/* Scrollable content area */}
+        <div className="overflow-y-auto flex-1 px-6 py-4">
+          <form onSubmit={saveChanges} className="space-y-4">
+            {/* Title field */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700 flex items-center gap-1">
+                Task Name
+                <span className="text-red-500">*</span>
               </label>
-              <Select 
-                value={tempStatus} 
-                onValueChange={(val) => {
-                  setTempStatus(val as TaskStatus);
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TASK_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {getStatusDisplayText(s)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                value={tempTitle}
+                onChange={(e) => setTempTitle(e.target.value)}
+                required
+                className="border-slate-200 focus:border-indigo-300 focus:ring-indigo-200"
+                placeholder="Enter task name..."
+              />
             </div>
 
-            {/* Priority */}
-            <div className="pb-2">
-              <label className="text-sm font-medium text-gray-700 mb-1.5 block flex items-center gap-2">
-                <Flag className="w-4 h-4" />
-                Priority
-              </label>
-              <Select 
-                value={tempPriority} 
-                onValueChange={(val) => {
-                  setTempPriority(val as TaskPriority);
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TASK_PRIORITIES.map((p) => (
-                    <SelectItem key={p} value={p}>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${
-                          p === 'low' ? 'bg-green-500' : 
-                          p === 'medium' ? 'bg-yellow-500' : 'bg-red-500'
-                        }`} />
-                        {p.charAt(0).toUpperCase() + p.slice(1)}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Description */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Description</label>
+              <textarea
+                value={tempDescription}
+                onChange={(e) => setTempDescription(e.target.value)}
+                placeholder="Provide additional details about this task..."
+                className="w-full min-h-[70px] px-3 py-2 border border-slate-200 rounded-md resize-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 text-sm"
+              />
             </div>
 
-            {/* Category */}
-            <div className="pb-2">
-              <label className="text-sm font-medium text-gray-700 mb-1.5 block flex items-center gap-2">
-                <Tag className="w-4 h-4" />
-                Category
-              </label>
-              <Select 
-                value={tempCategory} 
-                onValueChange={(val) => {
-                  setTempCategory(val as TaskCategory);
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TASK_CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+            {/* Status, Priority, and Category in a row */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-1">
+                  Status
+                  <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={tempStatus}
+                  onValueChange={(val) => {
+                    setTempStatus(val as TaskStatus);
+                  }}
+                >
+                  <SelectTrigger className="w-full border-slate-200 focus:border-indigo-300 focus:ring-indigo-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TASK_STATUSES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {getStatusDisplayText(s)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          {/* Due Date and Assigned To */}
-          <div className="grid grid-cols-2 gap-6 pb-2">
-            {/* Due Date */}
-            <div className="pb-2">
-              <label className="text-sm font-medium text-gray-700 mb-1.5 block flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                Due Date
-              </label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start text-left font-normal"
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-1">
+                  Priority
+                  <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={tempPriority}
+                  onValueChange={(val) => {
+                    setTempPriority(val as TaskPriority);
+                  }}
+                >
+                  <SelectTrigger className="w-full border-slate-200 focus:border-indigo-300 focus:ring-indigo-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TASK_PRIORITIES.map((p) => (
+                      <SelectItem key={p} value={p} className="capitalize">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${
+                            p === 'low' ? 'bg-green-500' :
+                            p === 'medium' ? 'bg-yellow-500' : 'bg-red-500'
+                          }`} />
+                          {p.charAt(0).toUpperCase() + p.slice(1)}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700">Category</label>
+                <Select
+                  value={tempCategory}
+                  onValueChange={(val) => {
+                    setTempCategory(val as TaskCategory);
+                  }}
+                >
+                  <SelectTrigger className="w-full border-slate-200 focus:border-indigo-300 focus:ring-indigo-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TASK_CATEGORIES.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Due Date and Assigned To */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700">Due Date</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal border-slate-200 hover:border-slate-300"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 text-slate-500" />
+                      <span className="text-sm">
+                        {tempDueDate ? format(tempDueDate, 'PPP') : 'Pick a date'}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={tempDueDate}
+                      onSelect={setTempDueDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700">Assigned To Instructor</label>
+                <Select
+                  value={tempAssignedToInstructorId}
+                  onValueChange={setTempAssignedToInstructorId}
+                  disabled={loadingInstructors}
+                >
+                  <SelectTrigger className="w-full border-slate-200 focus:border-indigo-300 focus:ring-indigo-200">
+                    <SelectValue placeholder={loadingInstructors ? "Loading..." : "Select instructor..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {instructors.map((instructor) => (
+                      <SelectItem key={instructor.id} value={instructor.id}>
+                        <div className="flex items-center gap-2 text-sm">
+                          <User className="w-3 h-3" />
+                          {instructor.first_name} {instructor.last_name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Due date status indicator */}
+            {tempDueDate && (() => {
+              const dateInfo = formatDateInfo(tempDueDate.toISOString());
+              if (dateInfo.isOverdue || dateInfo.text === 'Due today' || dateInfo.text === 'Due tomorrow') {
+                return (
+                  <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-md border ${dateInfo.bgColor} ${dateInfo.borderColor}`}>
+                    <Clock className={`w-3.5 h-3.5 ${dateInfo.color}`} />
+                    <span className={`text-xs font-semibold ${dateInfo.color}`}>
+                      {dateInfo.text}
+                    </span>
+                  </div>
+                );
+              }
+            })()}
+
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between pt-4 border-t border-slate-200">
+              <div className="flex items-center gap-2">
+                {task.status !== 'completed' && (
+                  <>
+                    {task.status !== 'inProgress' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleQuickStatusChange('inProgress')}
+                        disabled={saving}
+                        className="gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50"
+                      >
+                        <PlayCircle className="w-3.5 h-3.5" />
+                        Start
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleQuickStatusChange('completed')}
+                      disabled={saving}
+                      className="gap-1.5 border-green-200 text-green-700 hover:bg-green-50"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Complete
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {isDirty && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={cancelChanges}
+                    disabled={saving}
+                    className="text-slate-700 border-slate-300 hover:bg-slate-50"
                   >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {tempDueDate ? format(tempDueDate, 'PPP') : 'Pick a date'}
+                    Cancel
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={tempDueDate}
-                    onSelect={setTempDueDate}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Assigned To */}
-            <div className="pb-2">
-              <label className="text-sm font-medium text-gray-700 mb-1.5 block flex items-center gap-2">
-                <User className="w-4 h-4" />
-                Assigned To Instructor
-              </label>
-              <Select 
-                value={tempAssignedToInstructorId} 
-                onValueChange={setTempAssignedToInstructorId}
-                disabled={loadingInstructors}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={loadingInstructors ? "Loading instructors..." : "Select an instructor..."} />
-                </SelectTrigger>
-                <SelectContent>
-                  {instructors.map((instructor) => (
-                    <SelectItem key={instructor.id} value={instructor.id}>
-                      <div className="flex items-center gap-2">
-                        <User className="w-4 h-4" />
-                        {instructor.first_name} {instructor.last_name}
-                        {instructor.status !== 'active' && (
-                          <Badge variant="secondary" className="text-xs">
-                            {instructor.status}
-                          </Badge>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          
-          {/* Save/Cancel Actions */}
-          {isDirty && (
-            <div className="sticky bottom-0 bg-white border-t border-gray-200 p-6 -mx-8 -mb-6 mt-8">
-              <div className="flex justify-end gap-3">
+                )}
                 <Button
-                  variant="outline"
-                  onClick={cancelChanges}
-                  disabled={saving}
-                  className="px-6 py-2.5 border-gray-300 text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel Changes
-                </Button>
-                <Button
-                  onClick={saveChanges}
+                  type="submit"
                   disabled={saving || !isDirty}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm"
                 >
-                  {saving ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Changes'
-                  )}
+                  {saving ? "Saving..." : "Save Changes"}
                 </Button>
               </div>
             </div>
-          )}
+          </form>
         </div>
       </DialogContent>
     </Dialog>

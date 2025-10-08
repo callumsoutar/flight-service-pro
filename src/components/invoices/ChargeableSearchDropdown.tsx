@@ -9,17 +9,16 @@ import {
   CommandGroup,
   CommandItem,
 } from "../ui/command";
-import type { Chargeable, ChargeableType } from "@/types/chargeables";
-import { CHARGEABLE_TYPE_LABELS } from "@/types/chargeables";
+import { CHARGEABLE_TYPE_CODES, type Chargeable, type ChargeableWithAircraftRates } from "@/types/chargeables";
 import { Plus } from "lucide-react";
 
-const groupByCategory = (items: Chargeable[]) => {
-  return items.reduce<Record<ChargeableType, Chargeable[]>>((acc, item) => {
-    const type = item.type as ChargeableType;
-    if (!acc[type]) acc[type] = [];
-    acc[type].push(item);
+const groupByCategory = (items: ChargeableWithAircraftRates[]) => {
+  return items.reduce<Record<string, ChargeableWithAircraftRates[]>>((acc, item) => {
+    const typeName = item.chargeable_types?.name || 'Other';
+    if (!acc[typeName]) acc[typeName] = [];
+    acc[typeName].push(item);
     return acc;
-  }, {} as Record<ChargeableType, Chargeable[]>);
+  }, {} as Record<string, ChargeableWithAircraftRates[]>);
 };
 
 interface ChargeableSearchDropdownProps {
@@ -57,7 +56,11 @@ export default function ChargeableSearchDropdown({ onAdd, taxRate, category, air
         const data = await res.json();
         let items = data.chargeables || [];
         if (category === 'other') {
-          items = items.filter((c: Chargeable) => c.type !== 'landing_fee' && c.type !== 'airways_fees');
+          // Filter out landing fees and airways fees based on the chargeable_types.code
+          items = items.filter((c: Chargeable) => 
+            c.chargeable_types?.code !== CHARGEABLE_TYPE_CODES.LANDING_FEE && 
+            c.chargeable_types?.code !== CHARGEABLE_TYPE_CODES.AIRWAYS_FEES
+          );
         }
         setChargeables(items);
       })
@@ -92,8 +95,8 @@ export default function ChargeableSearchDropdown({ onAdd, taxRate, category, air
                   ) : error ? (
                     <div className="px-4 py-3 text-sm text-red-500">{error}</div>
                   ) : chargeables.length > 0 ? (
-                    Object.entries(groupByCategory(chargeables)).map(([type, items]) => (
-                      <CommandGroup key={type} heading={CHARGEABLE_TYPE_LABELS[type as ChargeableType] || type}>
+                    Object.entries(groupByCategory(chargeables)).map(([typeName, items]) => (
+                      <CommandGroup key={typeName} heading={typeName}>
                         {items.map((item) => (
                           <CommandItem
                             key={item.id}
@@ -112,8 +115,13 @@ export default function ChargeableSearchDropdown({ onAdd, taxRate, category, air
                               <div className="font-medium text-gray-900">{item.name}</div>
                               <div className="text-xs text-gray-500">{item.description}</div>
                             </div>
-                            <div className="font-semibold text-indigo-600 text-sm">
-                              ${(item.rate * (1 + taxRate)).toFixed(2)}
+                            <div className="flex flex-col items-end">
+                              <div className="font-semibold text-indigo-600 text-sm">
+                                ${(item.is_taxable ? item.rate * (1 + taxRate) : item.rate).toFixed(2)}
+                              </div>
+                              {!item.is_taxable && (
+                                <div className="text-xs text-gray-500">Tax-exempt</div>
+                              )}
                             </div>
                           </CommandItem>
                         ))}

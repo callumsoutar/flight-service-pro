@@ -43,11 +43,11 @@ export default function DebriefReport({
   const getStatusColor = (status?: string) => {
     switch (status) {
       case 'pass':
-        return 'bg-green-100 text-green-700 border border-green-200';
+        return { backgroundColor: '#dcfce7', color: '#166534', border: '1px solid #86efac' };
       case 'not yet competent':
-        return 'bg-red-100 text-red-700 border border-red-200';
+        return { backgroundColor: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5' };
       default:
-        return 'bg-yellow-100 text-yellow-700 border border-yellow-200';
+        return { backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' };
     }
   };
 
@@ -56,42 +56,46 @@ export default function DebriefReport({
       lessonProgress.instructor.user.email
     : 'Not assigned';
 
+  const statusStyles = getStatusColor(lessonProgress.status || '');
+
   return (
     <EmailLayout title="Flight Debrief Report - Aero Safety Flight School">
       {/* Header */}
-      <div className="text-center mb-6">
-        <Text className="text-2xl font-bold text-blue-700 m-0 mb-2">
+      <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+        <Text style={{ margin: '0 0 12px 0', fontSize: '32px', fontWeight: '700', color: '#111827', lineHeight: '1.2' }}>
           ✈️ Flight Debrief Report
         </Text>
-        <Text className="text-sm text-gray-600 m-0">
+        <Text style={{ margin: 0, fontSize: '16px', color: '#6b7280', lineHeight: '1.5' }}>
           Hi {booking.user?.first_name}, here&apos;s your personalized flight debrief from today&apos;s lesson.
         </Text>
       </div>
 
       {/* Flight Summary Card */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mb-4 border border-blue-100">
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <Text className="text-gray-800 font-semibold m-0 text-sm mb-1">
+      <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+          <div>
+            <Text style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600', color: '#111827' }}>
               {lessonProgress.completed_date
                 ? format(parseISO(lessonProgress.completed_date), 'd MMM yyyy')
                 : booking.start_time ? format(parseISO(booking.start_time), 'd MMM yyyy') : 'N/A'}
             </Text>
-            <Text className="text-gray-600 m-0 text-xs">
+            <Text style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#6b7280' }}>
               Aircraft: {booking.aircraft?.registration || '—'}
             </Text>
             {lesson && (
-              <Text className="text-gray-600 m-0 text-xs mt-1">
+              <Text style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>
                 Lesson: {lesson.name}
               </Text>
             )}
           </div>
           {lessonProgress.status && (
-            <div
-              className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(
-                lessonProgress.status,
-              )}`}
-            >
+            <div style={{
+              padding: '6px 12px',
+              borderRadius: '20px',
+              fontSize: '12px',
+              fontWeight: '600',
+              ...statusStyles
+            }}>
               {lessonProgress.status.charAt(0).toUpperCase() + lessonProgress.status.slice(1)}
             </div>
           )}
@@ -99,79 +103,96 @@ export default function DebriefReport({
       </div>
 
       {/* Student & Instructor */}
-      <div className="flex gap-3 mb-5">
-        <div className="flex-1 bg-blue-50 rounded-lg p-3 border border-blue-100">
-          <Text className="text-xs font-medium text-blue-600 m-0 uppercase mb-1">Student</Text>
-          <Text className="text-sm font-semibold text-gray-900 m-0">
-            👨‍🎓 {booking.user?.first_name} {booking.user?.last_name}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+        <div>
+          <Text style={{ margin: '0 0 4px 0', fontSize: '11px', fontWeight: '500', color: '#6b7280', textTransform: 'uppercase' }}>
+            👨‍🎓 Student
+          </Text>
+          <Text style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#111827' }}>
+            {booking.user?.first_name} {booking.user?.last_name}
           </Text>
         </div>
-        <div className="flex-1 bg-green-50 rounded-lg p-3 border border-green-100">
-          <Text className="text-xs font-medium text-green-600 m-0 uppercase mb-1">Instructor</Text>
-          <Text className="text-sm font-semibold text-gray-900 m-0">👨‍✈️ {instructorName}</Text>
+        <div>
+          <Text style={{ margin: '0 0 4px 0', fontSize: '11px', fontWeight: '500', color: '#6b7280', textTransform: 'uppercase' }}>
+            👨‍✈️ Instructor
+          </Text>
+          <Text style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#111827' }}>
+            {instructorName}
+          </Text>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4 mb-5">
-        {/* Instructor Comments */}
-        <div className="mb-4">
-          <Text className="text-base font-bold text-gray-900 mb-2">💬 Instructor Comments</Text>
-          <div className="bg-gray-50 rounded p-3 border border-gray-100">
-            {lessonProgress.instructor_comments ? (
-              <div 
-                style={{ color: '#374151', fontSize: '14px', lineHeight: '1.5', margin: 0 }}
-                dangerouslySetInnerHTML={{ __html: lessonProgress.instructor_comments }}
-              />
-            ) : (
-              <Text className="text-gray-800 text-sm m-0">
-                No instructor comments recorded.
-              </Text>
-            )}
-          </div>
+      {/* Instructor Comments */}
+      <div style={{ marginBottom: '20px' }}>
+        <Text style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+          💬 Instructor Comments
+        </Text>
+        <div style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
+          {lessonProgress.instructor_comments ? (
+            <div
+              style={{ color: '#374151', fontSize: '14px', lineHeight: '1.5', margin: 0 }}
+              dangerouslySetInnerHTML={{ __html: lessonProgress.instructor_comments }}
+            />
+          ) : (
+            <Text style={{ margin: 0, fontSize: '14px', color: '#6b7280' }}>
+              No instructor comments recorded.
+            </Text>
+          )}
         </div>
+      </div>
 
-        {/* Lesson Assessment Grid */}
+      {/* Lesson Assessment */}
+      <div style={{ marginBottom: '20px' }}>
+        <Text style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+          ✅ Lesson Assessment
+        </Text>
         <div>
-          <Text className="text-base font-bold text-gray-900 mb-3">✅ Lesson Assessment</Text>
-          <div className="grid grid-cols-1 gap-3">
-            {[
-              { icon: '⭐', title: 'Highlights', text: lessonProgress.lesson_highlights, bg: 'bg-yellow-50', border: 'border-yellow-100' },
-              { icon: '🧭', title: 'Airmanship', text: lessonProgress.airmanship, bg: 'bg-blue-50', border: 'border-blue-100' },
-              { icon: '📈', title: 'Strengths', text: lessonProgress.focus_next_lesson, bg: 'bg-green-50', border: 'border-green-100' },
-              { icon: '🎯', title: 'Areas for Improvement', text: lessonProgress.areas_for_improvement, bg: 'bg-red-50', border: 'border-red-100' },
-            ].map((item, idx) => (
-              <div key={idx} className={`${item.bg} ${item.border} rounded p-3 border`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <Text className="m-0 text-sm">{item.icon}</Text>
-                  <Text className="text-xs font-semibold text-gray-700 m-0 uppercase">{item.title}</Text>
-                </div>
-                <Text className="text-gray-800 text-xs whitespace-pre-line m-0">
-                  {item.text || `No ${item.title.toLowerCase()} recorded.`}
-                </Text>
-              </div>
-            ))}
-          </div>
+          {[
+            { icon: '⭐', title: 'Highlights', text: lessonProgress.lesson_highlights, bg: '#fef3c7', border: '#fcd34d' },
+            { icon: '🧭', title: 'Airmanship', text: lessonProgress.airmanship, bg: '#dbeafe', border: '#93c5fd' },
+            { icon: '📈', title: 'Strengths', text: lessonProgress.focus_next_lesson, bg: '#dcfce7', border: '#86efac' },
+            { icon: '🎯', title: 'Areas for Improvement', text: lessonProgress.areas_for_improvement, bg: '#fee2e2', border: '#fca5a5' },
+          ].map((item, idx) => (
+            <div key={idx} style={{ backgroundColor: item.bg, border: `1px solid ${item.border}`, borderRadius: '8px', padding: '12px', marginBottom: idx < 3 ? '8px' : '0' }}>
+              <Text style={{ margin: '0 0 4px 0', fontSize: '12px', fontWeight: '600', color: '#374151', textTransform: 'uppercase' }}>
+                {item.icon} {item.title}
+              </Text>
+              <Text style={{ margin: 0, fontSize: '14px', color: '#111827', whiteSpace: 'pre-line' }}>
+                {item.text || `No ${item.title.toLowerCase()} recorded.`}
+              </Text>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Next Steps */}
-      <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 mb-5">
-        <Text className="text-base font-bold text-gray-900 mb-2">➡️ Next Steps</Text>
-        <Text className="text-gray-800 text-sm whitespace-pre-line m-0">
+      <div style={{ backgroundColor: '#ede9fe', border: '1px solid #c4b5fd', borderRadius: '8px', padding: '16px', marginBottom: '24px' }}>
+        <Text style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+          ➡️ Next Steps
+        </Text>
+        <Text style={{ margin: 0, fontSize: '14px', color: '#374151', whiteSpace: 'pre-line' }}>
           {lessonProgress.focus_next_lesson || 'No next steps recorded.'}
         </Text>
       </div>
 
       {/* Action Button */}
-      <div className="text-center">
+      <div style={{ textAlign: 'center' }}>
         <Button
           href={`${dashboardUrl}/dashboard/bookings/debrief/view/${booking.id}`}
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold text-sm shadow-md"
+          style={{
+            backgroundColor: '#2563eb',
+            color: '#ffffff',
+            padding: '12px 32px',
+            borderRadius: '8px',
+            fontWeight: '600',
+            fontSize: '16px',
+            textDecoration: 'none',
+            display: 'inline-block'
+          }}
         >
           View Full Debrief Report
         </Button>
-        <Text className="text-gray-600 text-xs m-0 mt-3">
+        <Text style={{ margin: '12px 0 0 0', fontSize: '12px', color: '#6b7280' }}>
           Questions about your debrief? Contact your instructor or give us a call.
         </Text>
       </div>

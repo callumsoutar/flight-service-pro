@@ -6,11 +6,11 @@ export type InvoiceItem = {
   description: string;
   quantity: number;
   unit_price: number;
-  rate_inclusive: number | null; // Calculated by trigger: unit_price * (1 + tax_rate)
-  amount: number; // Calculated by trigger: quantity * unit_price
+  rate_inclusive: number | null; // Calculated by application: unit_price * (1 + tax_rate)
+  amount: number; // Calculated by application: quantity * unit_price
   tax_rate: number | null;
-  tax_amount: number | null; // Calculated by trigger: amount * (tax_rate / 100)
-  line_total: number | null; // Calculated by trigger: amount + tax_amount
+  tax_amount: number | null; // Calculated by application: amount * tax_rate
+  line_total: number | null; // Calculated by application: amount + tax_amount
   notes: string | null;
   created_at: string;
   updated_at: string;

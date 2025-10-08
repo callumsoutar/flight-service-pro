@@ -3,6 +3,7 @@ import { render } from '@react-email/render';
 import { resend, EMAIL_CONFIG, type EmailSendResult } from './resend-client';
 import { logEmail } from './email-logger';
 import BookingConfirmation from '@/email-templates/BookingConfirmation';
+import BookingCancellation from '@/email-templates/BookingCancellation';
 import DebriefReport from '@/email-templates/DebriefReport';
 import { Booking } from '@/types/bookings';
 import { User } from '@/types/users';
@@ -63,9 +64,14 @@ export async function sendBookingConfirmation({
     );
 
     const isConfirmed = booking.status === 'confirmed';
-    const subject = isConfirmed 
-      ? `Flight Booking Confirmed - ${new Date(booking.start_time).toLocaleDateString()}`
-      : `Flight Booking Received - ${new Date(booking.start_time).toLocaleDateString()}`;
+    const bookingDate = new Date(booking.start_time).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    const subject = isConfirmed
+      ? `Flight Booking Confirmed - ${bookingDate}`
+      : `Flight Booking Received - ${bookingDate}`;
 
     // Send the email
     const { data, error } = await resend.emails.send({
@@ -160,7 +166,12 @@ export async function sendBookingUpdate({
       />
     );
 
-    const subject = `Flight Booking Updated - ${new Date(booking.start_time).toLocaleDateString()}`;
+    const bookingDate = new Date(booking.start_time).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    const subject = `Flight Booking Updated - ${bookingDate}`;
 
     const { data, error } = await resend.emails.send({
       from: EMAIL_CONFIG.FROM_EMAIL,
@@ -201,11 +212,15 @@ export async function sendBookingCancellation({
   member,
   to,
   cancellationReason,
+  cancellationCategory,
+  cancelledBy,
 }: {
   booking: Booking;
   member: User;
   to?: string;
   cancellationReason?: string;
+  cancellationCategory?: string;
+  cancelledBy?: string;
 }): Promise<EmailSendResult> {
   try {
     // Check if email service is available
@@ -218,7 +233,7 @@ export async function sendBookingCancellation({
     }
 
     const recipientEmail = to || member.email;
-    
+
     if (!recipientEmail) {
       return {
         success: false,
@@ -226,23 +241,30 @@ export async function sendBookingCancellation({
       };
     }
 
-    // Simple cancellation email for now
-    // You can create a dedicated template later
-    const subject = `Flight Booking Cancelled - ${new Date(booking.start_time).toLocaleDateString()}`;
-    
-    const simpleHtml = `
-      <h2>Booking Cancelled</h2>
-      <p>Hello ${member.first_name},</p>
-      <p>Your flight booking for ${new Date(booking.start_time).toLocaleDateString()} has been cancelled.</p>
-      ${cancellationReason ? `<p><strong>Reason:</strong> ${cancellationReason}</p>` : ''}
-      <p>If you have any questions, please contact us.</p>
-    `;
+    // Render the cancellation email template
+    const emailHtml = await render(
+      <BookingCancellation
+        booking={booking}
+        member={member}
+        cancellationReason={cancellationReason}
+        cancellationCategory={cancellationCategory}
+        cancelledBy={cancelledBy}
+        dashboardUrl={process.env.NEXT_PUBLIC_APP_URL}
+      />
+    );
+
+    const bookingDate = new Date(booking.start_time).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    const subject = `Flight Booking Cancelled - ${bookingDate}`;
 
     const { data, error } = await resend.emails.send({
       from: EMAIL_CONFIG.FROM_EMAIL,
       to: recipientEmail,
       subject,
-      html: simpleHtml,
+      html: emailHtml,
       replyTo: EMAIL_CONFIG.REPLY_TO,
       headers: {
         'X-Booking-ID': booking.id,
@@ -258,6 +280,23 @@ export async function sendBookingCancellation({
         error: error.message || 'Failed to send email',
       };
     }
+
+    console.log('Booking cancellation email sent:', {
+      messageId: data?.id,
+      to: recipientEmail,
+      bookingId: booking.id,
+    });
+
+    // Log the email
+    await logEmail({
+      booking_id: booking.id,
+      user_id: member.id,
+      email_type: 'booking-cancellation',
+      recipient_email: recipientEmail,
+      subject,
+      message_id: data?.id,
+      status: 'sent',
+    });
 
     return {
       success: true,
@@ -342,7 +381,12 @@ export async function sendDebriefReport({
       />
     );
 
-    const subject = `Flight Debrief Report - ${new Date(booking.start_time).toLocaleDateString()}`;
+    const bookingDate = new Date(booking.start_time).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    const subject = `Flight Debrief Report - ${bookingDate}`;
 
     // Send the email
     const { data, error } = await resend.emails.send({

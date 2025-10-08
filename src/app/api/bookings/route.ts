@@ -428,7 +428,7 @@ export async function PATCH(req: NextRequest) {
   // First, get the existing booking to check for status changes
   const { data: existingBooking, error: existingError } = await supabase
     .from("bookings")
-    .select("status")
+    .select("status, start_time, end_time, aircraft_id, instructor_id")
     .eq("id", id)
     .single();
   
@@ -500,21 +500,28 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: fetchError.message }, { status: 500 });
   }
 
-  // Send email notification for status changes
+  // Send email notification for important booking changes
   try {
-    if (updatedBooking && updatedBooking.user && updatedBooking.user.email && 
-        updates.status && updates.status !== existingBooking.status) {
-      
+    // Check if any important fields have changed
+    const importantFieldsChanged =
+      (updates.status && updates.status !== existingBooking.status) ||
+      (updates.start_time && updates.start_time !== existingBooking.start_time) ||
+      (updates.end_time && updates.end_time !== existingBooking.end_time) ||
+      (updates.aircraft_id && updates.aircraft_id !== existingBooking.aircraft_id) ||
+      (updates.instructor_id && updates.instructor_id !== existingBooking.instructor_id);
+
+    if (updatedBooking && updatedBooking.user && updatedBooking.user.email && importantFieldsChanged) {
+
       // Prepare instructor data
       let instructor = null;
       if (updatedBooking.instructor && updatedBooking.instructor.users) {
-        const instructorUser = Array.isArray(updatedBooking.instructor.users) 
-          ? updatedBooking.instructor.users[0] 
+        const instructorUser = Array.isArray(updatedBooking.instructor.users)
+          ? updatedBooking.instructor.users[0]
           : updatedBooking.instructor.users;
-        
+
         instructor = {
-          name: `${instructorUser?.first_name || ''} ${instructorUser?.last_name || ''}`.trim() || 
-                instructorUser?.email || 
+          name: `${instructorUser?.first_name || ''} ${instructorUser?.last_name || ''}`.trim() ||
+                instructorUser?.email ||
                 updatedBooking.instructor.id,
           email: instructorUser?.email,
         };
@@ -523,7 +530,7 @@ export async function PATCH(req: NextRequest) {
       // Get lesson and flight type names if available
       let lesson = null;
       let flightType = null;
-      
+
       if (updatedBooking.lesson_id) {
         const { data: lessonData } = await supabase
           .from('lessons')

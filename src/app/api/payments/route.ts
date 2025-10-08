@@ -121,11 +121,14 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
     
+    console.log(`Payment ${result.payment_number} processed for invoice ${result.invoice_number}: ${result.payment_id}`);
     
     return NextResponse.json({ 
       id: result.payment_id,
+      payment_number: result.payment_number,
       transaction_id: result.transaction_id,
       invoice_id: result.invoice_id,
+      invoice_number: result.invoice_number,
       new_status: result.new_status,
       remaining_balance: result.remaining_balance,
       message: result.message

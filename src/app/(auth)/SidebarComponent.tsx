@@ -81,7 +81,7 @@ export function SidebarComponent() {
   // Render skeleton loading state while role data is loading
   if (rolesLoading) {
     return (
-      <aside className="fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-[#7c3aed] via-[#6d28d9] to-[#3b82f6] text-white flex flex-col z-30 overflow-visible">
+      <aside className="fixed left-0 top-0 h-full w-64 bg-purple-700 text-white flex flex-col z-30 overflow-visible">
         <div className="flex items-center h-16 px-6 font-extrabold text-2xl tracking-tight border-b border-white/10">
           Flight Desk Pro
         </div>
@@ -111,7 +111,7 @@ export function SidebarComponent() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-[#7c3aed] via-[#6d28d9] to-[#3b82f6] text-white flex flex-col z-30 overflow-visible">
+    <aside className="fixed left-0 top-0 h-full w-64 bg-purple-700 text-white flex flex-col z-30 overflow-visible">
       <div className="flex items-center h-16 px-6 font-extrabold text-2xl tracking-tight border-b border-white/10">
         Flight Desk Pro
       </div>
@@ -206,7 +206,7 @@ export function SidebarComponent() {
             zIndex: 10000,
             top: submenuPosition.top,
             left: submenuPosition.left,
-            background: 'linear-gradient(to bottom, #a855f7, #8b5cf6, #6366f1)',
+            background: '#7c3aed',
             border: '1px solid rgba(255,255,255,0.1)',
           }}
           onMouseEnter={() => {

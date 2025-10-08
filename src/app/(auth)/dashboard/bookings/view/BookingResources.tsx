@@ -49,11 +49,6 @@ export default function BookingResources({
   const activeObservations = aircraftObservations;
 
 
-  const handleContactDetailsClick = (userId: string) => {
-    setSelectedUserId(userId);
-    setContactModalOpen(true);
-  };
-
   return (
     <Card className="w-full">
       <CardHeader>

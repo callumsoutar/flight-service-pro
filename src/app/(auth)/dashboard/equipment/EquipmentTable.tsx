@@ -1,11 +1,11 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Eye, Edit, MoreVertical, Package, AlertTriangle, CheckCircle, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Equipment, EquipmentIssuance } from "@/types/equipment";
+import type { Equipment, EquipmentIssuance } from "@/types/equipment";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -38,13 +38,13 @@ const EQUIPMENT_TYPE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 export default function EquipmentTable({ equipment, openIssuanceByEquipmentId, issuedUsers }: EquipmentTableProps) {
-  // Use state for equipment list so we can update it on add
-  const [equipmentList, setEquipmentList] = useState<Equipment[]>(Array.isArray(equipment) ? equipment : []);
+  // State for equipment list so we can update it on add
+  const [equipmentList, setEquipmentList] = useState<Equipment[]>(equipment);
 
   // Tabs state
   const [tab, setTab] = useState<string>('all');
 
-  // Dropdown filter state
+  // Filter state
   const [selectedType, setSelectedType] = useState<string>('All');
   const [search, setSearch] = useState('');
 
@@ -56,91 +56,88 @@ export default function EquipmentTable({ equipment, openIssuanceByEquipmentId, i
   const router = useRouter();
 
   // Filtering logic based on tab
-  const filteredEquipment = React.useMemo(() => {
-    if (tab === 'issued') {
-      // Only show equipment with an open issuance
-      return equipmentList.filter(e => openIssuanceByEquipmentId[e.id]);
-    }
-    // For 'overdue' and 'all', filter with correct 'e' param
+  const filteredEquipment = useMemo(() => {
     return equipmentList.filter(e => {
+      // Tab filter
       let matchesTab = true;
-      if (tab === 'overdue') {
-        // Check if equipment has an open issuance with an overdue expected return date
+      if (tab === 'issued') {
+        matchesTab = !!openIssuanceByEquipmentId[e.id];
+      } else if (tab === 'overdue') {
         const issuance = openIssuanceByEquipmentId[e.id];
-        if (issuance && issuance.expected_return) {
+        if (!issuance || !issuance.expected_return) {
+          matchesTab = false;
+        } else {
           const expectedDate = new Date(issuance.expected_return);
           const today = new Date();
-          today.setHours(0, 0, 0, 0); // Reset time to start of day for fair comparison
+          today.setHours(0, 0, 0, 0);
           matchesTab = expectedDate < today;
-        } else {
-          matchesTab = false; // No issuance or no expected return date means not overdue
         }
       }
+
+      // Type filter
       const matchesType = selectedType === 'All' || e.type === selectedType;
-      const q = search.toLowerCase();
-      const matchesSearch =
-        e.name.toLowerCase().includes(q) ||
-        (e.serial_number?.toLowerCase().includes(q) ?? false) ||
-        (e.type?.toLowerCase().includes(q) ?? false);
-      return matchesTab && matchesType && (!search || matchesSearch);
+
+      // Search filter
+      const matchesSearch = !search || (
+        e.name.toLowerCase().includes(search.toLowerCase()) ||
+        e.serial_number?.toLowerCase().includes(search.toLowerCase()) ||
+        e.type?.toLowerCase().includes(search.toLowerCase())
+      );
+
+      return matchesTab && matchesType && matchesSearch;
     });
   }, [tab, openIssuanceByEquipmentId, equipmentList, selectedType, search]);
 
   // Helper: get effective status for badge (open issuance takes precedence)
-  function getEffectiveStatus(item: Equipment) {
-    if (openIssuanceByEquipmentId[item.id]) {
-      return 'Issued';
-    }
-    return item.status;
-  }
+  const getEffectiveStatus = (item: Equipment): string => {
+    return openIssuanceByEquipmentId[item.id] ? 'Issued' : item.status;
+  };
 
   // Helper: get status badge color
-  function statusColor(status: string) {
-    switch (status?.toLowerCase()) {
-      case "active":
-        return "bg-green-100 text-green-800";
-      case "issued": return "bg-blue-100 text-blue-800";
-      case "lost":
-      case "stolen":
-      case "damaged": return "bg-red-100 text-red-800";
-      case "maintenance": return "bg-yellow-100 text-yellow-800";
-      case "retired": return "bg-gray-100 text-gray-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
-  }
+  const getStatusColor = (status: string): string => {
+    const colors: Record<string, string> = {
+      active: "bg-green-100 text-green-800",
+      issued: "bg-blue-100 text-blue-800",
+      lost: "bg-red-100 text-red-800",
+      stolen: "bg-red-100 text-red-800",
+      damaged: "bg-red-100 text-red-800",
+      maintenance: "bg-yellow-100 text-yellow-800",
+      retired: "bg-gray-100 text-gray-800",
+    };
+    return colors[status?.toLowerCase()] || "bg-gray-100 text-gray-800";
+  };
 
-  // Helper: get issued to
-  function getIssuedTo(item: Equipment) {
+  // Helper: get issued to user name
+  const getIssuedToName = (item: Equipment): string => {
     const issuance = openIssuanceByEquipmentId[item.id];
-    if (issuance) {
-      const user = issuedUsers[issuance.user_id]; // Use user_id instead of issued_to
-      if (user) {
-        return user.first_name || user.last_name
-          ? `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim()
-          : user.email;
-      }
-      return 'Unknown';
-    }
-    return '—';
-  }
+    if (!issuance) return '—';
+    
+    const user = issuedUsers[issuance.user_id];
+    if (!user) return 'Unknown';
+    
+    return user.first_name || user.last_name
+      ? `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim()
+      : user.email;
+  };
 
-  // Helper: get expected return - now shows actual expected return dates
-  function getExpectedReturn(item: Equipment) {
+  // Helper: get expected return date
+  const getExpectedReturn = (item: Equipment): React.ReactNode => {
     const issuance = openIssuanceByEquipmentId[item.id];
-    if (issuance && issuance.expected_return) {
-      const expectedDate = new Date(issuance.expected_return);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const isOverdue = expectedDate < today;
-      
-      return (
-        <span className={isOverdue ? "text-red-600 font-semibold" : "text-gray-900"}>
-          {expectedDate.toLocaleDateString()}
-        </span>
-      );
+    if (!issuance || !issuance.expected_return) {
+      return <span className="text-gray-400">—</span>;
     }
-    return <span className="text-gray-400">—</span>;
-  }
+
+    const expectedDate = new Date(issuance.expected_return);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isOverdue = expectedDate < today;
+    
+    return (
+      <span className={isOverdue ? "text-red-600 font-semibold" : "text-gray-900"}>
+        {expectedDate.toLocaleDateString()}
+      </span>
+    );
+  };
 
   // Handler to add new equipment to the list
   function handleAddEquipment(newEquipment: Equipment) {
@@ -244,13 +241,13 @@ export default function EquipmentTable({ equipment, openIssuanceByEquipmentId, i
               >
                 <TableCell>{item.name}</TableCell>
                 <TableCell>{item.serial_number || '—'}</TableCell>
-                <TableCell>{item.type || '—'}</TableCell>
+                <TableCell className="capitalize">{item.type || '—'}</TableCell>
                 <TableCell>
-                  <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${statusColor(getEffectiveStatus(item))}`}>
+                  <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusColor(getEffectiveStatus(item))}`}>
                     {getEffectiveStatus(item)}
                   </span>
                 </TableCell>
-                <TableCell>{getIssuedTo(item)}</TableCell>
+                <TableCell>{getIssuedToName(item)}</TableCell>
                 <TableCell>{getExpectedReturn(item)}</TableCell>
                 <TableCell>
                   <DropdownMenu>

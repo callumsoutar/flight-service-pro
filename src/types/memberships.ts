@@ -7,10 +7,17 @@ export interface MembershipType {
   name: string; // "Flying Member", "Social Member"
   code: string; // "flying_member", "social_member"
   description?: string;
-  price: number; // Annual fee
+  price: number; // Annual fee (may be deprecated in favor of chargeable.rate)
   duration_months: number; // 12 for annual, 1 for monthly
   is_active: boolean;
   benefits: string[]; // Array of membership benefits
+  chargeable_id: string | null; // FK to chargeables table (nullable)
+  chargeables?: { // Joined chargeable data
+    id: string;
+    name: string;
+    rate: number;
+    is_taxable: boolean;
+  };
   created_at: string;
   updated_at: string;
 }
@@ -25,9 +32,14 @@ export interface Membership {
   expiry_date: string;
   purchased_date: string;
   is_active: boolean;
-  fee_paid: boolean;
+  fee_paid?: boolean; // DEPRECATED: Use invoices.status instead (will be removed after migration)
   amount_paid?: number;
   invoice_id?: string; // Link to payment invoice
+  invoices?: { // Joined invoice data for payment status
+    id: string;
+    status: string;
+    invoice_number: string | null;
+  };
   renewal_of?: string; // ID of membership this renews
   auto_renew: boolean;
   grace_period_days: number;

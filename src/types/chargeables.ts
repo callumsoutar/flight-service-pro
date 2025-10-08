@@ -1,47 +1,58 @@
 // Types for chargeables table (generated from Supabase)
-export type ChargeableType =
-  | 'aircraft_rental'
-  | 'instructor_fee'
-  | 'membership_fee'
-  | 'landing_fee'
-  | 'facility_rental'
-  | 'product_sale'
-  | 'service_fee'
-  | 'other'
-  | 'default_briefing'
-  | 'airways_fees';
 
-export const CHARGEABLE_TYPE_LABELS: Record<ChargeableType, string> = {
-  aircraft_rental: 'Aircraft Rental',
-  instructor_fee: 'Instructor Fee',
-  membership_fee: 'Membership Fee',
-  landing_fee: 'Landing Fee',
-  facility_rental: 'Facility Rental',
-  product_sale: 'Product Sale',
-  service_fee: 'Service Fee',
-  other: 'Other',
-  default_briefing: 'Briefing Fee',
-  airways_fees: 'Airways Fees',
-};
+// ============================================
+// CHARGEABLE TYPES (NEW TABLE)
+// ============================================
 
-export type Chargeable = {
+export interface ChargeableType {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  is_system: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChargeableTypeInsert {
+  code: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
+  // is_system defaults to false in database
+}
+
+export interface ChargeableTypeUpdate {
+  name?: string;
+  description?: string | null;
+  is_active?: boolean;
+  // Cannot update code or is_system after creation
+}
+
+// ============================================
+// CHARGEABLES
+// ============================================
+
+export interface Chargeable {
   id: string;
   name: string;
   description: string | null;
-  type: ChargeableType;
+  chargeable_type_id: string; // FK to chargeable_types
+  chargeable_types?: ChargeableType; // Joined data from Supabase
   rate: number;
   is_taxable: boolean;
   is_active: boolean | null;
   voided_at: string | null;
   created_at: string;
   updated_at: string;
-};
+}
 
 export type ChargeableInsert = {
   id?: string;
   name: string;
   description?: string | null;
-  type: string;
+  chargeable_type_id: string; // Changed from type
   rate: number;
   is_taxable?: boolean;
   is_active?: boolean | null;
@@ -54,7 +65,7 @@ export type ChargeableUpdate = {
   id?: string;
   name?: string;
   description?: string | null;
-  type?: string;
+  chargeable_type_id?: string; // Changed from type
   rate?: number;
   is_taxable?: boolean;
   is_active?: boolean | null;
@@ -62,6 +73,10 @@ export type ChargeableUpdate = {
   created_at?: string;
   updated_at?: string;
 };
+
+// ============================================
+// LANDING FEE RATES
+// ============================================
 
 // Landing fee rates - aircraft-type-specific pricing
 export type LandingFeeRate = {
@@ -86,4 +101,24 @@ export type LandingFeeRateUpdate = {
 // Extended chargeable with aircraft-specific rates
 export interface ChargeableWithAircraftRates extends Chargeable {
   landing_fee_rates?: LandingFeeRate[];
-} 
+}
+
+// ============================================
+// HELPER TYPES & CONSTANTS
+// ============================================
+
+// Common chargeable type codes (for convenience)
+export const CHARGEABLE_TYPE_CODES = {
+  AIRCRAFT_RENTAL: 'aircraft_rental',
+  INSTRUCTOR_FEE: 'instructor_fee',
+  MEMBERSHIP_FEE: 'membership_fee',
+  LANDING_FEE: 'landing_fee',
+  FACILITY_RENTAL: 'facility_rental',
+  PRODUCT_SALE: 'product_sale',
+  SERVICE_FEE: 'service_fee',
+  OTHER: 'other',
+  DEFAULT_BRIEFING: 'default_briefing',
+  AIRWAYS_FEES: 'airways_fees',
+} as const;
+
+export type ChargeableTypeCode = typeof CHARGEABLE_TYPE_CODES[keyof typeof CHARGEABLE_TYPE_CODES];

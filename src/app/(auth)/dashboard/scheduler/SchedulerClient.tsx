@@ -164,6 +164,7 @@ const FlightSchedulerInner = () => {
   // State for timeline scrolling
   const [timelineOffset, setTimelineOffset] = useState(0);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const hasLoadedRef = useRef(false);
 
   // State for context menu and double-click
   const [contextMenu, setContextMenu] = useState<{
@@ -198,12 +199,7 @@ const FlightSchedulerInner = () => {
       is_24_hours: generalSettings.business_is_24_hours || false,
       is_closed: generalSettings.business_is_closed || false,
     };
-  }, [
-    generalSettings?.business_open_time,
-    generalSettings?.business_close_time,
-    generalSettings?.business_is_24_hours,
-    generalSettings?.business_is_closed
-  ]);
+  }, [generalSettings]);
   const businessHoursLoading = !generalSettings;
   const router = useRouter();
   const { isRestricted, isLoading: roleLoading, error: roleError } = useIsRestrictedUser();
@@ -270,18 +266,20 @@ const FlightSchedulerInner = () => {
     fetchCancellationCategories();
   }, [showCancelBookingModal, isFetchingCategories, cancellationCategories.length]);
 
-  // Check if user can access a specific booking
-  const canAccessBooking = (booking: Booking): boolean => {
-    if (!currentUser) return false;
-    
-    // Only restrict access for members and students - they can only access their own bookings
-    if (isRestricted) {
-      return booking.user_id === currentUser.id;
-    }
-    
-    // Owners, admins, and instructors can access any booking
-    return true;
-  };
+  // Check if user can access a specific booking - memoized to avoid recalculation
+  const canAccessBooking = useMemo(() => {
+    return (booking: Booking): boolean => {
+      if (!currentUser) return false;
+
+      // Only restrict access for members and students - they can only access their own bookings
+      if (isRestricted) {
+        return booking.user_id === currentUser.id;
+      }
+
+      // Owners, admins, and instructors can access any booking
+      return true;
+    };
+  }, [currentUser, isRestricted]);
 
   // Configuration
   const VISIBLE_SLOTS = 24;
@@ -451,7 +449,9 @@ const FlightSchedulerInner = () => {
       // Process bookings
       const bookingsByResource: Record<string, Booking[]> = {};
       const convertedBookings: Booking[] = [];
-      
+      const additionalInstructors: Instructor[] = [];
+      const additionalAircraft: Aircraft[] = [];
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (bookingsData.bookings || []).forEach((booking: any) => {
         try {
@@ -475,7 +475,7 @@ const FlightSchedulerInner = () => {
             if (isNaN(endTime.getTime())) return;
             const duration = (endTime.getTime() - bookingDate.getTime()) / (1000 * 60 * 60);
             if (duration <= 0) return;
-        
+
             const schedulerBooking: Booking = {
           id: booking.id,
               start: startTime,
@@ -518,23 +518,19 @@ const FlightSchedulerInner = () => {
               if (instructor) schedulerBooking.instructor = instructor.name!;
               bookingsByResource[displayName].push(schedulerBooking);
 
-              // Add instructor to available list if not already there (for display purposes)
+              // Collect additional instructors (not in filtered list) for later addition
               if (!instructor && booking.instructor) {
-                const tempInstructor: Instructor = {
-                  id: booking.instructor_id,
-                  user_id: booking.instructor.user_id || '',
-                  name: schedulerBooking.instructor,
-                  first_name: booking.instructor.first_name,
-                  last_name: booking.instructor.last_name,
-                  instructor_category: booking.instructor.instructor_category || null
-                };
-                setAvailableInstructors(prev => {
-                  const exists = prev.find(inst => inst.id === booking.instructor_id);
-                  if (!exists) {
-                    return [...prev, tempInstructor];
-                  }
-                  return prev;
-                });
+                const exists = additionalInstructors.find(inst => inst.id === booking.instructor_id);
+                if (!exists) {
+                  additionalInstructors.push({
+                    id: booking.instructor_id,
+                    user_id: booking.instructor.user_id || '',
+                    name: schedulerBooking.instructor,
+                    first_name: booking.instructor.first_name,
+                    last_name: booking.instructor.last_name,
+                    instructor_category: booking.instructor.instructor_category || null
+                  });
+                }
               }
             }
 
@@ -555,21 +551,17 @@ const FlightSchedulerInner = () => {
               }
               bookingsByResource[aircraftDisplay].push({ ...schedulerBooking, instructor: schedulerBooking.instructor || 'No Instructor' });
 
-              // Add aircraft to list if not already there (for display purposes)
+              // Collect additional aircraft (not in online list) for later addition
               if (!aircraftMatch && booking.aircraft_id) {
-                const tempAircraft: Aircraft = {
-                  id: booking.aircraft_id,
-                  registration: booking.aircraft?.registration || `Aircraft ${booking.aircraft_id.substring(0, 8)}`,
-                  type: booking.aircraft?.type || 'Unknown',
-                  status: 'active'
-                };
-                setAircraft(prev => {
-                  const exists = prev.find(ac => ac.id === booking.aircraft_id);
-                  if (!exists) {
-                    return [...prev, tempAircraft];
-                  }
-                  return prev;
-                });
+                const exists = additionalAircraft.find(ac => ac.id === booking.aircraft_id);
+                if (!exists) {
+                  additionalAircraft.push({
+                    id: booking.aircraft_id,
+                    registration: booking.aircraft?.registration || `Aircraft ${booking.aircraft_id.substring(0, 8)}`,
+                    type: booking.aircraft?.type || 'Unknown',
+                    status: 'active'
+                  });
+                }
               }
             }
 
@@ -587,9 +579,9 @@ const FlightSchedulerInner = () => {
         }
       });
 
-      // Set all state atomically
-      setAircraft(onlineAircraft);
-      setAvailableInstructors(filteredInstructors);
+      // Set all state atomically - single update per state
+      setAircraft([...onlineAircraft, ...additionalAircraft]);
+      setAvailableInstructors([...filteredInstructors, ...additionalInstructors]);
       setRawBookings(bookingsData.bookings || []);
       setBookings(convertedBookings);
       setBookingsByResource(bookingsByResource);
@@ -612,13 +604,15 @@ const FlightSchedulerInner = () => {
     }
   };
 
-  // Initial load when component mounts, and refresh when date or business hours change
+  // Initial load when component mounts, and refresh when date changes
   useEffect(() => {
-    // Determine if this is the initial load
-    const isInitialLoad = !aircraft.length && !availableInstructors.length;
+    const isInitialLoad = !hasLoadedRef.current;
+    if (isInitialLoad) {
+      hasLoadedRef.current = true;
+    }
     fetchAllData(isInitialLoad, !isInitialLoad);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, businessHours]); // Only depend on actual changing values to prevent duplicate calls
+  }, [selectedDate]); // Only depend on selectedDate to prevent infinite loops
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -699,14 +693,14 @@ const FlightSchedulerInner = () => {
     today.setHours(0, 0, 0, 0);
     const selectedDateOnly = new Date(selectedDate);
     selectedDateOnly.setHours(0, 0, 0, 0);
-    
+
     // Only show timeline if viewing today
     if (selectedDateOnly.getTime() !== today.getTime()) {
       return null;
     }
 
     const currentHour = now.getHours() + (now.getMinutes() / 60);
-    const visibleSlots = getVisibleTimeSlots();
+    const visibleSlots = getVisibleTimeSlots;
     
     if (visibleSlots.length === 0) {
       return null;
@@ -726,10 +720,10 @@ const FlightSchedulerInner = () => {
     return positionPercent;
   };
 
-  // Get visible time slots based on current offset
-  const getVisibleTimeSlots = () => {
+  // Get visible time slots based on current offset - memoized to avoid recalculation
+  const getVisibleTimeSlots = useMemo(() => {
     return timeSlots.slice(timelineOffset, timelineOffset + VISIBLE_SLOTS);
-  };
+  }, [timeSlots, timelineOffset, VISIBLE_SLOTS]);
 
   // Navigation functions
   const canScrollLeft = () => timelineOffset > 0;
@@ -770,14 +764,14 @@ const FlightSchedulerInner = () => {
 
   // Get current time range for display
   const getCurrentTimeRange = () => {
-    const visibleSlots = getVisibleTimeSlots();
+    const visibleSlots = getVisibleTimeSlots;
     if (visibleSlots.length === 0) return '';
     return `${visibleSlots[0]} - ${visibleSlots[visibleSlots.length - 1]}`;
   };
 
   // Get booking style - restored from original
   const getBookingStyle = (booking: Booking, rowHeight: number) => {
-    const visibleSlots = getVisibleTimeSlots();
+    const visibleSlots = getVisibleTimeSlots;
     
     if (visibleSlots.length === 0) {
       return { display: 'none' };
@@ -1204,7 +1198,7 @@ const FlightSchedulerInner = () => {
     const resourceKey = isInstructor ? (resource as Instructor).name : resource as string;
     const resourceBookings = bookingsByResource[resourceKey!] || [];
     const rowHeight = 36; // Fixed height for all rows (further reduced for compact display)
-    const visibleSlots = getVisibleTimeSlots();
+    const visibleSlots = getVisibleTimeSlots;
     
     return (
       <div key={resourceKey} className="flex border-b border-gray-200 resource-row group transition-all duration-200" data-resource={resourceKey} style={{ height: `${rowHeight}px` }}>
@@ -1234,11 +1228,11 @@ const FlightSchedulerInner = () => {
         </div>
         <div className="flex-1 relative timeline-container" style={{ height: `${rowHeight}px` }}>
           {/* Time grid cells - using CSS Grid to match header alignment */}
-          <div 
+          <div
             className="grid w-full h-full absolute inset-0"
-            style={{ gridTemplateColumns: `repeat(${visibleSlots.length}, 1fr)` }}
+            style={{ gridTemplateColumns: `repeat(${getVisibleTimeSlots.length}, 1fr)` }}
           >
-            {visibleSlots.map((timeSlot) => {
+            {getVisibleTimeSlots.map((timeSlot) => {
               const isPast = isTimeSlotInPast(timeSlot);
               return (
                 <div
@@ -1584,9 +1578,9 @@ const FlightSchedulerInner = () => {
                 <div className="flex-1">
                   <div
                     className="grid w-full h-full"
-                    style={{ gridTemplateColumns: `repeat(${getVisibleTimeSlots().length}, 1fr)` }}
+                    style={{ gridTemplateColumns: `repeat(${getVisibleTimeSlots.length}, 1fr)` }}
                   >
-                    {getVisibleTimeSlots().map((timeSlot) => (
+                    {getVisibleTimeSlots.map((timeSlot) => (
                       <div
                         key={timeSlot}
                         className="border-r border-gray-200 text-[10px] py-1 px-0.5 text-center bg-gradient-to-r from-blue-50 to-indigo-50 font-semibold text-gray-700 hover:bg-gradient-to-b hover:from-blue-100 hover:to-indigo-100 transition-all duration-200 min-w-[22px]"

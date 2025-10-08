@@ -61,6 +61,8 @@ export interface GeneralSettings {
   contact_email: string;
   contact_phone: string;
   address: string;
+  billing_address: string;
+  gst_number: string;
   logo_url: string;
   website_url: string;
   timezone: string;
@@ -97,6 +99,8 @@ export interface InvoicingSettings {
   auto_generate_invoices: boolean;
   invoice_due_reminder_days: number;
   include_logo_on_invoice: boolean;
+  invoice_footer_message: string;
+  payment_terms_message: string;
 }
 
 export interface TimeSlot {

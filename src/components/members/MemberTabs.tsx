@@ -108,25 +108,25 @@ export default function MemberTabs({ member }: { member: User }) {
         </div>
         <div className="w-full p-6">
           <Tabs.Content value="contact" className="h-full w-full">
-            <MemberContactTab member={member} />
+            {selectedTab === "contact" && <MemberContactTab member={member} />}
           </Tabs.Content>
           <Tabs.Content value="pilot" className="h-full w-full">
-            <MemberPilotDetailsTab memberId={member.id} />
+            {selectedTab === "pilot" && <MemberPilotDetailsTab memberId={member.id} />}
           </Tabs.Content>
           <Tabs.Content value="memberships" className="h-full w-full">
-            <MemberMembershipsTab memberId={member.id} />
+            {selectedTab === "memberships" && <MemberMembershipsTab memberId={member.id} />}
           </Tabs.Content>
           <Tabs.Content value="account" className="h-full w-full">
-            <MemberAccountTab memberId={member.id} />
+            {selectedTab === "account" && <MemberAccountTab memberId={member.id} member={member} />}
           </Tabs.Content>
           <Tabs.Content value="flight" className="h-full w-full">
-            <MemberFlightHistoryTab memberId={member.id} />
+            {selectedTab === "flight" && <MemberFlightHistoryTab memberId={member.id} />}
           </Tabs.Content>
           <Tabs.Content value="training-history" className="h-full w-full">
-            <MemberTrainingHistoryTab memberId={member.id} />
+            {selectedTab === "training-history" && <MemberTrainingHistoryTab memberId={member.id} />}
           </Tabs.Content>
           <Tabs.Content value="history" className="h-full w-full">
-            <MemberHistoryTab member={member} />
+            {selectedTab === "history" && <MemberHistoryTab member={member} />}
           </Tabs.Content>
         </div>
       </Tabs.Root>

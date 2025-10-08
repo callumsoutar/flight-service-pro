@@ -56,11 +56,17 @@ export async function POST(req: NextRequest) {
     // Verify the chargeable is a landing fee
     const { data: chargeable } = await supabase
       .from("chargeables")
-      .select("type")
+      .select(`
+        id,
+        chargeable_types!inner (
+          code
+        )
+      `)
       .eq("id", chargeable_id)
+      .eq("chargeable_types.code", "landing_fee")
       .single();
 
-    if (!chargeable || chargeable.type !== "landing_fee") {
+    if (!chargeable) {
       return NextResponse.json(
         { error: "Chargeable must be of type 'landing_fee'" },
         { status: 400 }

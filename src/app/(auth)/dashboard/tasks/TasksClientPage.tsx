@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TaskDetailsModal } from "./TaskDetailsModal";
 import { CreateTaskModal } from "./CreateTaskModal";
 import { Task } from "@/types/tasks";
+import { toast } from "sonner";
 
 const statusConfig = {
   assigned: { label: "Assigned", color: "bg-purple-100 text-purple-800 border-purple-200" },
@@ -28,6 +29,7 @@ export default function TasksClientPage({ }: { tasks: Task[] }) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [showCompleted, setShowCompleted] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -55,13 +57,17 @@ export default function TasksClientPage({ }: { tasks: Task[] }) {
 
   // Use fetched tasks data, fallback to empty array if undefined
   const safeTasks = Array.isArray(tasks) ? tasks : [];
-  
+
   const filteredTasks = safeTasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === "all" || task.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesCompleted = showCompleted || task.status !== "completed";
+    return matchesSearch && matchesStatus && matchesCompleted;
   });
+
+  // Get count of completed tasks
+  const completedCount = safeTasks.filter(task => task.status === "completed").length;
 
   // const getStatusIcon = (status: string) => {
   //   switch (status) {
@@ -75,19 +81,58 @@ export default function TasksClientPage({ }: { tasks: Task[] }) {
   // };
 
   const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return "No due date";
-    
+    if (!dateString) return { text: "No due date", color: "text-gray-500", bgColor: "bg-gray-100", borderColor: "border-gray-200", isOverdue: false };
+
     const date = new Date(dateString);
+    date.setHours(0, 0, 0, 0); // Normalize to start of day
     const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    if (date.toDateString() === today.toDateString()) {
-      return "Today";
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return "Tomorrow";
+    today.setHours(0, 0, 0, 0);
+
+    const diffTime = date.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      // Overdue
+      const daysOverdue = Math.abs(diffDays);
+      return {
+        text: daysOverdue === 1 ? "1 day overdue" : `${daysOverdue} days overdue`,
+        color: "text-red-700",
+        bgColor: "bg-red-100",
+        borderColor: "border-red-200",
+        isOverdue: true
+      };
+    } else if (diffDays === 0) {
+      return {
+        text: "Due today",
+        color: "text-orange-700",
+        bgColor: "bg-orange-100",
+        borderColor: "border-orange-200",
+        isOverdue: false
+      };
+    } else if (diffDays === 1) {
+      return {
+        text: "Due tomorrow",
+        color: "text-yellow-700",
+        bgColor: "bg-yellow-100",
+        borderColor: "border-yellow-200",
+        isOverdue: false
+      };
+    } else if (diffDays <= 7) {
+      return {
+        text: `Due in ${diffDays} days`,
+        color: "text-blue-700",
+        bgColor: "bg-blue-100",
+        borderColor: "border-blue-200",
+        isOverdue: false
+      };
     } else {
-      return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+      return {
+        text: `Due in ${diffDays} days`,
+        color: "text-gray-700",
+        bgColor: "bg-gray-100",
+        borderColor: "border-gray-200",
+        isOverdue: false
+      };
     }
   };
 
@@ -188,12 +233,24 @@ export default function TasksClientPage({ }: { tasks: Task[] }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="assigned">Assigned</SelectItem>
                 <SelectItem value="inProgress">In Progress</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="overdue">Overdue</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              variant={showCompleted ? "default" : "outline"}
+              onClick={() => setShowCompleted(!showCompleted)}
+              className={`gap-2 ${
+                showCompleted
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <CheckCircle className="w-4 h-4" />
+              {showCompleted ? `Hide Completed (${completedCount})` : `Show Completed (${completedCount})`}
+            </Button>
           </div>
         </div>
       </div>
@@ -240,14 +297,18 @@ export default function TasksClientPage({ }: { tasks: Task[] }) {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredTasks.map((task) => (
-                  <tr 
-                    key={task.id} 
-                    className="hover:bg-gray-50/80 transition-all duration-200 group cursor-pointer"
+                  <tr
+                    key={task.id}
+                    className={`hover:bg-gray-50/80 transition-all duration-200 group cursor-pointer ${
+                      task.status === 'completed' ? 'opacity-60 hover:opacity-80' : ''
+                    }`}
                     onClick={() => handleEditTask(task.id.toString())}
                   >
                     <td className="px-6 py-5">
                       <div>
-                        <h4 className="font-semibold text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors">{task.title}</h4>
+                        <h4 className={`font-semibold mb-1 group-hover:text-indigo-600 transition-colors ${
+                          task.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-900'
+                        }`}>{task.title}</h4>
                         <p className="text-sm text-gray-500 line-clamp-2 max-w-xs leading-relaxed">{task.description}</p>
                       </div>
                     </td>
@@ -262,12 +323,29 @@ export default function TasksClientPage({ }: { tasks: Task[] }) {
                       </Badge>
                     </td>
                     <td className="px-6 py-5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                          <Calendar className="w-4 h-4 text-blue-600" />
-                        </div>
-                        <span className="text-sm font-medium text-gray-700">{formatDate(task.due_date)}</span>
-                      </div>
+                      {(() => {
+                        const dateInfo = formatDate(task.due_date);
+                        return (
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                              dateInfo.isOverdue ? 'bg-red-100' :
+                              dateInfo.text === 'Due today' ? 'bg-orange-100' :
+                              dateInfo.text === 'Due tomorrow' ? 'bg-yellow-100' :
+                              'bg-blue-50'
+                            }`}>
+                              <Calendar className={`w-4 h-4 ${
+                                dateInfo.isOverdue ? 'text-red-600' :
+                                dateInfo.text === 'Due today' ? 'text-orange-600' :
+                                dateInfo.text === 'Due tomorrow' ? 'text-yellow-600' :
+                                'text-blue-600'
+                              }`} />
+                            </div>
+                            <Badge className={`${dateInfo.bgColor} ${dateInfo.color} border ${dateInfo.borderColor} px-2.5 py-1 text-xs font-medium`}>
+                              {dateInfo.text}
+                            </Badge>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-2">
@@ -288,9 +366,40 @@ export default function TasksClientPage({ }: { tasks: Task[] }) {
                     </td>
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        {task.status !== "completed" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const response = await fetch(`/api/tasks/${task.id}`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    status: 'completed',
+                                    completed_date: new Date().toISOString()
+                                  }),
+                                });
+                                if (response.ok) {
+                                  const data = await response.json();
+                                  handleTaskUpdate(data.task);
+                                  toast.success('Task marked as complete!');
+                                }
+                              } catch (error) {
+                                console.error('Error completing task:', error);
+                                toast.error('Failed to complete task');
+                              }
+                            }}
+                            title="Mark as Complete"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="h-8 w-8 p-0 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all duration-200"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -300,9 +409,9 @@ export default function TasksClientPage({ }: { tasks: Task[] }) {
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
                           onClick={(e) => {
                             e.stopPropagation();

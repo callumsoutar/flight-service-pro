@@ -50,6 +50,8 @@ export default function RecordPaymentModal({
   const [notes, setNotes] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [success, setSuccess] = React.useState(false);
+  const [paymentNumber, setPaymentNumber] = React.useState<string | null>(null);
   const router = useRouter();
 
   // Clean the balance due to avoid floating point precision issues
@@ -66,9 +68,20 @@ export default function RecordPaymentModal({
     return null;
   };
 
+  const resetForm = () => {
+    setAmount(roundToTwoDecimals(defaultAmount || balanceDue));
+    setMethod("");
+    setReference("");
+    setNotes("");
+    setError(null);
+    setSuccess(false);
+    setPaymentNumber(null);
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSuccess(false);
     
     const validationError = validatePaymentAmount(amount, cleanBalanceDue);
     if (validationError) {
@@ -99,15 +112,22 @@ export default function RecordPaymentModal({
         setLoading(false);
         return;
       }
-      // Reset form and close modal
-      setAmount(roundToTwoDecimals(defaultAmount || balanceDue));
-      setMethod("");
-      setReference("");
-      setNotes("");
+      
+      const result = await res.json();
+      
+      // Store payment number for success message
+      setPaymentNumber(result.payment_number);
+      
+      // Show success state
+      setSuccess(true);
       setLoading(false);
-      onOpenChange(false);
-      // Refresh the page to update payment history and invoice fields
-      router.refresh();
+      
+      // Wait a moment to show success message, then close and refresh
+      setTimeout(() => {
+        resetForm();
+        onOpenChange(false);
+        router.refresh();
+      }, 2000); // Extended to allow reading payment number
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message || "Failed to record payment.");
@@ -117,6 +137,14 @@ export default function RecordPaymentModal({
       setLoading(false);
     }
   }
+
+  // Reset form when modal is closed
+  React.useEffect(() => {
+    if (!open) {
+      setTimeout(resetForm, 200);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -132,21 +160,50 @@ export default function RecordPaymentModal({
             <DialogDescription className="text-sm mt-1">Record a payment for this invoice</DialogDescription>
           </div>
         </DialogHeader>
-        {/* Invoice summary */}
-        <div className="px-6 pt-4 pb-2 bg-muted/40 flex flex-row justify-between items-center text-sm border-b">
-          <div className="flex flex-col gap-1">
-            <div className="text-muted-foreground">Invoice:</div>
-            <div className="font-semibold">{invoiceNumber}</div>
+        
+        {success ? (
+          // Success state
+          <div className="flex flex-col items-center justify-center py-12 px-6">
+            <div className="bg-green-100 text-green-600 rounded-full p-4 mb-4">
+              <CheckCircle className="w-12 h-12" />
+            </div>
+            <h3 className="text-xl font-bold text-green-600 mb-2">Payment Recorded!</h3>
+            <p className="text-sm text-muted-foreground text-center mb-2">
+              Payment of ${formatCurrencyDisplay(amount)} has been recorded for invoice {invoiceNumber}.
+            </p>
+            {isFullyPaid && (
+              <p className="text-sm font-semibold text-green-600 mb-4">
+                Invoice is now fully paid ✓
+              </p>
+            )}
+            {/* Display payment reference number */}
+            {paymentNumber && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-white border border-green-200 rounded-lg">
+                <Receipt className="w-4 h-4 text-green-600" />
+                <div className="text-left">
+                  <div className="text-xs text-muted-foreground">Payment Reference</div>
+                  <div className="font-mono font-bold text-green-700">{paymentNumber}</div>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="flex flex-col gap-1 text-right">
-            <div className="text-muted-foreground">Total Amount:</div>
-            <div className="font-semibold">${formatCurrencyDisplay(totalAmount)}</div>
-            <div className="text-muted-foreground mt-1">Remaining Balance:</div>
-            <div className="font-semibold text-green-600">${formatCurrencyDisplay(cleanBalanceDue)}</div>
-          </div>
-        </div>
-        {/* Form fields */}
-        <form className="flex flex-col gap-3 px-6 py-5" onSubmit={handleSubmit}>
+        ) : (
+          <>
+            {/* Invoice summary */}
+            <div className="px-6 pt-4 pb-2 bg-muted/40 flex flex-row justify-between items-center text-sm border-b">
+              <div className="flex flex-col gap-1">
+                <div className="text-muted-foreground">Invoice:</div>
+                <div className="font-semibold">{invoiceNumber}</div>
+              </div>
+              <div className="flex flex-col gap-1 text-right">
+                <div className="text-muted-foreground">Total Amount:</div>
+                <div className="font-semibold">${formatCurrencyDisplay(totalAmount)}</div>
+                <div className="text-muted-foreground mt-1">Remaining Balance:</div>
+                <div className="font-semibold text-green-600">${formatCurrencyDisplay(cleanBalanceDue)}</div>
+              </div>
+            </div>
+            {/* Form fields */}
+            <form className="flex flex-col gap-3 px-6 py-5" onSubmit={handleSubmit}>
           <div>
             <label className="block text-sm font-medium mb-1">Payment Amount <span className="text-destructive">*</span></label>
             <div className="relative flex items-center">
@@ -195,29 +252,31 @@ export default function RecordPaymentModal({
               onChange={e => setNotes(e.target.value)}
             />
           </div>
-          {error && <div className="text-destructive text-sm mb-2">{error}</div>}
-          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-4 mt-4 px-0 pb-0 pt-0">
-            <DialogClose asChild>
-              <Button variant="outline" type="button" className="flex-1 cursor-pointer" disabled={loading}>Cancel</Button>
-            </DialogClose>
-            <Button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold cursor-pointer" disabled={loading}>
-              {loading ? 'Recording...' : 'Record Payment'}
-            </Button>
-          </DialogFooter>
-        </form>
-        {/* Payment summary */}
-        <div className="px-6 py-4 flex items-center gap-4 border-t bg-muted/40">
-          <div className="flex-1">
-            <div className="text-sm font-medium">Payment Amount:</div>
-            <div className={cn("text-2xl font-bold", isFullyPaid ? "text-green-600" : "text-foreground")}>${formatCurrencyDisplay(amount)}</div>
-          </div>
-          {isFullyPaid && (
-            <div className="flex items-center gap-2 text-green-600 text-sm">
-              <CheckCircle className="w-5 h-5" />
-              This will mark the invoice as fully paid
+              {error && <div className="text-destructive text-sm mb-2">{error}</div>}
+              <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-4 mt-4 px-0 pb-0 pt-0">
+                <DialogClose asChild>
+                  <Button variant="outline" type="button" className="flex-1 cursor-pointer" disabled={loading}>Cancel</Button>
+                </DialogClose>
+                <Button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold cursor-pointer" disabled={loading}>
+                  {loading ? 'Recording...' : 'Record Payment'}
+                </Button>
+              </DialogFooter>
+            </form>
+            {/* Payment summary */}
+            <div className="px-6 py-4 flex items-center gap-4 border-t bg-muted/40">
+              <div className="flex-1">
+                <div className="text-sm font-medium">Payment Amount:</div>
+                <div className={cn("text-2xl font-bold", isFullyPaid ? "text-green-600" : "text-foreground")}>${formatCurrencyDisplay(amount)}</div>
+              </div>
+              {isFullyPaid && (
+                <div className="flex items-center gap-2 text-green-600 text-sm">
+                  <CheckCircle className="w-5 h-5" />
+                  This will mark the invoice as fully paid
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

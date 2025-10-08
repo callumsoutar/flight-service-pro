@@ -108,7 +108,7 @@ export default function AircraftOverviewForm({ aircraft, onSave }: { aircraft: A
       try {
         const types = await fetchAircraftTypes();
         setAircraftTypes(types);
-      } catch (error) {
+      } catch {
         toast.error("Failed to load aircraft types");
       }
     };

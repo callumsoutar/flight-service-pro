@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/SupabaseServerClient';
+import { sendBookingCancellation } from '@/lib/email/booking-emails';
 import { z } from 'zod';
 
 const cancelBookingSchema = z.object({
@@ -106,7 +107,27 @@ export async function POST(
       return NextResponse.json({ error: 'Booking cancelled but failed to fetch updated data' }, { status: 500 });
     }
 
-    return NextResponse.json({ 
+    // Send cancellation email
+    if (updatedBooking && updatedBooking.user && updatedBooking.user.email) {
+      const cancelledByName = updatedBooking.cancelled_by_user
+        ? `${updatedBooking.cancelled_by_user.first_name} ${updatedBooking.cancelled_by_user.last_name}`.trim()
+        : 'System';
+
+      const categoryName = updatedBooking.cancellation_category?.name;
+
+      sendBookingCancellation({
+        booking: updatedBooking,
+        member: updatedBooking.user,
+        cancellationReason: updatedBooking.cancellation_reason || validatedData.reason,
+        cancellationCategory: categoryName,
+        cancelledBy: cancelledByName,
+      }).catch((emailError) => {
+        console.error('Failed to send cancellation email:', emailError);
+        // Don't fail the cancellation if email fails
+      });
+    }
+
+    return NextResponse.json({
       message: 'Booking cancelled successfully',
       booking: updatedBooking
     });

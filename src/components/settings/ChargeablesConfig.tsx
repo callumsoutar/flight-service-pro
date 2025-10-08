@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,34 +9,33 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Search, Plus, AlertCircle, DollarSign, Trash2 } from "lucide-react";
-import { Chargeable, ChargeableType, CHARGEABLE_TYPE_LABELS, ChargeableWithAircraftRates } from "@/types/chargeables";
+import { Chargeable, ChargeableType, ChargeableWithAircraftRates } from "@/types/chargeables";
 
 interface ChargeableFormData {
   name: string;
   description: string;
-  type: ChargeableType | "";
+  chargeable_type_id: string;
   rate: string;
   is_taxable: boolean;
   is_active: boolean;
 }
 
-type FilterType = "airways_fees" | "other";
-
 export default function ChargeablesConfig() {
   const [chargeables, setChargeables] = useState<ChargeableWithAircraftRates[]>([]);
   const [selectedChargeable, setSelectedChargeable] = useState<ChargeableWithAircraftRates | null>(null);
+  const [chargeableTypes, setChargeableTypes] = useState<ChargeableType[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [taxRate, setTaxRate] = useState(0.15); // Default 15%
-  const [filterType, setFilterType] = useState<FilterType | "all">("all");
+  const [filterTypeId, setFilterTypeId] = useState<string>("all");
 
   const [editFormData, setEditFormData] = useState<ChargeableFormData>({
     name: "",
     description: "",
-    type: "",
+    chargeable_type_id: "",
     rate: "",
     is_taxable: true,
     is_active: true,
@@ -45,7 +44,7 @@ export default function ChargeablesConfig() {
   const [addFormData, setAddFormData] = useState<ChargeableFormData>({
     name: "",
     description: "",
-    type: "",
+    chargeable_type_id: "",
     rate: "",
     is_taxable: true,
     is_active: true,
@@ -61,13 +60,30 @@ export default function ChargeablesConfig() {
       const data = await response.json();
       // Exclude landing fees - they have their own tab now
       const nonLandingFees = (data.chargeables || []).filter(
-        (c: ChargeableWithAircraftRates) => c.type !== 'landing_fee'
+        (c: ChargeableWithAircraftRates) => c.chargeable_types?.code !== 'landing_fee'
       );
       setChargeables(nonLandingFees);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchChargeableTypes = async () => {
+    try {
+      const response = await fetch("/api/chargeable-types?active_only=true");
+      if (!response.ok) {
+        throw new Error("Failed to fetch chargeable types");
+      }
+      const data = await response.json();
+      // Exclude landing_fee type - it has its own tab
+      const types = (data.chargeable_types || []).filter(
+        (t: ChargeableType) => t.code !== 'landing_fee'
+      );
+      setChargeableTypes(types);
+    } catch (err) {
+      console.error("Failed to fetch chargeable types:", err);
     }
   };
 
@@ -89,27 +105,40 @@ export default function ChargeablesConfig() {
 
   useEffect(() => {
     fetchChargeables();
+    fetchChargeableTypes();
     fetchTaxRate();
   }, []);
 
+  const calculateTaxInclusiveRate = useCallback((rate: number, isTaxable: boolean = true) => {
+    if (!isTaxable) return rate;
+    return rate * (1 + taxRate);
+  }, [taxRate]);
+
+  const calculateTaxExclusiveRate = useCallback((inclusiveRate: number, isTaxable: boolean = true) => {
+    if (!isTaxable) return inclusiveRate;
+    return inclusiveRate / (1 + taxRate);
+  }, [taxRate]);
+
   useEffect(() => {
     if (selectedChargeable) {
+      // Convert stored exclusive rate to inclusive for display
+      const inclusiveRate = calculateTaxInclusiveRate(selectedChargeable.rate, selectedChargeable.is_taxable);
       setEditFormData({
         name: selectedChargeable.name,
         description: selectedChargeable.description || "",
-        type: selectedChargeable.type,
-        rate: selectedChargeable.rate.toString(),
+        chargeable_type_id: selectedChargeable.chargeable_type_id,
+        rate: inclusiveRate.toFixed(2),
         is_taxable: selectedChargeable.is_taxable,
         is_active: selectedChargeable.is_active ?? true,
       });
     }
-  }, [selectedChargeable]);
+  }, [selectedChargeable, taxRate, calculateTaxInclusiveRate]);
 
   const resetAddForm = () => {
     setAddFormData({
       name: "",
       description: "",
-      type: "",
+      chargeable_type_id: "",
       rate: "",
       is_taxable: true,
       is_active: true,
@@ -117,13 +146,17 @@ export default function ChargeablesConfig() {
   };
 
   const handleAdd = async () => {
-    if (!addFormData.name.trim() || !addFormData.type || !addFormData.rate) {
+    if (!addFormData.name.trim() || !addFormData.chargeable_type_id || !addFormData.rate) {
       setError("Name, type, and rate are required");
       return;
     }
 
     try {
       setSaving(true);
+      // Convert inclusive input to exclusive for storage
+      const inclusiveRate = parseFloat(addFormData.rate);
+      const exclusiveRate = calculateTaxExclusiveRate(inclusiveRate, addFormData.is_taxable);
+
       const response = await fetch("/api/chargeables", {
         method: "POST",
         headers: {
@@ -131,7 +164,7 @@ export default function ChargeablesConfig() {
         },
         body: JSON.stringify({
           ...addFormData,
-          rate: parseFloat(addFormData.rate),
+          rate: exclusiveRate,
         }),
       });
 
@@ -154,13 +187,17 @@ export default function ChargeablesConfig() {
   const handleEdit = async () => {
     if (!selectedChargeable) return;
 
-    if (!editFormData.name.trim() || !editFormData.type || !editFormData.rate) {
+    if (!editFormData.name.trim() || !editFormData.chargeable_type_id || !editFormData.rate) {
       setError("Name, type, and rate are required");
       return;
     }
 
     try {
       setSaving(true);
+      // Convert inclusive input to exclusive for storage
+      const inclusiveRate = parseFloat(editFormData.rate);
+      const exclusiveRate = calculateTaxExclusiveRate(inclusiveRate, editFormData.is_taxable);
+
       const response = await fetch("/api/chargeables", {
         method: "PATCH",
         headers: {
@@ -169,7 +206,7 @@ export default function ChargeablesConfig() {
         body: JSON.stringify({
           id: selectedChargeable.id,
           ...editFormData,
-          rate: parseFloat(editFormData.rate),
+          rate: exclusiveRate,
         }),
       });
 
@@ -219,21 +256,14 @@ export default function ChargeablesConfig() {
   };
 
   const filteredChargeables = chargeables.filter(chargeable => {
+    const typeName = chargeable.chargeable_types?.name || '';
     const matchesSearch = chargeable.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       chargeable.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      CHARGEABLE_TYPE_LABELS[chargeable.type].toLowerCase().includes(searchTerm.toLowerCase());
+      typeName.toLowerCase().includes(searchTerm.toLowerCase());
 
-    if (filterType === "all") return matchesSearch;
+    if (filterTypeId === "all") return matchesSearch;
 
-    if (filterType === "airways_fees") {
-      return matchesSearch && chargeable.type === "airways_fees";
-    }
-
-    if (filterType === "other") {
-      return matchesSearch && chargeable.type !== "airways_fees";
-    }
-
-    return matchesSearch;
+    return matchesSearch && chargeable.chargeable_type_id === filterTypeId;
   });
 
   const formatCurrency = (amount: number) => {
@@ -242,11 +272,6 @@ export default function ChargeablesConfig() {
       currency: 'NZD',
       minimumFractionDigits: 2,
     }).format(amount);
-  };
-
-  const calculateTaxInclusiveRate = (rate: number, isTaxable: boolean = true) => {
-    if (!isTaxable) return rate;
-    return rate * (1 + taxRate);
   };
 
   if (loading) {
@@ -295,23 +320,23 @@ export default function ChargeablesConfig() {
                 <div>
                   <Label htmlFor="add-type">Type</Label>
                   <Select
-                    value={addFormData.type}
-                    onValueChange={(value) => setAddFormData({ ...addFormData, type: value as ChargeableType })}
+                    value={addFormData.chargeable_type_id}
+                    onValueChange={(value) => setAddFormData({ ...addFormData, chargeable_type_id: value })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.entries(CHARGEABLE_TYPE_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
+                      {chargeableTypes.map((type) => (
+                        <SelectItem key={type.id} value={type.id}>
+                          {type.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="add-rate">Rate (NZD, Tax Exclusive)</Label>
+                  <Label htmlFor="add-rate">Rate (NZD, Tax Inclusive)</Label>
                   <Input
                     id="add-rate"
                     type="number"
@@ -321,6 +346,14 @@ export default function ChargeablesConfig() {
                     onChange={(e) => setAddFormData({ ...addFormData, rate: e.target.value })}
                     placeholder="0.00"
                   />
+                  {addFormData.rate && !isNaN(parseFloat(addFormData.rate)) && (
+                    <div className="mt-2 text-xs text-gray-500">
+                      {addFormData.is_taxable
+                        ? `Tax Exclusive: ${formatCurrency(calculateTaxExclusiveRate(parseFloat(addFormData.rate), true))}`
+                        : `Tax Exempt (no conversion needed)`
+                      }
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="add-description">Description (Optional)</Label>
@@ -354,7 +387,7 @@ export default function ChargeablesConfig() {
                   </Button>
                   <Button
                     onClick={handleAdd}
-                    disabled={saving || !addFormData.name.trim() || !addFormData.type || !addFormData.rate}
+                    disabled={saving || !addFormData.name.trim() || !addFormData.chargeable_type_id || !addFormData.rate}
                   >
                     {saving ? "Creating..." : "Create"}
                   </Button>
@@ -371,28 +404,24 @@ export default function ChargeablesConfig() {
           </div>
         )}
 
-        <div className="flex items-center gap-2 mb-4">
-          <Button
-            variant={filterType === "all" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilterType("all")}
+        <div className="mb-4">
+          <Label htmlFor="filter-type" className="text-sm mb-2 block">Filter by Type</Label>
+          <Select
+            value={filterTypeId}
+            onValueChange={(value) => setFilterTypeId(value)}
           >
-            All
-          </Button>
-          <Button
-            variant={filterType === "airways_fees" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilterType("airways_fees")}
-          >
-            Airways Fees
-          </Button>
-          <Button
-            variant={filterType === "other" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilterType("other")}
-          >
-            Other
-          </Button>
+            <SelectTrigger id="filter-type" className="w-full">
+              <SelectValue placeholder="All Types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              {chargeableTypes.map((type) => (
+                <SelectItem key={type.id} value={type.id}>
+                  {type.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex-1 overflow-y-auto border rounded-lg">
@@ -414,7 +443,7 @@ export default function ChargeablesConfig() {
                     <div className="flex items-center gap-2">
                       <h4 className="font-medium text-gray-900">{chargeable.name}</h4>
                       <Badge variant="secondary" className="text-xs">
-                        {CHARGEABLE_TYPE_LABELS[chargeable.type]}
+                        {chargeable.chargeable_types?.name || 'Unknown'}
                       </Badge>
                       {chargeable.is_taxable ? (
                         <Badge variant="default" className="text-xs bg-green-100 text-green-800">
@@ -470,16 +499,16 @@ export default function ChargeablesConfig() {
               <div>
                 <Label htmlFor="edit-type">Type</Label>
                 <Select
-                  value={editFormData.type}
-                  onValueChange={(value) => setEditFormData({ ...editFormData, type: value as ChargeableType })}
+                  value={editFormData.chargeable_type_id}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, chargeable_type_id: value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(CHARGEABLE_TYPE_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
+                    {chargeableTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -487,7 +516,7 @@ export default function ChargeablesConfig() {
               </div>
 
               <div>
-                <Label htmlFor="edit-rate">Rate (NZD, Tax Exclusive)</Label>
+                <Label htmlFor="edit-rate">Rate (NZD, Tax Inclusive)</Label>
                 <Input
                   id="edit-rate"
                   type="number"
@@ -498,14 +527,11 @@ export default function ChargeablesConfig() {
                   placeholder="0.00"
                 />
                 {editFormData.rate && !isNaN(parseFloat(editFormData.rate)) && (
-                  <div className="mt-2 text-sm text-gray-600">
-                    <div>Tax Exclusive: {formatCurrency(parseFloat(editFormData.rate))}</div>
-                    <div>
-                      {editFormData.is_taxable
-                        ? `Tax Inclusive: ${formatCurrency(calculateTaxInclusiveRate(parseFloat(editFormData.rate), true))}`
-                        : `Tax Exempt: ${formatCurrency(calculateTaxInclusiveRate(parseFloat(editFormData.rate), false))}`
-                      }
-                    </div>
+                  <div className="mt-2 text-xs text-gray-500">
+                    {editFormData.is_taxable
+                      ? `Tax Exclusive: ${formatCurrency(calculateTaxExclusiveRate(parseFloat(editFormData.rate), true))}`
+                      : `Tax Exempt (no conversion needed)`
+                    }
                   </div>
                 )}
               </div>
@@ -543,7 +569,7 @@ export default function ChargeablesConfig() {
             <div className="mt-4 pt-4 border-t">
               <Button
                 onClick={handleEdit}
-                disabled={saving || !editFormData.name.trim() || !editFormData.type || !editFormData.rate}
+                disabled={saving || !editFormData.name.trim() || !editFormData.chargeable_type_id || !editFormData.rate}
                 className="w-full"
               >
                 {saving ? "Saving..." : "Save Changes"}

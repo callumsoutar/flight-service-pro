@@ -21,9 +21,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
   }
 
-  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+  if (!userRole || !['admin', 'owner', 'instructor'].includes(userRole)) {
     return NextResponse.json({ 
-      error: 'Forbidden: Invoice access requires admin or owner role' 
+      error: 'Forbidden: Invoice access requires instructor, admin, or owner role' 
     }, { status: 403 });
   }
   
@@ -136,28 +136,33 @@ export async function POST(req: NextRequest) {
     
     // Create invoice items if provided
     if (items.length > 0) {
-      const invoiceItems = items.map((item: { chargeable_id?: string; description: string; quantity: number; unit_price: number; tax_rate?: number | null; notes?: string }) => {
-        // Use InvoiceService for currency-safe calculations
-        const calculatedAmounts = InvoiceService.calculateItemAmounts({
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          tax_rate: item.tax_rate ?? taxRate
-        });
+      const invoiceItems = items.map((item: { chargeable_id?: string; description: string; quantity: number; unit_price: number; tax_rate?: number | null; notes?: string }, index: number) => {
+        try {
+          // Use InvoiceService for currency-safe calculations
+          const calculatedAmounts = InvoiceService.calculateItemAmounts({
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            tax_rate: item.tax_rate ?? taxRate
+          });
 
-        return {
-          invoice_id: result.invoice_id,
-          chargeable_id: item.chargeable_id,
-          description: item.description,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          tax_rate: item.tax_rate ?? taxRate,
-          // Application-calculated values using currency-safe arithmetic
-          amount: calculatedAmounts.amount,
-          tax_amount: calculatedAmounts.tax_amount,
-          line_total: calculatedAmounts.line_total,
-          rate_inclusive: calculatedAmounts.rate_inclusive,
-          notes: item.notes || null
-        };
+          return {
+            invoice_id: result.invoice_id,
+            chargeable_id: item.chargeable_id,
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            tax_rate: item.tax_rate ?? taxRate,
+            // Application-calculated values using currency-safe arithmetic
+            amount: calculatedAmounts.amount,
+            tax_amount: calculatedAmounts.tax_amount,
+            line_total: calculatedAmounts.line_total,
+            rate_inclusive: calculatedAmounts.rate_inclusive,
+            notes: item.notes || null
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown calculation error';
+          throw new Error(`Failed to calculate amounts for item ${index + 1} (${item.description}): ${errorMessage}`);
+        }
       });
 
       const { error: itemsError } = await supabase
@@ -224,6 +229,34 @@ export async function PATCH(req: NextRequest) {
   }
   
   try {
+    // Get current invoice data to check status
+    const { data: currentInvoice, error: statusFetchError } = await supabase
+      .from("invoices")
+      .select("total_amount, total_paid, due_date, paid_date, status, invoice_number")
+      .eq("id", id)
+      .single();
+      
+    if (statusFetchError) {
+      return NextResponse.json({ error: statusFetchError.message }, { status: 500 });
+    }
+    
+    // Paid invoices are immutable - only allow payment workflow fields to be updated
+    // (total_paid, balance_due, paid_date, status, updated_at)
+    if (currentInvoice.status === 'paid') {
+      const paymentWorkflowFields = ['total_paid', 'balance_due', 'paid_date', 'status', 'updated_at'];
+      const nonPaymentFields = Object.keys(updateFields).filter(f => !paymentWorkflowFields.includes(f));
+      
+      if (nonPaymentFields.length > 0) {
+        return NextResponse.json({ 
+          error: `Cannot modify ${nonPaymentFields.join(', ')} on paid invoice ${currentInvoice.invoice_number}. Paid invoices are immutable for compliance.`,
+          invoice_status: currentInvoice.status,
+          invoice_number: currentInvoice.invoice_number,
+          disallowed_fields: nonPaymentFields,
+          hint: 'Create a credit note to adjust a paid invoice.'
+        }, { status: 403 });
+      }
+    }
+    
     // Add updated timestamp
     const fieldsToUpdate = {
       ...updateFields,
@@ -232,17 +265,6 @@ export async function PATCH(req: NextRequest) {
     
     // Handle status changes that might affect calculations
     if (updateFields.status || updateFields.total_paid !== undefined) {
-      // Get current invoice data
-      const { data: currentInvoice, error: fetchError } = await supabase
-        .from("invoices")
-        .select("total_amount, total_paid, due_date, paid_date, status")
-        .eq("id", id)
-        .single();
-        
-      if (fetchError) {
-        return NextResponse.json({ error: fetchError.message }, { status: 500 });
-      }
-      
       // Calculate new status if needed
       const totalAmount = fieldsToUpdate.total_amount !== undefined ? fieldsToUpdate.total_amount : currentInvoice.total_amount;
       const totalPaid = fieldsToUpdate.total_paid !== undefined ? fieldsToUpdate.total_paid : currentInvoice.total_paid;
@@ -278,14 +300,14 @@ export async function PATCH(req: NextRequest) {
     }
     
     // Fetch and return the updated invoice
-    const { data: updatedInvoice, error: fetchError } = await supabase
+    const { data: updatedInvoice, error: updatedFetchError } = await supabase
       .from("invoices")
       .select("*")
       .eq("id", id)
       .single();
       
-    if (fetchError) {
-      return NextResponse.json({ error: fetchError.message }, { status: 500 });
+    if (updatedFetchError) {
+      return NextResponse.json({ error: updatedFetchError.message }, { status: 500 });
     }
     
     return NextResponse.json({ invoice: updatedInvoice });

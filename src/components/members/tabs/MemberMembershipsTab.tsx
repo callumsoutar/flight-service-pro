@@ -72,13 +72,20 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
 
   const handleRenewMembership = async (renewalData: {
     membership_type_id?: string;
-    auto_renew: boolean;
+    auto_renew?: boolean;
     notes?: string;
     create_invoice: boolean;
   }) => {
     if (!membershipSummary?.current_membership) return;
     
     setIsRenewing(true);
+    
+    if (!membershipSummary.current_membership?.id) {
+      setError("No active membership to renew");
+      setIsRenewing(false);
+      return;
+    }
+    
     try {
       const response = await fetch("/api/memberships", {
         method: "POST",
@@ -237,9 +244,15 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
                     {isRenewing ? 'Processing...' :
                      membershipSummary.status === 'unpaid' ? 'Pay / Renew Membership' : 'Renew Membership'}
                   </Button>
-                  <Button variant="outline" onClick={() => {}} size="sm">
-                    View Invoice
-                  </Button>
+                  {membershipSummary.current_membership?.invoice_id && (
+                    <Button
+                      variant="outline"
+                      onClick={() => window.open(`/dashboard/invoices/edit/${membershipSummary.current_membership?.invoice_id}`, '_blank')}
+                      size="sm"
+                    >
+                      View Invoice
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -303,8 +316,8 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
                               {membership.membership_types?.price === 0 ? 'Free' : `$${membership.membership_types?.price}`}
                             </td>
                             <td className="py-3 pr-4">
-                              <Badge variant={membership.fee_paid ? "default" : "secondary"} className="text-xs">
-                                {membership.fee_paid ? "Paid" : "Unpaid"}
+                              <Badge variant={membership.invoices?.status === 'paid' ? "default" : "secondary"} className="text-xs">
+                                {membership.invoices?.status === 'paid' ? "Paid" : "Unpaid"}
                               </Badge>
                             </td>
                             <td className="py-3 text-sm text-gray-600 max-w-xs">

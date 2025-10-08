@@ -41,11 +41,74 @@ export async function POST(req: NextRequest) {
     unit_price,
     tax_rate,
   } = body;
-  if (!invoice_id || !description || !quantity || !unit_price) {
+  
+  // Validate required fields
+  if (!invoice_id || !description || quantity == null || unit_price == null) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
   
+  // Validate quantity
+  if (typeof quantity !== 'number' || isNaN(quantity) || quantity <= 0) {
+    return NextResponse.json({ error: 'Quantity must be a positive number' }, { status: 400 });
+  }
+  
+  // Validate unit_price
+  if (typeof unit_price !== 'number' || isNaN(unit_price) || unit_price < 0) {
+    return NextResponse.json({ error: 'Unit price must be a non-negative number' }, { status: 400 });
+  }
+  
+  // Validate tax_rate if provided
+  if (tax_rate != null && (typeof tax_rate !== 'number' || isNaN(tax_rate) || tax_rate < 0 || tax_rate > 1)) {
+    return NextResponse.json({ error: 'Tax rate must be between 0 and 1 (e.g., 0.15 for 15%)' }, { status: 400 });
+  }
+  
   try {
+    // Get user for auth check
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    // Check user role for admin override capability (using check_user_role_simple RPC)
+    const { data: isAdmin } = await supabase
+      .rpc('check_user_role_simple', {
+        user_id: user?.id,
+        allowed_roles: ['admin', 'owner']
+      });
+    
+    // Check invoice status before allowing item addition
+    const { data: invoice, error: invoiceError } = await supabase
+      .from('invoices')
+      .select('status, invoice_number')
+      .eq('id', invoice_id)
+      .single();
+    
+    if (invoiceError) {
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+    }
+    
+    // Paid invoices are immutable - cannot add items, even for admins
+    if (invoice.status === 'paid') {
+      return NextResponse.json({ 
+        error: `Cannot add items to paid invoice ${invoice.invoice_number}. Paid invoices are immutable for compliance.`,
+        invoice_status: invoice.status,
+        invoice_number: invoice.invoice_number,
+        hint: 'Create a credit note to adjust a paid invoice.'
+      }, { status: 403 });
+    }
+    
+    // Only allow adding items to draft invoices (unless admin/owner)
+    if (invoice.status !== 'draft' && !isAdmin) {
+      return NextResponse.json({ 
+        error: `Cannot add items to approved invoice ${invoice.invoice_number}. Create a credit note instead.`,
+        invoice_status: invoice.status,
+        invoice_number: invoice.invoice_number,
+        hint: 'Only draft invoices can have items added. Contact an admin if you need to modify this invoice.'
+      }, { status: 400 });
+    }
+    
+    // Log admin override
+    if (isAdmin && invoice.status !== 'draft') {
+      console.log(`Admin override: User ${user?.id} adding item to ${invoice.status} invoice ${invoice.invoice_number}`);
+    }
+    
     // Get the tax rate for this invoice item
     let finalTaxRate = tax_rate;
     if (!finalTaxRate) {
@@ -137,16 +200,71 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Missing invoice_item id' }, { status: 400 });
   }
   
+  // Validate numeric fields if they're being updated
+  if (fields.quantity != null && (typeof fields.quantity !== 'number' || isNaN(fields.quantity) || fields.quantity <= 0)) {
+    return NextResponse.json({ error: 'Quantity must be a positive number' }, { status: 400 });
+  }
+  
+  if (fields.unit_price != null && (typeof fields.unit_price !== 'number' || isNaN(fields.unit_price) || fields.unit_price < 0)) {
+    return NextResponse.json({ error: 'Unit price must be a non-negative number' }, { status: 400 });
+  }
+  
+  if (fields.tax_rate != null && (typeof fields.tax_rate !== 'number' || isNaN(fields.tax_rate) || fields.tax_rate < 0 || fields.tax_rate > 1)) {
+    return NextResponse.json({ error: 'Tax rate must be between 0 and 1 (e.g., 0.15 for 15%)' }, { status: 400 });
+  }
+  
   try {
-    // Get current item data
+    // Get user for auth and role check
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    // Check user role for admin override capability (using check_user_role_simple RPC)
+    const { data: isAdmin } = await supabase
+      .rpc('check_user_role_simple', {
+        user_id: user?.id,
+        allowed_roles: ['admin', 'owner']
+      });
+    
+    // Get current item data and invoice status
     const { data: currentItem, error: fetchError } = await supabase
       .from('invoice_items')
-      .select('invoice_id, quantity, unit_price, tax_rate')
+      .select('invoice_id, quantity, unit_price, tax_rate, invoices!inner(status, invoice_number)')
       .eq('id', id)
       .single();
       
     if (fetchError) {
       return NextResponse.json({ error: fetchError.message }, { status: 500 });
+    }
+    
+    if (!currentItem?.invoices) {
+      return NextResponse.json({ error: 'Invoice not found for this item' }, { status: 404 });
+    }
+    
+    // Extract invoice data (Supabase returns as object for many-to-one)
+    const invoice = currentItem.invoices as unknown as { status: string; invoice_number: string };
+    
+    // Paid invoices are immutable - cannot modify items, even for admins
+    if (invoice.status === 'paid') {
+      return NextResponse.json({ 
+        error: `Cannot modify items on paid invoice ${invoice.invoice_number}. Paid invoices are immutable for compliance.`,
+        invoice_status: invoice.status,
+        invoice_number: invoice.invoice_number,
+        hint: 'Create a credit note to adjust a paid invoice.'
+      }, { status: 403 });
+    }
+    
+    // Only allow modifying items on draft invoices (unless admin/owner)
+    if (invoice.status !== 'draft' && !isAdmin) {
+      return NextResponse.json({ 
+        error: `Cannot modify items on approved invoice ${invoice.invoice_number}. Create a credit note instead.`,
+        invoice_status: invoice.status,
+        invoice_number: invoice.invoice_number,
+        hint: 'Only items on draft invoices can be modified. Contact an admin if you need to modify this invoice.'
+      }, { status: 400 });
+    }
+    
+    // Log admin override
+    if (isAdmin && invoice.status !== 'draft') {
+      console.log(`Admin override: User ${user?.id} modifying item on ${invoice.status} invoice ${invoice.invoice_number}`);
     }
     
     // Only allow updating certain fields
@@ -233,15 +351,29 @@ export async function DELETE(req: NextRequest) {
   const supabase = await createClient();
   const body = await req.json();
   const { id } = body;
+  
   if (!id) {
     return NextResponse.json({ error: 'Missing invoice_item id' }, { status: 400 });
   }
   
   try {
-    // Get invoice_id before deleting
+    // Get user for auth and soft delete
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    
+    // Check user role for admin override capability (using check_user_role_simple RPC)
+    const { data: isAdmin } = await supabase
+      .rpc('check_user_role_simple', {
+        user_id: user.id,
+        allowed_roles: ['admin', 'owner']
+      });
+    
+    // Get item and invoice status before deleting
     const { data: item, error: fetchError } = await supabase
       .from('invoice_items')
-      .select('invoice_id')
+      .select('invoice_id, invoices!inner(status, invoice_number)')
       .eq('id', id)
       .single();
       
@@ -249,10 +381,45 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: fetchError.message }, { status: 500 });
     }
     
-    // Delete the item
+    if (!item?.invoices) {
+      return NextResponse.json({ error: 'Invoice not found for this item' }, { status: 404 });
+    }
+    
+    // Extract invoice data (Supabase returns as object for many-to-one)
+    const invoice = item.invoices as unknown as { status: string; invoice_number: string };
+    
+    // Paid invoices are immutable - cannot delete items, even for admins
+    if (invoice.status === 'paid') {
+      return NextResponse.json({ 
+        error: `Cannot delete items from paid invoice ${invoice.invoice_number}. Paid invoices are immutable for compliance.`,
+        invoice_status: invoice.status,
+        invoice_number: invoice.invoice_number,
+        hint: 'Create a credit note to adjust a paid invoice.'
+      }, { status: 403 });
+    }
+    
+    // Prevent deletion of items from approved invoices (unless admin/owner)
+    if (invoice.status !== 'draft' && !isAdmin) {
+      return NextResponse.json({ 
+        error: `Cannot delete items from approved invoice ${invoice.invoice_number}. Create a credit note instead.`,
+        invoice_status: invoice.status,
+        invoice_number: invoice.invoice_number,
+        hint: 'Only items on draft invoices can be deleted. Contact an admin if you need to modify this invoice.'
+      }, { status: 400 });
+    }
+    
+    // Log admin override
+    if (isAdmin && invoice.status !== 'draft') {
+      console.log(`Admin override: User ${user.id} deleting item from ${invoice.status} invoice ${invoice.invoice_number}`);
+    }
+    
+    // Soft delete the item
     const { error } = await supabase
       .from('invoice_items')
-      .delete()
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: user.id
+      })
       .eq('id', id);
       
     if (error) {
@@ -262,9 +429,15 @@ export async function DELETE(req: NextRequest) {
     // Update parent invoice totals and sync transaction amounts
     await InvoiceService.updateInvoiceTotalsWithTransactionSync(item.invoice_id);
     
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ 
+      success: true,
+      soft_deleted: true,
+      message: 'Invoice item has been deleted successfully'
+    });
   } catch (error) {
     console.error('Invoice item deletion error:', error);
-    return NextResponse.json({ error: 'Failed to delete invoice item' }, { status: 500 });
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : 'Failed to delete invoice item'
+    }, { status: 500 });
   }
 } 

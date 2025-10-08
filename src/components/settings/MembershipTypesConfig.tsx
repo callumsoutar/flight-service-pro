@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, AlertCircle, Users, Trash2, X } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, Plus, AlertCircle, Users, Trash2, X, Link2, ChevronDown, ChevronUp } from "lucide-react";
 import { MembershipType } from "@/types/memberships";
 
 interface MembershipTypeFormData {
@@ -18,6 +19,7 @@ interface MembershipTypeFormData {
   duration_months: string;
   benefits: string[];
   is_active: boolean;
+  chargeable_id: string | null;
 }
 
 export default function MembershipTypesConfig() {
@@ -29,6 +31,9 @@ export default function MembershipTypesConfig() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newBenefit, setNewBenefit] = useState("");
+  const [membershipChargeables, setMembershipChargeables] = useState<{id: string; name: string; rate: number; is_taxable: boolean}[]>([]);
+  const [isBenefitsExpanded, setIsBenefitsExpanded] = useState(false);
+  const [taxRate, setTaxRate] = useState(0.15);
 
   const [editFormData, setEditFormData] = useState<MembershipTypeFormData>({
     name: "",
@@ -38,6 +43,7 @@ export default function MembershipTypesConfig() {
     duration_months: "",
     benefits: [],
     is_active: true,
+    chargeable_id: null,
   });
 
   const [addFormData, setAddFormData] = useState<MembershipTypeFormData>({
@@ -48,6 +54,7 @@ export default function MembershipTypesConfig() {
     duration_months: "12",
     benefits: [],
     is_active: true,
+    chargeable_id: null,
   });
 
   const fetchMembershipTypes = async () => {
@@ -66,23 +73,72 @@ export default function MembershipTypesConfig() {
     }
   };
 
+  const fetchMembershipChargeables = async () => {
+    try {
+      const response = await fetch("/api/chargeables?type=membership_fee");
+      if (response.ok) {
+        const data = await response.json();
+        setMembershipChargeables(data.chargeables || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch membership chargeables:", err);
+    }
+  };
+
+  const fetchTaxRate = async () => {
+    try {
+      const response = await fetch("/api/tax_rates?is_default=true");
+      if (!response.ok) {
+        throw new Error("Failed to fetch tax rate");
+      }
+      const data = await response.json();
+      const defaultRate = data.tax_rates?.[0]?.rate;
+      setTaxRate(defaultRate || 0.15);
+    } catch {
+      console.warn("Could not fetch tax rate, using default 15%");
+      setTaxRate(0.15);
+    }
+  };
+
   useEffect(() => {
     fetchMembershipTypes();
+    fetchMembershipChargeables();
+    fetchTaxRate();
   }, []);
+
+  const getChargeableTaxStatus = useCallback((chargeableId: string | null) => {
+    if (!chargeableId) return false;
+    const chargeable = membershipChargeables.find(c => c.id === chargeableId);
+    return chargeable?.is_taxable || false;
+  }, [membershipChargeables]);
+
+  const calculateTaxInclusiveRate = useCallback((rate: number, isTaxable: boolean = true) => {
+    if (!isTaxable) return rate;
+    return rate * (1 + taxRate);
+  }, [taxRate]);
+
+  const calculateTaxExclusiveRate = useCallback((inclusiveRate: number, isTaxable: boolean = true) => {
+    if (!isTaxable) return inclusiveRate;
+    return inclusiveRate / (1 + taxRate);
+  }, [taxRate]);
 
   useEffect(() => {
     if (selectedType) {
+      // Convert stored exclusive price to inclusive for display
+      const isTaxable = getChargeableTaxStatus(selectedType.chargeable_id);
+      const inclusivePrice = calculateTaxInclusiveRate(selectedType.price, isTaxable);
       setEditFormData({
         name: selectedType.name,
         code: selectedType.code,
         description: selectedType.description || "",
-        price: selectedType.price.toString(),
+        price: inclusivePrice.toFixed(2),
         duration_months: selectedType.duration_months.toString(),
         benefits: [...selectedType.benefits],
         is_active: selectedType.is_active ?? true,
+        chargeable_id: selectedType.chargeable_id || null,
       });
     }
-  }, [selectedType]);
+  }, [selectedType, membershipChargeables, taxRate, getChargeableTaxStatus, calculateTaxInclusiveRate]);
 
   const resetAddForm = () => {
     setAddFormData({
@@ -93,6 +149,7 @@ export default function MembershipTypesConfig() {
       duration_months: "12",
       benefits: [],
       is_active: true,
+      chargeable_id: null,
     });
   };
 
@@ -112,6 +169,11 @@ export default function MembershipTypesConfig() {
 
     try {
       setSaving(true);
+      // Convert inclusive input to exclusive for storage
+      const isTaxable = getChargeableTaxStatus(addFormData.chargeable_id);
+      const inclusivePrice = parseFloat(addFormData.price);
+      const exclusivePrice = calculateTaxExclusiveRate(inclusivePrice, isTaxable);
+
       const response = await fetch("/api/membership_types", {
         method: "POST",
         headers: {
@@ -119,8 +181,9 @@ export default function MembershipTypesConfig() {
         },
         body: JSON.stringify({
           ...addFormData,
-          price: parseFloat(addFormData.price),
+          price: exclusivePrice,
           duration_months: parseInt(addFormData.duration_months),
+          chargeable_id: addFormData.chargeable_id || null,
         }),
       });
 
@@ -150,6 +213,12 @@ export default function MembershipTypesConfig() {
 
     try {
       setSaving(true);
+      // Convert inclusive input to exclusive for storage
+      const isTaxable = getChargeableTaxStatus(editFormData.chargeable_id);
+      const inclusivePrice = parseFloat(editFormData.price);
+      const exclusivePrice = calculateTaxExclusiveRate(inclusivePrice, isTaxable);
+
+      // Update the membership type
       const response = await fetch(`/api/membership_types/${selectedType.id}`, {
         method: "PATCH",
         headers: {
@@ -157,8 +226,9 @@ export default function MembershipTypesConfig() {
         },
         body: JSON.stringify({
           ...editFormData,
-          price: parseFloat(editFormData.price),
+          price: exclusivePrice,
           duration_months: parseInt(editFormData.duration_months),
+          chargeable_id: editFormData.chargeable_id || null,
         }),
       });
 
@@ -167,18 +237,32 @@ export default function MembershipTypesConfig() {
         throw new Error(errorData.error || "Failed to update membership type");
       }
 
+      // If there's a linked chargeable, update its rate to match (chargeable is source of truth for invoicing)
+      if (editFormData.chargeable_id) {
+        try {
+          await fetch(`/api/chargeables`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              id: editFormData.chargeable_id,
+              rate: exclusivePrice,
+            }),
+          });
+        } catch (chargeableErr) {
+          console.error("Failed to update linked chargeable:", chargeableErr);
+          // Don't fail the whole operation if chargeable update fails
+        }
+      }
+
       await fetchMembershipTypes();
+      await fetchMembershipChargeables();
       setError(null);
 
-      const updatedTypes = membershipTypes.map(t =>
-        t.id === selectedType.id ? {
-          ...t,
-          ...editFormData,
-          price: parseFloat(editFormData.price),
-          duration_months: parseInt(editFormData.duration_months)
-        } : t
-      );
-      const updatedSelected = updatedTypes.find(t => t.id === selectedType.id);
+      // Refresh the selected type from the fetched data
+      const refreshedTypes = await fetch("/api/membership_types").then(r => r.json());
+      const updatedSelected = refreshedTypes.membership_types?.find((t: MembershipType) => t.id === selectedType.id);
       if (updatedSelected) {
         setSelectedType(updatedSelected);
       }
@@ -330,7 +414,7 @@ export default function MembershipTypesConfig() {
                   <p className="text-xs text-gray-500 mt-1">Unique identifier (auto-generated from name)</p>
                 </div>
                 <div>
-                  <Label htmlFor="add-price">Annual Fee (NZD)</Label>
+                  <Label htmlFor="add-price">Annual Fee (NZD, Tax Inclusive)</Label>
                   <Input
                     id="add-price"
                     type="number"
@@ -340,6 +424,14 @@ export default function MembershipTypesConfig() {
                     onChange={(e) => setAddFormData({ ...addFormData, price: e.target.value })}
                     placeholder="0.00"
                   />
+                  {addFormData.price && !isNaN(parseFloat(addFormData.price)) && (
+                    <div className="mt-2 text-xs text-gray-500">
+                      {getChargeableTaxStatus(addFormData.chargeable_id)
+                        ? `Tax Exclusive: ${formatCurrency(calculateTaxExclusiveRate(parseFloat(addFormData.price), true))}`
+                        : `Not linked to taxable chargeable (no conversion needed)`
+                      }
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="add-duration">Duration (Months)</Label>
@@ -352,6 +444,36 @@ export default function MembershipTypesConfig() {
                     placeholder="12"
                   />
                   <p className="text-xs text-gray-500 mt-1">12 for annual, 1 for monthly</p>
+                </div>
+                <div>
+                  <Label htmlFor="add-chargeable">Linked Chargeable (Optional)</Label>
+                  <Select
+                    value={addFormData.chargeable_id || "none"}
+                    onValueChange={(value) =>
+                      setAddFormData({ ...addFormData, chargeable_id: value === "none" ? null : value })
+                    }
+                  >
+                    <SelectTrigger id="add-chargeable" className="w-full">
+                      <SelectValue placeholder="Select a chargeable..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">
+                        <span className="text-gray-500">No linked chargeable</span>
+                      </SelectItem>
+                      {membershipChargeables.map((chargeable) => (
+                        <SelectItem key={chargeable.id} value={chargeable.id}>
+                          <div className="flex items-center gap-2">
+                            <Link2 className="w-3 h-3" />
+                            <span>{chargeable.name}</span>
+                            <span className="text-xs text-gray-500">
+                              - ${chargeable.rate.toFixed(2)}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500 mt-1">Link to an existing membership fee chargeable</p>
                 </div>
                 <div>
                   <Label htmlFor="add-description">Description (Optional)</Label>
@@ -487,104 +609,226 @@ export default function MembershipTypesConfig() {
               </Button>
             </div>
 
-            <div className="space-y-4 overflow-y-auto flex-1">
-              <div>
-                <Label htmlFor="edit-name">Name</Label>
-                <Input
-                  id="edit-name"
-                  value={editFormData.name}
-                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                  placeholder="e.g., Flying Member"
-                />
-              </div>
+            <div className="space-y-6 overflow-y-auto flex-1 pr-2">
+              {/* Basic Information Section */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Basic Information</h4>
 
-              <div>
-                <Label htmlFor="edit-code">Code</Label>
-                <Input
-                  id="edit-code"
-                  value={editFormData.code}
-                  onChange={(e) => setEditFormData({ ...editFormData, code: e.target.value })}
-                  placeholder="e.g., flying_member"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="edit-price">Annual Fee (NZD)</Label>
-                <Input
-                  id="edit-price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={editFormData.price}
-                  onChange={(e) => setEditFormData({ ...editFormData, price: e.target.value })}
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="edit-duration">Duration (Months)</Label>
-                <Input
-                  id="edit-duration"
-                  type="number"
-                  min="1"
-                  value={editFormData.duration_months}
-                  onChange={(e) => setEditFormData({ ...editFormData, duration_months: e.target.value })}
-                  placeholder="12"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="edit-description">Description (Optional)</Label>
-                <Textarea
-                  id="edit-description"
-                  value={editFormData.description}
-                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
-                  placeholder="Enter description"
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <Label>Benefits</Label>
-                <div className="space-y-2">
-                  {editFormData.benefits.map((benefit, index) => (
-                    <div key={index} className="flex items-center gap-2 bg-gray-50 p-2 rounded">
-                      <span className="flex-1 text-sm">{benefit}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeBenefitFromForm(index, "edit")}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="edit-name">Name</Label>
                     <Input
-                      value={newBenefit}
-                      onChange={(e) => setNewBenefit(e.target.value)}
-                      placeholder="Add a benefit..."
-                      onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addBenefitToForm("edit"))}
+                      id="edit-name"
+                      value={editFormData.name}
+                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                      placeholder="e.g., Flying Member"
                     />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => addBenefitToForm("edit")}
-                      disabled={!newBenefit.trim()}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
                   </div>
+
+                  <div>
+                    <Label htmlFor="edit-code">Code</Label>
+                    <Input
+                      id="edit-code"
+                      value={editFormData.code}
+                      onChange={(e) => setEditFormData({ ...editFormData, code: e.target.value })}
+                      placeholder="e.g., flying_member"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-description">Description</Label>
+                  <Textarea
+                    id="edit-description"
+                    value={editFormData.description}
+                    onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                    placeholder="Enter description"
+                    rows={2}
+                  />
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="edit-is_active"
-                  checked={editFormData.is_active}
-                  onCheckedChange={(checked) => setEditFormData({ ...editFormData, is_active: checked })}
-                />
-                <Label htmlFor="edit-is_active">Active</Label>
+              {/* Pricing Section */}
+              <div className="space-y-4 pt-4 border-t">
+                <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Pricing & Billing</h4>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="edit-price">Annual Fee (NZD, Tax Inclusive)</Label>
+                    <Input
+                      id="edit-price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editFormData.price}
+                      onChange={(e) => setEditFormData({ ...editFormData, price: e.target.value })}
+                      placeholder="0.00"
+                    />
+                    {editFormData.price && !isNaN(parseFloat(editFormData.price)) && (
+                      <div className="mt-2 text-xs text-gray-500">
+                        {getChargeableTaxStatus(editFormData.chargeable_id)
+                          ? `Tax Exclusive: ${formatCurrency(calculateTaxExclusiveRate(parseFloat(editFormData.price), true))}`
+                          : `Not linked to taxable chargeable (no conversion needed)`
+                        }
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="edit-duration">Duration (Months)</Label>
+                    <Input
+                      id="edit-duration"
+                      type="number"
+                      min="1"
+                      value={editFormData.duration_months}
+                      onChange={(e) => setEditFormData({ ...editFormData, duration_months: e.target.value })}
+                      placeholder="12"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-chargeable">Linked Chargeable</Label>
+                  <Select
+                    value={editFormData.chargeable_id || "none"}
+                    onValueChange={(value) =>
+                      setEditFormData({ ...editFormData, chargeable_id: value === "none" ? null : value })
+                    }
+                  >
+                    <SelectTrigger id="edit-chargeable" className="w-full">
+                      <SelectValue placeholder="Select a chargeable..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">
+                        <span className="text-gray-500">No linked chargeable</span>
+                      </SelectItem>
+                      {membershipChargeables.map((chargeable) => (
+                        <SelectItem key={chargeable.id} value={chargeable.id}>
+                          <div className="flex items-center gap-2">
+                            <Link2 className="w-3 h-3" />
+                            <span>{chargeable.name}</span>
+                            <span className="text-xs text-gray-500">
+                              - ${chargeable.rate.toFixed(2)}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {editFormData.chargeable_id && selectedType?.chargeables && (
+                    <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
+                      <p className="text-blue-700 text-xs">
+                        Rate: ${selectedType.chargeables.rate.toFixed(2)} |
+                        Tax: {selectedType.chargeables.is_taxable ? 'Taxable' : 'Tax Exempt'}
+                      </p>
+                    </div>
+                  )}
+                  {editFormData.chargeable_id && selectedType?.chargeables &&
+                   parseFloat(editFormData.price) !== selectedType.chargeables.rate && (
+                    <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-amber-900 font-medium">Price Mismatch</p>
+                        <p className="text-amber-700 text-xs mt-1">
+                          Membership price (${parseFloat(editFormData.price).toFixed(2)}) doesn&apos;t match chargeable rate (${selectedType.chargeables.rate.toFixed(2)})
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Benefits Section */}
+              <div className="space-y-4 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setIsBenefitsExpanded(!isBenefitsExpanded)}
+                  className="w-full flex items-center justify-between group hover:opacity-70 transition-opacity"
+                >
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Member Benefits</h4>
+                    {editFormData.benefits.length > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        {editFormData.benefits.length}
+                      </Badge>
+                    )}
+                  </div>
+                  {isBenefitsExpanded ? (
+                    <ChevronUp className="w-4 h-4 text-gray-500" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-gray-500" />
+                  )}
+                </button>
+
+                {isBenefitsExpanded && (
+                  <div className="space-y-2">
+                    {editFormData.benefits.length > 0 ? (
+                      editFormData.benefits.map((benefit, index) => (
+                        <div key={index} className="flex items-center gap-2 bg-gray-50 p-2.5 rounded-md border border-gray-200">
+                          <span className="flex-1 text-sm text-gray-700">{benefit}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeBenefitFromForm(index, "edit")}
+                            className="h-7 w-7 p-0 hover:bg-red-50 hover:text-red-600"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500 italic py-2">No benefits added yet</p>
+                    )}
+                    <div className="flex gap-2">
+                      <Input
+                        value={newBenefit}
+                        onChange={(e) => setNewBenefit(e.target.value)}
+                        placeholder="Add a benefit..."
+                        onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addBenefitToForm("edit"))}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => addBenefitToForm("edit")}
+                        disabled={!newBenefit.trim()}
+                        className="px-3"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Status Section */}
+              <div className="space-y-4 pt-4 border-t pb-4">
+                <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Status</h4>
+
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border border-gray-200">
+                  <div className="flex items-center space-x-3">
+                    <Switch
+                      id="edit-is_active"
+                      checked={editFormData.is_active}
+                      onCheckedChange={(checked) => setEditFormData({ ...editFormData, is_active: checked })}
+                    />
+                    <Label htmlFor="edit-is_active" className="cursor-pointer">
+                      <span className="font-medium">Active</span>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {editFormData.is_active ? 'Available for new memberships' : 'Hidden from selection'}
+                      </p>
+                    </Label>
+                  </div>
+                  {editFormData.is_active ? (
+                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                      Active
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-gray-500 border-gray-300">
+                      Inactive
+                    </Badge>
+                  )}
+                </div>
               </div>
             </div>
 
