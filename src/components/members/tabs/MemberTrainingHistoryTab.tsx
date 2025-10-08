@@ -16,8 +16,6 @@ import type { FlightExperience } from "@/types/flight_experience";
 
 import {
   Target,
-  Edit3,
-  X,
   BookOpen,
   GraduationCap,
   Plus,
@@ -25,7 +23,7 @@ import {
   MessageSquare,
   Plane
 } from "lucide-react";
-import { format, subDays, startOfDay, endOfDay, differenceInDays } from "date-fns";
+import { format, subDays, startOfDay, endOfDay } from "date-fns";
 
 // Import the new tab components
 import LessonProgressTab from "./LessonProgressTab";
@@ -80,9 +78,9 @@ export default function MemberTrainingHistoryTab({ memberId }: MemberTrainingHis
   const [flightExperiencesLoading, setFlightExperiencesLoading] = useState(false);
   const [flightExperiences, setFlightExperiences] = useState<FlightExperience[]>([]);
   const [experienceTypes, setExperienceTypes] = useState<Record<string, { name: string }>>({});
-  const [editingInstructor, setEditingInstructor] = useState(false);
+  const [, setEditingInstructor] = useState(false);
   const [updatingInstructor, setUpdatingInstructor] = useState(false);
-  const [editingAircraftType, setEditingAircraftType] = useState(false);
+  const [, setEditingAircraftType] = useState(false);
   const [updatingAircraftType, setUpdatingAircraftType] = useState(false);
 
   // Exam results state
