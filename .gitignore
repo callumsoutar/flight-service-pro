@@ -23,7 +23,11 @@
 # misc
 .DS_Store
 *.pem
-to-do.md
+
+# Development documentation and notes (local only)
+/dev-docs/
+/dev-notes/
+/dev-sql/
 
 # debug
 npm-debug.log*
