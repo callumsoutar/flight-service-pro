@@ -28,6 +28,7 @@
 /dev-docs/
 /dev-notes/
 /dev-sql/
+/dev-supabase/
 
 # debug
 npm-debug.log*
