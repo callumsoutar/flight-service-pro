@@ -29,6 +29,10 @@
 /dev-notes/
 /dev-sql/
 /dev-supabase/
+/docs/
+
+# IDE
+.vscode/
 
 # debug
 npm-debug.log*
