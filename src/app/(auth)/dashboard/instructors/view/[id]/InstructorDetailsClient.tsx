@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { useUserRoles, useAssignRole, useRemoveRole } from '@/hooks/use-user-roles';
 import { useCanManageRoles } from '@/hooks/use-can-manage-roles';
-const InstructorFlightTypeRatesTable = dynamic(() => import("@/components/InstructorFlightTypeRatesTable"), { ssr: false });
+const InstructorFlightTypeRatesTable = dynamic(() => import("@/components/instructors/InstructorFlightTypeRatesTable"), { ssr: false });
 
 const tabItems = [
   { id: "license", label: "Details", icon: Award },

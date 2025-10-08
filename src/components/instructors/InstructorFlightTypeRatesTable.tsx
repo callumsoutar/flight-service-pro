@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -40,7 +40,29 @@ export default function InstructorFlightTypeRatesTable({ instructorId }: Props) 
   const [addingNewRate, setAddingNewRate] = useState(false);
   const [defaultTaxRate, setDefaultTaxRate] = useState<number>(0.15); // Default to 15%
 
-  // Fetch rates
+  // Helper function to refresh rates from API
+  const refreshRates = useCallback(async () => {
+    try {
+      const ratesRes = await fetch(`/api/instructor_flight_type_rates?instructor_id=${instructorId}`);
+      if (ratesRes.ok) {
+        const ratesData = await ratesRes.json();
+        setRates(ratesData.rates || []);
+      }
+    } catch (error) {
+      console.error('Failed to refresh rates:', error);
+    }
+  }, [instructorId]);
+
+  // Tax calculation helpers
+  const calculateTaxExclusive = useCallback((taxInclusiveAmount: number): number => {
+    return taxInclusiveAmount / (1 + defaultTaxRate);
+  }, [defaultTaxRate]);
+
+  const calculateTaxInclusive = useCallback((taxExclusiveAmount: number): number => {
+    return taxExclusiveAmount * (1 + defaultTaxRate);
+  }, [defaultTaxRate]);
+
+  // Fetch rates on mount
   useEffect(() => {
     async function fetchRates() {
       try {
@@ -154,13 +176,7 @@ export default function InstructorFlightTypeRatesTable({ instructorId }: Props) 
         throw new Error(errorData.error || 'Failed to add rate');
       }
 
-      // Refresh rates
-      const ratesRes = await fetch(`/api/instructor_flight_type_rates?instructor_id=${instructorId}`);
-      if (ratesRes.ok) {
-        const ratesData = await ratesRes.json();
-        setRates(ratesData.rates || []);
-      }
-      
+      await refreshRates();
       setAddingNewRate(false);
       setEditingRate(null);
       toast.success('Rate added successfully');
@@ -177,14 +193,13 @@ export default function InstructorFlightTypeRatesTable({ instructorId }: Props) 
   };
 
   const handleEditRate = (rate: Rate) => {
-    console.log('Edit button clicked for rate:', rate.id);
     // Convert stored tax-exclusive rate to tax-inclusive for display
     const taxInclusiveRate = calculateTaxInclusive(rate.rate);
     setEditingRate({
       id: rate.id,
       flight_type_id: rate.flight_type_id,
       rate: taxInclusiveRate.toFixed(2),
-      effective_from: rate.effective_from ? rate.effective_from.split('T')[0] : undefined, // Convert to date input format
+      effective_from: rate.effective_from ? rate.effective_from.split('T')[0] : undefined,
     });
   };
 
@@ -193,7 +208,6 @@ export default function InstructorFlightTypeRatesTable({ instructorId }: Props) 
   };
 
   const handleSaveRate = async () => {
-    console.log('Save button clicked for rate:', editingRate?.id);
     if (!editingRate) return;
 
     const taxInclusiveRate = parseFloat(editingRate.rate);
@@ -221,13 +235,7 @@ export default function InstructorFlightTypeRatesTable({ instructorId }: Props) 
         throw new Error('Failed to update rate');
       }
 
-      // Refresh rates
-      const ratesRes = await fetch(`/api/instructor_flight_type_rates?instructor_id=${instructorId}`);
-      if (ratesRes.ok) {
-        const ratesData = await ratesRes.json();
-        setRates(ratesData.rates || []);
-      }
-      
+      await refreshRates();
       setEditingRate(null);
       toast.success('Rate updated successfully');
     } catch {
@@ -251,12 +259,7 @@ export default function InstructorFlightTypeRatesTable({ instructorId }: Props) 
         throw new Error('Failed to delete rate');
       }
 
-      // Refresh rates
-      const ratesRes = await fetch(`/api/instructor_flight_type_rates?instructor_id=${instructorId}`);
-      if (ratesRes.ok) {
-        const ratesData = await ratesRes.json();
-        setRates(ratesData.rates || []);
-      }
+      await refreshRates();
       toast.success('Rate deleted successfully');
     } catch {
       toast.error('Failed to delete rate');
@@ -265,15 +268,6 @@ export default function InstructorFlightTypeRatesTable({ instructorId }: Props) 
 
   const isEditing = (rateId: string) => editingRate?.id === rateId;
   const isAddingNew = () => addingNewRate && editingRate?.id === 'new';
-
-  // Tax calculation helpers
-  const calculateTaxExclusive = (taxInclusiveAmount: number): number => {
-    return taxInclusiveAmount / (1 + defaultTaxRate);
-  };
-
-  const calculateTaxInclusive = (taxExclusiveAmount: number): number => {
-    return taxExclusiveAmount * (1 + defaultTaxRate);
-  };
 
   if (loading) {
     return (
