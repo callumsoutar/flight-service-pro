@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, ClipboardList, CalendarCheck, Eye, Info, Trash2 } from "lucide-react";
+import { MoreHorizontal, ClipboardList, Pencil, Info, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -154,11 +154,6 @@ export default function UpcomingMaintenanceTable({ aircraft_id }: UpcomingMainte
     setLogMaintenanceModalOpen(true);
   };
 
-  const handleScheduleMaintenance = (component: AircraftComponent) => {
-    void component; // Explicitly mark as intentionally unused
-    // TODO: Implement schedule maintenance functionality
-    toast.info("Schedule maintenance functionality coming soon!");
-  };
 
   const handleViewDetails = (component: AircraftComponent) => {
     setSelectedComponent(component);
@@ -425,12 +420,9 @@ export default function UpcomingMaintenanceTable({ aircraft_id }: UpcomingMainte
                           }}>
                             <ClipboardList className="w-4 h-4 mr-2" /> Log Maintenance
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleScheduleMaintenance(comp)}>
-                            <CalendarCheck className="w-4 h-4 mr-2" /> Schedule Maintenance
-                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => handleViewDetails(comp)}>
-                            <Eye className="w-4 h-4 mr-2" /> View Details
+                            <Pencil className="w-4 h-4 mr-2" /> Edit Details
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem

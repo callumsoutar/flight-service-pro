@@ -52,6 +52,7 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
   
   // Store component data for calculations
   const [componentData, setComponentData] = useState<AircraftComponent | null>(null);
+  const [aircraftData, setAircraftData] = useState<{ total_hours: number | null } | null>(null);
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -69,6 +70,7 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
       setNextDueHours("");
       setNextDueDate("");
       setComponentData(null);
+      setAircraftData(null);
       setError(null);
       
       // Get current user
@@ -79,6 +81,28 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
       })();
     }
   }, [open]);
+
+  // Fetch aircraft data when modal opens
+  useEffect(() => {
+    if (open && aircraft_id) {
+      (async () => {
+        try {
+          const res = await fetch(`/api/aircraft?id=${aircraft_id}`);
+          if (res.ok) {
+            const { aircraft } = await res.json();
+            setAircraftData(aircraft);
+            
+            // Set initial hours at visit to aircraft's current total hours
+            if (aircraft.total_hours) {
+              setHoursAtVisit(String(aircraft.total_hours));
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch aircraft details:', err);
+        }
+      })();
+    }
+  }, [open, aircraft_id]);
 
   // Fetch component details and set due values when component_id is provided
   useEffect(() => {
@@ -109,12 +133,6 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
             if (component.current_due_date) {
               setComponentDueDate(component.current_due_date.split('T')[0]);
             }
-            
-            // Calculate next due hours (base + interval, no extension)
-            if (component.current_due_hours !== null && component.interval_hours) {
-              const nextDue = Number(component.current_due_hours) + Number(component.interval_hours);
-              setNextDueHours(String(nextDue));
-            }
           }
         } catch (err) {
           console.error('Failed to fetch component details:', err);
@@ -122,6 +140,19 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
       })();
     }
   }, [open, component_id]);
+  
+  // Calculate next due hours from component's base due (without extension) + interval
+  // This ensures extensions never become cumulative
+  useEffect(() => {
+    if (componentData && componentData.interval_hours && componentData.current_due_hours !== null) {
+      // Next due = component's BASE due (without extension) + interval
+      // Example: Due at 17715.5 (extended to 17725.5), done at 17717.4
+      // Next due = 17715.5 + 100 = 17815.5 (NOT 17717.4 + 100 = 17817.4)
+      const baseDueHours = Number(componentData.current_due_hours);
+      const nextDue = baseDueHours + Number(componentData.interval_hours);
+      setNextDueHours(String(nextDue));
+    }
+  }, [componentData]);
   
   // Calculate next due date when visitDate changes
   useEffect(() => {
@@ -284,7 +315,7 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
                       onChange={e => setNextDueHours(e.target.value)}
                       placeholder="Next due hours"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">Calculated: current due + interval (editable)</p>
+                    <p className="text-xs text-muted-foreground mt-1">Calculated: base due + interval (extensions not cumulative)</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-1">Next Due Date</label>

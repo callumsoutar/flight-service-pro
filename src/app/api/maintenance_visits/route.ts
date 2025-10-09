@@ -66,8 +66,10 @@ export async function POST(req: NextRequest) {
       // User provided override
       newDueHours = Number(body.next_due_hours);
     } else {
-      // Calculate from component's CURRENT base due (no extension)
+      // Calculate next due from component's CURRENT base due (without extension) + interval
       // This ensures extensions NEVER become cumulative
+      // Example: Due at 100hrs (extended to 110hrs), done at 105hrs
+      // Next due = 100 + 100 = 200hrs, NOT 105 + 100 = 205hrs
       const baseDueHours = Number(component.current_due_hours);
       newDueHours = baseDueHours + intervalHours;
     }
@@ -139,6 +141,7 @@ export async function PATCH(req: NextRequest) {
         newDueHours = Number(body.next_due_hours);
       } else if (body.hours_at_visit && body.hours_at_visit !== component.last_completed_hours) {
         // Only recalculate if hours_at_visit actually changed
+        // Calculate from base due (without extension) to prevent cumulative extensions
         const baseDueHours = Number(component.current_due_hours);
         newDueHours = baseDueHours + intervalHours;
       }
