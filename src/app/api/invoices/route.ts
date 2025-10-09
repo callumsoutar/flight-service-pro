@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/SupabaseServerClient";
 import { InvoiceService } from "@/lib/invoice-service";
+import { getDefaultInvoiceDueDate } from "@/lib/settings-utils";
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
@@ -100,13 +101,16 @@ export async function POST(req: NextRequest) {
     // Get the organization tax rate (single-tenant: all invoices use same rate)
     const taxRate = await InvoiceService.getTaxRateForInvoice();
     
+    // Get default due date if not provided
+    const invoiceDueDate = due_date || await getDefaultInvoiceDueDate();
+    
     // Use atomic database function to create invoice and transaction
     const { data: result, error } = await supabase.rpc('create_invoice_with_transaction', {
       p_user_id: user_id,
       p_booking_id: booking_id || null,
       p_status: status,
       p_tax_rate: taxRate,
-      p_due_date: due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      p_due_date: invoiceDueDate
     });
       
     if (error) {

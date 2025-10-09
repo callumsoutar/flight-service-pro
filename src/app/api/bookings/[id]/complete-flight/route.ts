@@ -4,6 +4,7 @@ import { getOrganizationTaxRate } from "@/lib/tax-rates";
 import { InvoiceService } from "@/lib/invoice-service";
 import { generateRequiredItems, matchInvoiceItems } from "@/lib/invoice-item-upsert";
 import { updateAircraftOnBookingCompletion } from "@/lib/aircraft-update";
+import { getDefaultInvoiceDueDate } from "@/lib/settings-utils";
 
 /**
  * Unified endpoint for booking completion workflow
@@ -300,6 +301,7 @@ async function handleCalculate(
     invoice = existingInvoice;
   } else {
     const taxRate = await getOrganizationTaxRate();
+    const dueDate = await getDefaultInvoiceDueDate();
     const { data: newInvoice } = await supabase
       .from('invoices')
       .insert({
@@ -307,6 +309,8 @@ async function handleCalculate(
         booking_id: bookingId,
         status: 'draft',
         tax_rate: taxRate,
+        issue_date: new Date().toISOString(),
+        due_date: dueDate,
         subtotal: 0,
         tax_total: 0,
         total_amount: 0,
@@ -704,6 +708,7 @@ async function handleComplete(
   } else {
     // Create new invoice
     const invoiceNumber = await InvoiceService.generateInvoiceNumber();
+    const dueDate = await getDefaultInvoiceDueDate();
     const { data: created, error: createError } = await supabase
       .from('invoices')
       .insert({
@@ -712,6 +717,7 @@ async function handleComplete(
         status: 'pending',
         invoice_number: invoiceNumber,
         issue_date: new Date().toISOString(),
+        due_date: dueDate,
         tax_rate: taxRate,
         subtotal: 0,
         tax_total: 0,

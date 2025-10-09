@@ -29,6 +29,7 @@ import { useOrganizationTaxRate } from "@/hooks/use-tax-rate";
 import { InvoiceCalculations } from "@/lib/invoice-calculations";
 import { roundToTwoDecimals } from "@/lib/utils";
 import InvoiceActionsToolbar from "@/components/invoices/InvoiceActionsToolbar";
+import { useSettingsContext } from "@/contexts/SettingsContext";
 
 interface InvoiceEditClientProps {
   id?: string;           // undefined for new invoices
@@ -52,7 +53,7 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
   const [adding, setAdding] = useState(false);
   const [reference, setReference] = useState("");
   const [invoiceDate, setInvoiceDate] = useState<Date | undefined>(isNewInvoice ? new Date() : undefined);
-  const [dueDate, setDueDate] = useState<Date | undefined>(isNewInvoice ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : undefined);
+  const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [selectedMember, setSelectedMember] = useState<UserResult | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -68,13 +69,14 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const { taxRate: organizationTaxRate } = useOrganizationTaxRate();
+  const { getSettingValue } = useSettingsContext();
 
   // New state for draft mode
   const [draftInvoice, setDraftInvoice] = useState<Partial<Invoice>>({
     user_id: '',
     status: 'draft',
     issue_date: new Date().toISOString(),
-    due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    due_date: '',
     reference: '',
     notes: '',
     subtotal: 0,
@@ -84,6 +86,22 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
     balance_due: 0
   });
   const [draftItems, setDraftItems] = useState<InvoiceItem[]>([]);
+
+  // Initialize due date for new invoices from settings
+  useEffect(() => {
+    if (!isNewInvoice) return;
+    
+    const defaultDueDays = getSettingValue<number>("invoicing", "default_invoice_due_days", 7);
+    const calculatedDueDate = new Date();
+    calculatedDueDate.setDate(calculatedDueDate.getDate() + defaultDueDays);
+    setDueDate(calculatedDueDate);
+    
+    // Also update draft invoice state
+    setDraftInvoice(prev => ({
+      ...prev,
+      due_date: calculatedDueDate.toISOString(),
+    }));
+  }, [isNewInvoice, getSettingValue]);
 
   useEffect(() => {
     // Only load invoice if we're in edit mode and have a valid ID

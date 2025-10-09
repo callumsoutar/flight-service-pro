@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Save, X, Building2, FileText, MapPin, Hash, Phone, Mail } from "lucide-react";
+import { Save, X, Building2, FileText, MapPin, Hash, Phone, Mail, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,7 @@ export default function InvoiceTemplateSettings() {
     contact_email: "",
     invoice_footer_message: "",
     payment_terms_message: "",
+    default_invoice_due_days: 7,
   });
 
   const [hasChanges, setHasChanges] = useState(false);
@@ -36,6 +37,7 @@ export default function InvoiceTemplateSettings() {
     const contact_email = getSettingValue<string>("general", "contact_email", "");
     const invoice_footer_message = getSettingValue<string>("invoicing", "invoice_footer_message", "");
     const payment_terms_message = getSettingValue<string>("invoicing", "payment_terms_message", "");
+    const default_invoice_due_days = getSettingValue<number>("invoicing", "default_invoice_due_days", 7);
 
     setFormData({
       school_name,
@@ -45,10 +47,11 @@ export default function InvoiceTemplateSettings() {
       contact_email,
       invoice_footer_message,
       payment_terms_message,
+      default_invoice_due_days,
     });
   }, [getSettingValue]);
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | number) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     setHasChanges(true);
   };
@@ -92,6 +95,11 @@ export default function InvoiceTemplateSettings() {
           key: "payment_terms_message",
           setting_value: formData.payment_terms_message,
         }),
+        updateMutation.mutateAsync({
+          category: "invoicing",
+          key: "default_invoice_due_days",
+          setting_value: formData.default_invoice_due_days,
+        }),
       ]);
 
       refetch();
@@ -116,6 +124,7 @@ export default function InvoiceTemplateSettings() {
     const contact_email = getSettingValue<string>("general", "contact_email", "");
     const invoice_footer_message = getSettingValue<string>("invoicing", "invoice_footer_message", "");
     const payment_terms_message = getSettingValue<string>("invoicing", "payment_terms_message", "");
+    const default_invoice_due_days = getSettingValue<number>("invoicing", "default_invoice_due_days", 7);
 
     setFormData({
       school_name,
@@ -125,6 +134,7 @@ export default function InvoiceTemplateSettings() {
       contact_email,
       invoice_footer_message,
       payment_terms_message,
+      default_invoice_due_days,
     });
     setHasChanges(false);
   };
@@ -257,6 +267,25 @@ export default function InvoiceTemplateSettings() {
             />
             <p className="text-xs text-muted-foreground">
               Specify your payment terms and late payment policy
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="default_invoice_due_days" className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Default Invoice Due Days
+            </Label>
+            <Input
+              id="default_invoice_due_days"
+              type="number"
+              min="1"
+              max="365"
+              value={formData.default_invoice_due_days}
+              onChange={(e) => handleInputChange("default_invoice_due_days", parseInt(e.target.value) || 7)}
+              placeholder="7"
+            />
+            <p className="text-xs text-muted-foreground">
+              Default number of days until invoice payment is due (e.g., 7 days)
             </p>
           </div>
         </CardContent>

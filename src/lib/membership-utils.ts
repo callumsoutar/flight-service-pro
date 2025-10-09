@@ -117,27 +117,6 @@ export function calculateRenewalDates(membershipType: MembershipType, startDate?
 }
 
 /**
- * Create invoice data for membership payment
- */
-export function createMembershipInvoiceData(
-  membership: Membership,
-  membershipType: MembershipType,
-  userId: string
-) {
-  return {
-    user_id: userId,
-    status: "pending" as const,
-    issue_date: new Date().toISOString(),
-    due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-    subtotal: membershipType.price,
-    tax_total: 0, // Membership fees typically aren't taxed
-    total_amount: membershipType.price,
-    notes: `Membership fee for ${membershipType.name}`,
-    reference: `MEMBERSHIP-${membership.id.substring(0, 8)}`,
-  };
-}
-
-/**
  * Check if membership is about to expire (within warning threshold)
  */
 export function isMembershipExpiringSoon(membership: Membership, warningDays: number = 30): boolean {

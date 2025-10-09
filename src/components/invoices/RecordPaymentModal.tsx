@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { BadgeCheck, CreditCard, DollarSign, Landmark, Receipt, Wallet, CheckCircle } from "lucide-react";
 import { cn, roundToTwoDecimals, formatCurrencyDisplay } from "@/lib/utils";
-import { useRouter } from "next/navigation";
 
 const paymentMethods = [
   { value: "cash", label: "Cash", icon: DollarSign },
@@ -52,7 +51,6 @@ export default function RecordPaymentModal({
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState(false);
   const [paymentNumber, setPaymentNumber] = React.useState<string | null>(null);
-  const router = useRouter();
 
   // Clean the balance due to avoid floating point precision issues
   const cleanBalanceDue = roundToTwoDecimals(balanceDue);
@@ -126,7 +124,7 @@ export default function RecordPaymentModal({
       setTimeout(() => {
         resetForm();
         onOpenChange(false);
-        router.refresh();
+        window.location.reload();
       }, 2000); // Extended to allow reading payment number
     } catch (err: unknown) {
       if (err instanceof Error) {

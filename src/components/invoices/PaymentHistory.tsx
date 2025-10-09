@@ -146,6 +146,7 @@ export function PaymentHistory({ invoiceId, userRole }: PaymentHistoryProps) {
               <thead className="border-b bg-muted/50">
                 <tr>
                   <th className="text-left py-2 px-4 text-xs font-medium text-muted-foreground">DATE</th>
+                  <th className="text-left py-2 px-4 text-xs font-medium text-muted-foreground">PAYMENT #</th>
                   <th className="text-left py-2 px-4 text-xs font-medium text-muted-foreground">METHOD</th>
                   <th className="text-left py-2 px-4 text-xs font-medium text-muted-foreground">REFERENCE</th>
                   <th className="text-left py-2 px-4 text-xs font-medium text-muted-foreground">NOTES</th>
@@ -182,11 +183,14 @@ export function PaymentHistory({ invoiceId, userRole }: PaymentHistoryProps) {
                           year: "numeric",
                         })}
                         <span className="block text-xs">
-                          {new Date(payment.created_at).toLocaleTimeString([], { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
+                          {new Date(payment.created_at).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit'
                           })}
                         </span>
+                      </td>
+                      <td className="py-2.5 px-4 text-sm font-mono text-muted-foreground whitespace-nowrap">
+                        {payment.payment_number || '—'}
                       </td>
                       <td className="py-2.5 px-4">
                         <div className="flex items-center gap-2">
