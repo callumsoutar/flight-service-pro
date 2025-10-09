@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plane, ClipboardCheck, FileSignature, CheckCircle, ShieldCheck, ChevronDown, FileText } from "lucide-react";
+import { Plane, ClipboardCheck, FileSignature, CheckCircle, ShieldCheck, ChevronDown, FileText, Printer } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -166,9 +166,101 @@ export default function BookingActions({
 
   // Helper function to navigate to authorization
   const handleAuthorizationNavigation = () => {
-    // If authorization is overridden, still navigate to the authorization page 
+    // If authorization is overridden, still navigate to the authorization page
     // which can show the override information
     router.push(`/dashboard/bookings/authorize/${actualBookingId}`);
+  };
+
+  // Helper function to handle printing checkout sheet
+  const handlePrintCheckoutSheet = async () => {
+    try {
+      // Dynamic import to avoid SSR issues
+      const { pdf } = await import('@react-pdf/renderer');
+      const CheckOutSheet = (await import('./CheckOutSheet')).default;
+      const { default: React } = await import('react');
+
+      // Fetch flight log for this booking
+      const response = await fetch(`/api/flight-logs?booking_id=${actualBookingId}`);
+      let flightLogData = null;
+      let checkedOutAircraft = null;
+      let checkedOutInstructor = null;
+
+      if (response.ok) {
+        const data = await response.json();
+        const flightLog = data.data?.[0];
+
+        if (flightLog) {
+          flightLogData = {
+            hobbs_start: flightLog.hobbs_start,
+            hobbs_end: flightLog.hobbs_end,
+            tacho_start: flightLog.tach_start,
+            tacho_end: flightLog.tach_end,
+            flight_time: flightLog.flight_time,
+            circuits: null, // Not in flight_logs schema
+            landings: null, // Not in flight_logs schema
+            sar_time: null, // Not in flight_logs schema
+            ssr_code: null, // Not in flight_logs schema
+            eta: flightLog.eta,
+          };
+
+          // Get checked out aircraft if different from booking aircraft
+          if (flightLog.checked_out_aircraft_id && flightLog.checked_out_aircraft) {
+            checkedOutAircraft = flightLog.checked_out_aircraft;
+          }
+
+          // Get checked out instructor if different from booking instructor
+          if (flightLog.checked_out_instructor_id && flightLog.checked_out_instructor) {
+            checkedOutInstructor = flightLog.checked_out_instructor;
+          }
+        }
+      }
+
+      // Use checked out values if available, otherwise fall back to booking values
+      const finalAircraft = checkedOutAircraft || booking.aircraft;
+      const finalInstructor = checkedOutInstructor || booking.instructor;
+
+      // Create PDF document with dynamic data
+      const doc = React.createElement(CheckOutSheet, {
+        booking: {
+          aircraft_registration: finalAircraft?.registration || 'N/A',
+          member_name: booking.user
+            ? `${booking.user.first_name || ''} ${booking.user.last_name || ''}`.trim() || booking.user.email
+            : 'N/A',
+          booking_type: booking.flight_type?.name || booking.booking_type || 'Flight',
+          lease_start_date: null,
+          lease_end_date: null,
+          instructor_name: finalInstructor?.first_name
+            ? `${finalInstructor.first_name} ${finalInstructor.last_name || ''}`.trim()
+            : null,
+          purpose: booking.purpose || null,
+        },
+        flightLog: flightLogData,
+      });
+
+      // Generate PDF blob
+      const blob = await pdf(doc).toBlob();
+
+      // Open PDF directly in new window for printing
+      const url = URL.createObjectURL(blob);
+      const printWindow = window.open(url, '_blank');
+
+      if (printWindow) {
+        // Wait for PDF to fully load and render before printing
+        printWindow.onload = () => {
+          // Additional delay to ensure PDF is rendered in the browser
+          setTimeout(() => {
+            printWindow.print();
+          }, 1000);
+        };
+
+        // Clean up URL after a delay
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+        }, 5000);
+      }
+    } catch (error) {
+      console.error('Error generating checkout sheet:', error);
+    }
   };
 
   // Helper function to render authorization indicator badge
@@ -361,6 +453,17 @@ export default function BookingActions({
             <ClipboardCheck className="w-4 h-4 mr-1" />
             Check Flight In
           </Link>
+        </Button>
+      )}
+
+      {/* Print Checkout Sheet Button */}
+      {actualStatus === "flying" && (!mode || mode === 'check-out') && (
+        <Button
+          onClick={handlePrintCheckoutSheet}
+          className="h-10 px-6 text-base font-bold bg-slate-600 hover:bg-slate-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-slate-300"
+        >
+          <Printer className="w-4 h-4 mr-1" />
+          Print Checkout Sheet
         </Button>
       )}
 

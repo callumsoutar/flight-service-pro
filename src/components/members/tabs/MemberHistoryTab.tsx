@@ -113,62 +113,118 @@ export default function MemberHistoryTab({ member }: MemberHistoryTabProps) {
       .finally(() => setLoading(false));
   }, [member.id]);
 
+  function formatValue(value: unknown, field: string): string {
+    if (value === null || value === undefined) return '—';
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    if (typeof value === 'string' && value === '') return '—';
+    return String(value);
+  }
+
+  function formatDateValue(value: unknown): string {
+    if (!value || typeof value !== 'string') return '—';
+    try {
+      return new Date(value).toLocaleDateString([], { month: 'short', day: '2-digit', year: 'numeric' });
+    } catch {
+      return String(value);
+    }
+  }
+
+  function formatCurrencyValue(value: unknown): string {
+    if (value === null || value === undefined) return '—';
+    const numValue = parseFloat(String(value));
+    if (isNaN(numValue)) return '—';
+    return `$${numValue.toFixed(2)}`;
+  }
+
   function renderDescription(log: AuditLog): string {
     if (log.action === "INSERT") return "Member Account Created";
     if (log.action === "DELETE") return "Member Account Deleted";
+    
     if (log.action === "UPDATE" && log.column_changes) {
-      // Find the first changed field in priority order
+      const changes: string[] = [];
+      
+      // Process changes in priority order
       for (const field of FIELD_PRIORITY) {
         if (log.column_changes[field] && !IGNORED_FIELDS.includes(field)) {
           const label = FIELD_LABELS[field] || field.replace(/_/g, ' ');
           const value = log.column_changes[field];
+          
           if (value && typeof value === 'object' && 'old' in value && 'new' in value) {
-            let oldDisplay = value.old === null ? 'Not Set' : String(value.old);
-            let newDisplay = value.new === null ? 'Not Set' : String(value.new);
+            let oldDisplay: string;
+            let newDisplay: string;
             
-            // Format dates
-            if (field.includes('_date') || field.includes('_expiry') || field.includes('_due') || field === 'date_of_birth') {
-              if (oldDisplay !== 'Not Set') {
-                oldDisplay = new Date(oldDisplay).toLocaleDateString();
-              }
-              if (newDisplay !== 'Not Set') {
-                newDisplay = new Date(newDisplay).toLocaleDateString();
-              }
-            }
-            
-            // Format boolean values
+            // Special formatting for different field types
             if (field === 'is_active') {
               oldDisplay = value.old ? 'Active' : 'Inactive';
               newDisplay = value.new ? 'Active' : 'Inactive';
-            }
-            if (field === 'public_directory_opt_in') {
+              changes.push(`${label}: ${oldDisplay} → ${newDisplay}`);
+              continue;
+            } else if (field === 'public_directory_opt_in') {
               oldDisplay = value.old ? 'Visible' : 'Hidden';
               newDisplay = value.new ? 'Visible' : 'Hidden';
+              changes.push(`${label}: ${oldDisplay} → ${newDisplay}`);
+              continue;
+            } else if (field === 'account_balance') {
+              oldDisplay = formatCurrencyValue(value.old);
+              newDisplay = formatCurrencyValue(value.new);
+            } else if (field.includes('_date') || field.includes('_expiry') || field.includes('_due') || field === 'date_of_birth') {
+              oldDisplay = formatDateValue(value.old);
+              newDisplay = formatDateValue(value.new);
+            } else {
+              oldDisplay = formatValue(value.old, field);
+              newDisplay = formatValue(value.new, field);
             }
             
-            // Format currency
-            if (field === 'account_balance') {
-              oldDisplay = `$${parseFloat(oldDisplay).toFixed(2)}`;
-              newDisplay = `$${parseFloat(newDisplay).toFixed(2)}`;
+            // Skip if no meaningful change
+            if (oldDisplay === newDisplay || (oldDisplay === '—' && newDisplay === '—')) {
+              continue;
             }
             
-            return `${label} changed from "${oldDisplay}" to "${newDisplay}"`;
+            changes.push(`${label}: ${oldDisplay} → ${newDisplay}`);
           }
         }
       }
       
-      // If no priority fields changed, show any other changed field
-      const changedFields = Object.keys(log.column_changes).filter(
-        (field) => !IGNORED_FIELDS.includes(field)
-      );
-      if (changedFields.length > 0) {
-        const field = changedFields[0];
-        const label = FIELD_LABELS[field] || field.replace(/_/g, ' ');
-        return `${label} updated`;
+      // If no priority fields changed, check other fields
+      if (changes.length === 0) {
+        const changedFields = Object.keys(log.column_changes).filter(
+          (field) => !IGNORED_FIELDS.includes(field)
+        );
+        for (const field of changedFields) {
+          const label = FIELD_LABELS[field] || field.replace(/_/g, ' ');
+          const value = log.column_changes[field];
+          
+          if (value && typeof value === 'object' && 'old' in value && 'new' in value) {
+            let oldDisplay: string;
+            let newDisplay: string;
+            
+            if (field.includes('_date') || field.includes('_expiry') || field.includes('_due')) {
+              oldDisplay = formatDateValue(value.old);
+              newDisplay = formatDateValue(value.new);
+            } else {
+              oldDisplay = formatValue(value.old, field);
+              newDisplay = formatValue(value.new, field);
+            }
+            
+            if (oldDisplay !== newDisplay && !(oldDisplay === '—' && newDisplay === '—')) {
+              changes.push(`${label}: ${oldDisplay} → ${newDisplay}`);
+            }
+          }
+        }
+      }
+      
+      if (changes.length > 0) {
+        return changes.join('; ');
       }
       
       return "Member Profile Updated";
     }
+    
+    // Fallback for logs without column_changes
+    if (log.action === "UPDATE") {
+      return "Member Profile Updated";
+    }
+    
     return log.action;
   }
 

@@ -198,7 +198,6 @@ export function useCheckOutSave(options?: { onSuccess?: () => void }) {
       return { success: true };
     },
     onSuccess: () => {
-      toast.success("Check-Out details saved successfully!");
       // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: checkoutKeys.all });
       // Call custom onSuccess callback if provided

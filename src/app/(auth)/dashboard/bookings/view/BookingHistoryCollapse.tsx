@@ -38,17 +38,31 @@ const FIELD_LABELS: Record<string, string> = {
   status: 'Status',
   remarks: 'Remarks',
   purpose: 'Description',
+  booking_type: 'Booking Type',
+  notes: 'Notes',
+  cancellation_reason: 'Cancellation Reason',
+  cancelled_notes: 'Cancellation Notes',
+  authorization_override: 'Authorization Override',
+  authorization_override_reason: 'Override Reason',
+  voucher_number: 'Voucher Number',
 };
 const IGNORED_FIELDS = ['updated_at', 'created_at', 'id', 'user_id'];
 const FIELD_PRIORITY = [
+  'status',
   'start_time',
   'end_time',
-  'status',
-  'lesson_id',
   'aircraft_id',
   'instructor_id',
-  'remarks',
+  'lesson_id',
+  'booking_type',
   'purpose',
+  'remarks',
+  'notes',
+  'cancellation_reason',
+  'cancelled_notes',
+  'authorization_override',
+  'authorization_override_reason',
+  'voucher_number',
 ];
 
 export default function BookingHistoryCollapse({ bookingId, lessons }: BookingHistoryCollapseProps) {
@@ -77,37 +91,100 @@ export default function BookingHistoryCollapse({ bookingId, lessons }: BookingHi
     }
   }, [open, bookingId, logs.length, loading]);
 
-  function renderDescription(log: AuditLog) {
+  function formatValue(value: unknown, field: string): string {
+    if (value === null || value === undefined) return '—';
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    if (typeof value === 'string' && value === '') return '—';
+    return String(value);
+  }
+
+  function formatTimeValue(value: unknown): string {
+    if (!value || typeof value !== 'string') return '—';
+    try {
+      return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return String(value);
+    }
+  }
+
+  function formatDateValue(value: unknown): string {
+    if (!value || typeof value !== 'string') return '—';
+    try {
+      return new Date(value).toLocaleDateString([], { month: 'short', day: '2-digit', year: 'numeric' });
+    } catch {
+      return String(value);
+    }
+  }
+
+  function renderDescription(log: AuditLog): string {
     if (log.action === "INSERT") return "Booking Created";
     if (log.action === "DELETE") return "Booking Deleted";
+    
     if (log.action === "UPDATE" && log.column_changes) {
+      const changes: string[] = [];
+      
+      // Process changes in priority order
       for (const field of FIELD_PRIORITY) {
         if (log.column_changes[field] && !IGNORED_FIELDS.includes(field)) {
           const label = FIELD_LABELS[field] || field.replace(/_/g, ' ');
-          let oldDisplay = '—';
-          let newDisplay = '—';
           const value = log.column_changes[field];
+          
           if (value && typeof value === 'object' && 'old' in value && 'new' in value) {
-            oldDisplay = value.old as string;
-            newDisplay = value.new as string;
-            // Format times
-            if ((field === 'start_time' || field === 'end_time') && typeof oldDisplay === 'string' && typeof newDisplay === 'string') {
-              oldDisplay = new Date(oldDisplay).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              newDisplay = new Date(newDisplay).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            }
-            // Map lesson_id to lesson name
-            if (field === 'lesson_id') {
+            let oldDisplay: string;
+            let newDisplay: string;
+            
+            // Special formatting for different field types
+            if (field === 'start_time' || field === 'end_time') {
+              oldDisplay = formatTimeValue(value.old);
+              newDisplay = formatTimeValue(value.new);
+            } else if (field === 'status') {
+              // Status changes are most important - format them nicely
+              oldDisplay = formatValue(value.old, field);
+              newDisplay = formatValue(value.new, field);
+              changes.push(`${label}: ${oldDisplay} → ${newDisplay}`);
+              continue;
+            } else if (field === 'lesson_id') {
               const oldLesson = lessons.find((l: { id: string; name: string }) => l.id === value.old);
               const newLesson = lessons.find((l: { id: string; name: string }) => l.id === value.new);
-              oldDisplay = oldLesson ? oldLesson.name : oldDisplay;
-              newDisplay = newLesson ? newLesson.name : newDisplay;
+              oldDisplay = oldLesson ? oldLesson.name : formatValue(value.old, field);
+              newDisplay = newLesson ? newLesson.name : formatValue(value.new, field);
+            } else if (field === 'authorization_override') {
+              oldDisplay = formatValue(value.old, field);
+              newDisplay = formatValue(value.new, field);
+              if (newDisplay === 'Yes') {
+                changes.push(`Authorization override enabled`);
+                continue;
+              } else {
+                changes.push(`Authorization override disabled`);
+                continue;
+              }
+            } else {
+              oldDisplay = formatValue(value.old, field);
+              newDisplay = formatValue(value.new, field);
             }
+            
+            // Skip if no meaningful change
+            if (oldDisplay === newDisplay || (oldDisplay === '—' && newDisplay === '—')) {
+              continue;
+            }
+            
+            changes.push(`${label}: ${oldDisplay} → ${newDisplay}`);
           }
-          return `${label} changed from "${oldDisplay}" to "${newDisplay}"`;
         }
       }
+      
+      if (changes.length > 0) {
+        return changes.join('; ');
+      }
+      
       return "Booking Updated";
     }
+    
+    // Fallback for logs without column_changes
+    if (log.action === "UPDATE") {
+      return "Booking Updated";
+    }
+    
     return log.action;
   }
 
