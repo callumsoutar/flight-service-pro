@@ -32,10 +32,12 @@ export interface InvoiceItem {
 /**
  * Client-side invoice calculations using currency-safe arithmetic
  * This is a client-safe version of InvoiceService calculations
+ * All calculations match server-side logic for consistency
  */
 export class InvoiceCalculations {
   /**
    * Calculate all amounts for an invoice item using currency-safe arithmetic
+   * All values are rounded to 2 decimal places for consistency
    */
   static calculateItemAmounts(item: InvoiceItemInput): InvoiceItemCalculated {
     // Input validation
@@ -75,11 +77,13 @@ export class InvoiceCalculations {
       // Calculate rate_inclusive (unit_price including tax)
       const rateInclusive = unitPriceDecimal.mul(taxRateDecimal.add(1));
 
+      // Round all values to 2 decimals for consistency across the application
+      // This ensures displayed amounts match stored amounts and line items add up correctly
       const result = {
-        amount: amount.toNumber(),
-        tax_amount: taxAmount.toNumber(),
-        line_total: lineTotal.toNumber(),
-        rate_inclusive: rateInclusive.toNumber()
+        amount: roundToTwoDecimals(amount.toNumber()),
+        tax_amount: roundToTwoDecimals(taxAmount.toNumber()),
+        line_total: roundToTwoDecimals(lineTotal.toNumber()),
+        rate_inclusive: roundToTwoDecimals(rateInclusive.toNumber())
       };
 
       // Validate results are finite numbers

@@ -35,7 +35,7 @@ export default function LandingFeeSelector({ onAdd, taxRate, aircraftTypeId }: L
     setError(null);
     const controller = new AbortController();
 
-    let url = `/api/chargeables?type=landing_fee&include_rates=true&q=${encodeURIComponent(search)}`;
+    const url = `/api/chargeables?type=landing_fee&include_rates=true&q=${encodeURIComponent(search)}`;
 
     fetch(url, { signal: controller.signal })
       .then(async (res) => {

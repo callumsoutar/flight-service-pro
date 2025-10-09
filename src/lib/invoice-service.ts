@@ -39,6 +39,7 @@ export interface InvoiceItem {
 export class InvoiceService {
   /**
    * Calculate all amounts for an invoice item using currency-safe arithmetic
+   * All values are rounded to 2 decimal places for consistency
    */
   static calculateItemAmounts(item: InvoiceItemInput): InvoiceItemCalculated {
     const quantity = new Decimal(item.quantity);
@@ -57,21 +58,25 @@ export class InvoiceService {
     // Calculate rate_inclusive (unit_price including tax)
     const rateInclusive = unitPrice.mul(taxRate.add(1));
     
+    // Round all values to 2 decimals for consistency across the application
+    // This ensures displayed amounts match stored amounts and line items add up correctly
     return {
-      amount: amount.toNumber(),
-      tax_amount: taxAmount.toNumber(),
-      line_total: lineTotal.toNumber(),
-      rate_inclusive: rateInclusive.toNumber()
+      amount: roundToTwoDecimals(amount.toNumber()),
+      tax_amount: roundToTwoDecimals(taxAmount.toNumber()),
+      line_total: roundToTwoDecimals(lineTotal.toNumber()),
+      rate_inclusive: roundToTwoDecimals(rateInclusive.toNumber())
     };
   }
 
   /**
    * Calculate invoice totals from items with proper rounding
+   * Items should already be rounded to 2 decimals, so this sum will be consistent
    */
   static calculateInvoiceTotals(items: InvoiceItem[]): InvoiceTotals {
     let subtotal = new Decimal(0);
     let taxTotal = new Decimal(0);
     
+    // Sum up all item amounts and tax amounts (already rounded to 2 decimals)
     for (const item of items) {
       subtotal = subtotal.add(item.amount);
       taxTotal = taxTotal.add(item.tax_amount);
@@ -79,6 +84,8 @@ export class InvoiceService {
     
     const totalAmount = subtotal.add(taxTotal);
     
+    // Round totals to 2 decimals for consistency
+    // Since items are already rounded, this should result in clean values
     return {
       subtotal: roundToTwoDecimals(subtotal.toNumber()),
       tax_total: roundToTwoDecimals(taxTotal.toNumber()),
@@ -117,8 +124,7 @@ export class InvoiceService {
       }
       
       return INVOICE_CONFIG.DEFAULT_PREFIX;
-    } catch (error) {
-      console.error('Error getting invoice prefix from settings:', error);
+    } catch {
       return INVOICE_CONFIG.DEFAULT_PREFIX;
     }
   }
@@ -148,8 +154,7 @@ export class InvoiceService {
   static async getTaxRateForInvoice(): Promise<number> {
     try {
       return await getOrganizationTaxRate();
-    } catch (error) {
-      console.error('Error getting organization tax rate for invoice:', error);
+    } catch {
       return 0.15; // Final fallback
     }
   }
@@ -316,7 +321,6 @@ export class InvoiceService {
         user_id: invoice.user_id
       });
     } catch (error) {
-      console.error(`Failed to create transaction for invoice ${invoice.invoice_number}:`, error);
       throw error;
     }
   }
@@ -376,8 +380,6 @@ export class InvoiceService {
           debitTransactionId, 
           'Invoice cancelled'
         );
-      } else {
-        console.warn(`No debit transaction found for cancelled invoice ${invoice.invoice_number}`);
       }
     }
     
@@ -418,13 +420,5 @@ export class InvoiceService {
     if (!result.success) {
       throw new Error(`Invoice totals update failed: ${result.error}`);
     }
-    
-    console.log(`Invoice ${invoiceId} totals updated atomically:`, {
-      subtotal: result.subtotal,
-      tax_total: result.tax_total,
-      total_amount: result.total_amount,
-      transaction_created: result.transaction_created,
-      transaction_id: result.transaction_id
-    });
   }
 }

@@ -5,7 +5,7 @@ interface CancellationCategoriesResponse {
   categories: CancellationCategory[];
 }
 
-export function useCancellationCategories() {
+export function useCancellationCategories(enabled: boolean = true) {
   return useQuery<CancellationCategoriesResponse>({
     queryKey: ['cancellation-categories'],
     queryFn: async () => {
@@ -15,6 +15,7 @@ export function useCancellationCategories() {
       }
       return response.json();
     },
+    enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
   });

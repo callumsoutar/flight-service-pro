@@ -11,61 +11,6 @@ export interface AccountStatementEntry {
   entry_id: string;
 }
 
-interface PaymentWithInvoice {
-  invoices: { user_id: string; invoice_number?: string; id: string } | null;
-  id: string;
-  created_at: string;
-  payment_number?: string;
-  payment_reference?: string;
-  payment_method: string;
-  amount: number;
-  notes?: string;
-  invoice_id?: string | null;
-}
-
-// Type for the raw query result where invoices comes back as an array
-interface PaymentQueryResult {
-  id: string;
-  created_at: string;
-  payment_number?: string;
-  payment_reference?: string;
-  payment_method: string;
-  amount: number;
-  notes?: string;
-  invoice_id?: string | null;
-  invoices: { user_id: string; invoice_number?: string; id: string }[] | null;
-}
-
-interface CreditTransaction {
-  created_at: string;
-  amount: number;
-  description?: string;
-  payments?: Array<{
-    id: string;
-    invoice_id: string | null;
-    payment_number?: string;
-    payment_reference?: string;
-    payment_method: string;
-    notes?: string;
-  }>;
-}
-
-interface Invoice {
-  id: string;
-  created_at: string;
-  invoice_number: string;
-  reference?: string;
-  total_amount: number;
-}
-
-interface CreditNote {
-  id: string;
-  applied_date: string;
-  credit_note_number: string;
-  reason: string;
-  total_amount: number;
-}
-
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   
@@ -201,9 +146,9 @@ export async function GET(req: NextRequest) {
       let entry_type: 'invoice' | 'payment' | 'credit_note' | 'opening_balance' = 'invoice';
 
       // Parse metadata to get related IDs
-      const metadata = transaction.metadata as any;
-      const invoiceId = metadata?.invoice_id;
-      const creditNoteId = metadata?.credit_note_id;
+      const metadata = transaction.metadata as Record<string, unknown> | null;
+      const invoiceId = metadata?.invoice_id as string | undefined;
+      const creditNoteId = metadata?.credit_note_id as string | undefined;
 
       if (transaction.type === 'debit') {
         // This is an invoice transaction

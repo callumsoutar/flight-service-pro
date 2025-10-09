@@ -51,8 +51,8 @@ const DebriefClientShell: React.FC<DebriefClientShellProps> = ({ booking, member
       if (invoiceId) {
         router.push(`/dashboard/invoices/view/${invoiceId}`);
       } else {
-        // If no invoice exists, navigate to booking check-in to create one
-        router.push(`/dashboard/bookings/check-in/${booking.id}`);
+        // If no invoice exists, navigate to booking complete to create one
+        router.push(`/dashboard/bookings/complete/${booking.id}`);
       }
     }
   };

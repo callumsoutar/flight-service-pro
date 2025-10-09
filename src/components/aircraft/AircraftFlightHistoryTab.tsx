@@ -344,7 +344,7 @@ export default function AircraftFlightHistoryTab({ aircraftId }: AircraftFlightH
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => window.location.href = `/dashboard/bookings/check-in/${flight.booking_id}`}
+                          onClick={() => window.location.href = `/dashboard/bookings/complete/${flight.booking_id}`}
                           className="h-6 px-2 text-xs"
                         >
                           View

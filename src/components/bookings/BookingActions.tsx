@@ -357,7 +357,7 @@ export default function BookingActions({
       {/* Check In Button */}
       {actualStatus === "flying" && (!mode || mode === 'check-out') && (
         <Button asChild className="h-10 px-6 text-base font-bold bg-green-600 hover:bg-green-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-green-300">
-          <Link href={`/dashboard/bookings/check-in/${actualBookingId}`}>
+          <Link href={`/dashboard/bookings/complete/${actualBookingId}`}>
             <ClipboardCheck className="w-4 h-4 mr-1" />
             Check Flight In
           </Link>

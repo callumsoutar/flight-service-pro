@@ -1,13 +1,19 @@
 "use client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { checkInKeys } from "./use-booking-check-in";
+import { InvoiceCalculations } from "@/lib/invoice-calculations";
 import type { Chargeable } from "@/types/chargeables";
 import type { InvoiceItem } from "@/types/invoice_items";
+
+// Query keys for invoice items
+const invoiceItemsKeys = {
+  invoiceItems: (invoiceId: string) => ['invoice-items', invoiceId] as const,
+};
 
 interface AddItemParams {
   invoiceId: string;
   item: Chargeable;
   quantity: number;
+  taxRate: number; // Added: Must be provided for proper calculations
 }
 
 interface UpdateItemParams {
@@ -18,6 +24,7 @@ interface UpdateItemParams {
     description?: string;
     tax_rate?: number;
   };
+  taxRate?: number; // Added: For recalculations
 }
 
 interface DeleteItemParams {
@@ -30,7 +37,7 @@ export function useInvoiceItems(invoiceId: string | null) {
 
   // Add item mutation
   const addItemMutation = useMutation({
-    mutationFn: async ({ invoiceId, item, quantity }: AddItemParams) => {
+    mutationFn: async ({ invoiceId, item, quantity, taxRate }: AddItemParams) => {
       const response = await fetch("/api/invoice_items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -40,6 +47,7 @@ export function useInvoiceItems(invoiceId: string | null) {
           description: item.name,
           quantity,
           unit_price: item.rate,
+          tax_rate: taxRate, // Include tax rate
         }),
       });
 
@@ -50,14 +58,21 @@ export function useInvoiceItems(invoiceId: string | null) {
 
       return response.json();
     },
-    onMutate: async ({ invoiceId, item, quantity }) => {
+    onMutate: async ({ invoiceId, item, quantity, taxRate }) => {
       if (!invoiceId) return;
 
       // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: checkInKeys.invoiceItems(invoiceId) });
+      await queryClient.cancelQueries({ queryKey: invoiceItemsKeys.invoiceItems(invoiceId) });
 
       // Snapshot the previous value
-      const previousItems = queryClient.getQueryData(checkInKeys.invoiceItems(invoiceId)) as InvoiceItem[] || [];
+      const previousItems = queryClient.getQueryData(invoiceItemsKeys.invoiceItems(invoiceId)) as InvoiceItem[] || [];
+
+      // Use InvoiceCalculations for optimistic update (currency-safe)
+      const calculatedAmounts = InvoiceCalculations.calculateItemAmounts({
+        quantity,
+        unit_price: item.rate,
+        tax_rate: taxRate
+      });
 
       // Optimistically add the new item
       const optimisticItem: InvoiceItem = {
@@ -67,18 +82,18 @@ export function useInvoiceItems(invoiceId: string | null) {
         description: item.name,
         quantity,
         unit_price: item.rate,
-        rate_inclusive: null,
-        amount: quantity * item.rate,
-        tax_rate: 0.15,
-        tax_amount: quantity * item.rate * 0.15, // Approximate
-        line_total: quantity * item.rate * 1.15,
+        rate_inclusive: calculatedAmounts.rate_inclusive,
+        amount: calculatedAmounts.amount,
+        tax_rate: taxRate,
+        tax_amount: calculatedAmounts.tax_amount,
+        line_total: calculatedAmounts.line_total,
         notes: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
       queryClient.setQueryData(
-        checkInKeys.invoiceItems(invoiceId),
+        invoiceItemsKeys.invoiceItems(invoiceId),
         [...previousItems, optimisticItem]
       );
 
@@ -86,12 +101,15 @@ export function useInvoiceItems(invoiceId: string | null) {
     },
     onError: (err, { invoiceId }, context) => {
       if (context?.previousItems && invoiceId) {
-        queryClient.setQueryData(checkInKeys.invoiceItems(invoiceId), context.previousItems);
+        queryClient.setQueryData(invoiceItemsKeys.invoiceItems(invoiceId), context.previousItems);
       }
     },
-    onSuccess: (data, { invoiceId }) => {
-      // Refetch to get the actual calculated values
-      queryClient.invalidateQueries({ queryKey: checkInKeys.invoiceItems(invoiceId) });
+    onSuccess: async (data, { invoiceId }) => {
+      // Refetch to get the actual calculated values (background refetch, no loading state)
+      await queryClient.refetchQueries({ 
+        queryKey: invoiceItemsKeys.invoiceItems(invoiceId),
+        type: 'active' 
+      });
     },
   });
 
@@ -114,39 +132,59 @@ export function useInvoiceItems(invoiceId: string | null) {
 
       return response.json();
     },
-    onMutate: async ({ itemId, updates }) => {
+    onMutate: async ({ itemId, updates, taxRate }) => {
       if (!invoiceId) return;
 
       // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: checkInKeys.invoiceItems(invoiceId) });
+      await queryClient.cancelQueries({ queryKey: invoiceItemsKeys.invoiceItems(invoiceId) });
 
       // Snapshot the previous value
-      const previousItems = queryClient.getQueryData(checkInKeys.invoiceItems(invoiceId)) as InvoiceItem[] || [];
+      const previousItems = queryClient.getQueryData(invoiceItemsKeys.invoiceItems(invoiceId)) as InvoiceItem[] || [];
 
-      // Optimistically update the item
-      const updatedItems = previousItems.map(item => 
-        item.id === itemId 
-          ? { 
-              ...item, 
-              ...updates,
-              amount: (updates.quantity ?? item.quantity) * (updates.unit_price ?? item.unit_price),
-              line_total: (updates.quantity ?? item.quantity) * (updates.unit_price ?? item.unit_price) * 1.15,
-            }
-          : item
-      );
+      // Optimistically update the item using InvoiceCalculations
+      const updatedItems = previousItems.map(item => {
+        if (item.id !== itemId) return item;
 
-      queryClient.setQueryData(checkInKeys.invoiceItems(invoiceId), updatedItems);
+        const newQuantity = updates.quantity ?? item.quantity;
+        const newUnitPrice = updates.unit_price ?? item.unit_price;
+        const newTaxRate = updates.tax_rate ?? taxRate ?? item.tax_rate ?? 0;
+
+        // Use InvoiceCalculations for currency-safe recalculation
+        const calculatedAmounts = InvoiceCalculations.calculateItemAmounts({
+          quantity: newQuantity,
+          unit_price: newUnitPrice,
+          tax_rate: newTaxRate
+        });
+
+        return {
+          ...item,
+          ...updates,
+          quantity: newQuantity,
+          unit_price: newUnitPrice,
+          tax_rate: newTaxRate,
+          amount: calculatedAmounts.amount,
+          tax_amount: calculatedAmounts.tax_amount,
+          line_total: calculatedAmounts.line_total,
+          rate_inclusive: calculatedAmounts.rate_inclusive,
+        };
+      });
+
+      queryClient.setQueryData(invoiceItemsKeys.invoiceItems(invoiceId), updatedItems);
 
       return { previousItems };
     },
     onError: (err, variables, context) => {
       if (context?.previousItems && invoiceId) {
-        queryClient.setQueryData(checkInKeys.invoiceItems(invoiceId), context.previousItems);
+        queryClient.setQueryData(invoiceItemsKeys.invoiceItems(invoiceId), context.previousItems);
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       if (invoiceId) {
-        queryClient.invalidateQueries({ queryKey: checkInKeys.invoiceItems(invoiceId) });
+        // Refetch to get the actual calculated values (background refetch, no loading state)
+        await queryClient.refetchQueries({ 
+          queryKey: invoiceItemsKeys.invoiceItems(invoiceId),
+          type: 'active' 
+        });
       }
     },
   });
@@ -169,25 +207,28 @@ export function useInvoiceItems(invoiceId: string | null) {
     },
     onMutate: async ({ itemId, invoiceId }) => {
       // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: checkInKeys.invoiceItems(invoiceId) });
+      await queryClient.cancelQueries({ queryKey: invoiceItemsKeys.invoiceItems(invoiceId) });
 
       // Snapshot the previous value
-      const previousItems = queryClient.getQueryData(checkInKeys.invoiceItems(invoiceId)) as InvoiceItem[] || [];
+      const previousItems = queryClient.getQueryData(invoiceItemsKeys.invoiceItems(invoiceId)) as InvoiceItem[] || [];
 
       // Optimistically remove the item
       const updatedItems = previousItems.filter(item => item.id !== itemId);
-      queryClient.setQueryData(checkInKeys.invoiceItems(invoiceId), updatedItems);
+      queryClient.setQueryData(invoiceItemsKeys.invoiceItems(invoiceId), updatedItems);
 
       return { previousItems };
     },
     onError: (err, { invoiceId }, context) => {
       if (context?.previousItems) {
-        queryClient.setQueryData(checkInKeys.invoiceItems(invoiceId), context.previousItems);
+        queryClient.setQueryData(invoiceItemsKeys.invoiceItems(invoiceId), context.previousItems);
       }
     },
-    onSuccess: (data, { invoiceId }) => {
-      // Refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: checkInKeys.invoiceItems(invoiceId) });
+    onSuccess: async (data, { invoiceId }) => {
+      // Refetch to ensure consistency (background refetch, no loading state)
+      await queryClient.refetchQueries({ 
+        queryKey: invoiceItemsKeys.invoiceItems(invoiceId),
+        type: 'active' 
+      });
     },
   });
 

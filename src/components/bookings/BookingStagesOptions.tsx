@@ -44,9 +44,12 @@ export default function BookingStagesOptions({ bookingId, bookingStatus, instruc
 
   // Check if user has restricted access (member/student)
   const { isRestricted: isRestrictedUser } = useIsRestrictedUser();
-  
-  // Use the hook for cancellation categories
-  const { data: categoriesData, isLoading: loadingCategories, error: categoriesError } = useCancellationCategories();
+
+  // Only fetch cancellation categories if booking can be cancelled
+  const canCancel = bookingStatus !== 'complete' && bookingStatus !== 'cancelled';
+
+  // Use the hook for cancellation categories (conditionally)
+  const { data: categoriesData, isLoading: loadingCategories, error: categoriesError } = useCancellationCategories(canCancel);
   const cancellationCategories = categoriesData?.categories || [];
 
   const handleCancelSubmit = async (data: { reason: string; notes?: string; cancellation_category_id?: string }) => {
