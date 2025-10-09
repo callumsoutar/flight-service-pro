@@ -37,8 +37,6 @@ interface InvoicePreviewCardProps {
   completeSuccess: boolean;
   isDualFlight: boolean;
   aircraftTypeId?: string;
-  onNavigateToDebrief: () => void;
-  onNavigateToInvoice: () => void;
 }
 
 export default function InvoicePreviewCard({
@@ -57,8 +55,6 @@ export default function InvoicePreviewCard({
   completeSuccess,
   isDualFlight,
   aircraftTypeId,
-  onNavigateToDebrief,
-  onNavigateToInvoice,
 }: InvoicePreviewCardProps) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editRate, setEditRate] = useState<number>(0);
@@ -247,43 +243,24 @@ export default function InvoicePreviewCard({
         {/* Action Buttons */}
         {hasItems && (
           <div className="space-y-3 pt-4">
-            {completeSuccess && isDualFlight ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-green-600 text-sm font-medium px-3 py-2 bg-green-50 rounded-lg border border-green-200">
-                  <CheckCircle2 className="w-4 h-4" />
-                  Flight charges saved!
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={onNavigateToDebrief}
-                    className="flex-1 bg-black hover:bg-gray-800 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm text-sm"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                    Continue to Debrief
-                  </button>
-                  <button
-                    onClick={onNavigateToInvoice}
-                    className="flex-1 bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-1.5 border border-gray-300 text-sm"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    View Invoice
-                  </button>
-                </div>
-              </div>
-            ) : completeSuccess ? (
+            {/* Success message after completion */}
+            {completeSuccess && (
               <div className="flex items-center gap-2 text-green-600 text-sm font-medium px-3 py-2 bg-green-50 rounded-lg border border-green-200">
                 <CheckCircle2 className="w-4 h-4" />
-                Solo flight completed successfully! Redirecting to invoice...
+                {isDualFlight ? 'Flight charges saved!' : 'Solo flight completed successfully!'}
               </div>
-            ) : (
+            )}
+
+            {/* Action buttons - hide after completion */}
+            {!completeSuccess && (
               <button
-                className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg font-medium bg-black text-white shadow-sm hover:bg-gray-800 transition disabled:opacity-60 disabled:cursor-not-allowed text-sm"
                 onClick={onComplete}
                 disabled={isCompleting}
                 type="button"
+                className="w-full bg-black hover:bg-gray-800 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm text-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Save and Confirm
+                Save and Continue
               </button>
             )}
           </div>

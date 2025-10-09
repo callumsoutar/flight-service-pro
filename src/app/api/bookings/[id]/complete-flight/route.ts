@@ -662,6 +662,7 @@ async function handleComplete(
 
   // 8. Create or get invoice
   let invoice;
+  let invoiceWarning: string | undefined;
   const { data: existingInvoice } = await supabase
     .from('invoices')
     .select('*')
@@ -669,25 +670,41 @@ async function handleComplete(
     .maybeSingle();
 
   const taxRate = await getOrganizationTaxRate();
-  const invoiceNumber = await InvoiceService.generateInvoiceNumber();
 
   if (existingInvoice) {
-    // Update existing invoice
-    const { data: updated } = await supabase
-      .from('invoices')
-      .update({
-        status: 'pending',
-        invoice_number: invoiceNumber,
-        issue_date: new Date().toISOString(),
-        tax_rate: taxRate,
-      })
-      .eq('id', existingInvoice.id)
-      .select('*')
-      .single();
-    invoice = updated;
+    // Check if invoice is already finalized (paid, pending, overdue)
+    // These statuses are protected by the prevent_invoice_modification trigger
+    const isFinalized = ['paid', 'pending', 'overdue'].includes(existingInvoice.status);
+    
+    if (isFinalized) {
+      // For finalized invoices, don't modify the invoice header
+      // Only invoice items can be updated
+      invoice = existingInvoice;
+      invoiceWarning = `Invoice ${existingInvoice.invoice_number} is ${existingInvoice.status}. Only invoice items were updated - invoice details remain unchanged.`;
+    } else {
+      // For draft invoices, update normally
+      const invoiceNumber = await InvoiceService.generateInvoiceNumber();
+      const { data: updated, error: updateError } = await supabase
+        .from('invoices')
+        .update({
+          status: 'pending',
+          invoice_number: invoiceNumber,
+          issue_date: new Date().toISOString(),
+          tax_rate: taxRate,
+        })
+        .eq('id', existingInvoice.id)
+        .select('*')
+        .single();
+      
+      if (updateError) {
+        return NextResponse.json({ error: `Failed to update invoice: ${updateError.message}` }, { status: 500 });
+      }
+      invoice = updated;
+    }
   } else {
     // Create new invoice
-    const { data: created } = await supabase
+    const invoiceNumber = await InvoiceService.generateInvoiceNumber();
+    const { data: created, error: createError } = await supabase
       .from('invoices')
       .insert({
         user_id: booking.user_id,
@@ -703,6 +720,10 @@ async function handleComplete(
       })
       .select('*')
       .single();
+    
+    if (createError) {
+      return NextResponse.json({ error: `Failed to create invoice: ${createError.message}` }, { status: 500 });
+    }
     invoice = created;
   }
 
@@ -805,6 +826,7 @@ async function handleComplete(
     booking: updatedBooking,
     invoice: updatedInvoice,
     success: true,
+    warning: invoiceWarning,
   });
 }
 

@@ -45,6 +45,16 @@ export default async function BookingCompletePage({ params }: PageProps) {
     .select("id", { count: "exact", head: true })
     .eq("booking_id", booking.id);
 
+  // Check if there's lesson progress (debrief) for this booking
+  const { data: lessonProgressData } = await supabase
+    .from("lesson_progress")
+    .select("id")
+    .eq("booking_id", booking.id)
+    .limit(1)
+    .maybeSingle();
+  
+  const hasLessonProgress = !!lessonProgressData;
+
   // Get aircraft data (from flight log if available, otherwise booking)
   const aircraftId = booking.flight_logs?.[0]?.checked_out_aircraft_id || booking.aircraft_id;
   const { data: aircraft } = await supabase
@@ -164,7 +174,7 @@ export default async function BookingCompletePage({ params }: PageProps) {
               flightAuthorization={null}
               requireFlightAuthorization={false}
             />
-            <BookingStagesOptions bookingId={bookingId} bookingStatus={booking.status} instructorCommentsCount={instructorCommentsCount || 0} />
+            <BookingStagesOptions bookingId={bookingId} bookingStatus={booking.status} instructorCommentsCount={instructorCommentsCount || 0} hasLessonProgress={hasLessonProgress} />
           </div>
         </div>
         <BookingStages stages={BOOKING_STAGES} currentStage={4} />

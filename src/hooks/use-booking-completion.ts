@@ -81,6 +81,7 @@ export function useBookingCompletion(bookingId: string) {
   const queryClient = useQueryClient();
   const [localData, setLocalData] = useState<LocalCalculatedData | null>(null);
   const [hasCompleted, setHasCompleted] = useState(false);
+  const [completionWarning, setCompletionWarning] = useState<string | null>(null);
 
   // Complete booking mutation - now creates everything atomically
   const completeMutation = useMutation({
@@ -107,6 +108,11 @@ export function useBookingCompletion(bookingId: string) {
     },
     onSuccess: async (data) => {
       setHasCompleted(true);
+      
+      // Capture warning if present
+      if (data.warning) {
+        setCompletionWarning(data.warning);
+      }
       
       // Fetch fresh invoice items from server to update local state
       if (data.invoice?.id) {
@@ -179,6 +185,7 @@ export function useBookingCompletion(bookingId: string) {
     },
     onMutate: () => {
       setHasCompleted(false);
+      setCompletionWarning(null);
       completeMutation.reset();
     },
     onSuccess: (data) => {
@@ -309,11 +316,13 @@ export function useBookingCompletion(bookingId: string) {
     // Errors
     calculateError: calculateMutation.error?.message,
     completeError: completeMutation.error?.message,
+    completeWarning: completionWarning,
 
     // Reset
     resetCalculate: calculateMutation.reset,
     resetComplete: () => {
       setHasCompleted(false);
+      setCompletionWarning(null);
       completeMutation.reset();
     },
     clearLocalData: () => setLocalData(null),

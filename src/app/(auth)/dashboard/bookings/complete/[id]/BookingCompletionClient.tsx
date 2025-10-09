@@ -35,6 +35,7 @@ export default function BookingCompletionClient({
   aircraftRate,
   instructorRate,
   chargingBy,
+  existingInvoice,
   existingInvoiceItems = [],
 }: BookingCompletionClientProps) {
   const router = useRouter();
@@ -54,6 +55,7 @@ export default function BookingCompletionClient({
     localData,
     calculateError,
     completeError,
+    completeWarning,
     resetComplete,
   } = useBookingCompletion(booking.id);
 
@@ -149,11 +151,22 @@ export default function BookingCompletionClient({
     });
   }, [booking.id, calculateCharges]);
 
-  // Handle complete booking
+  // Handle complete booking and navigate based on flight type
   const handleComplete = useCallback(() => {
     if (!currentMeterReadings) return;
     completeBooking(currentMeterReadings);
-  }, [completeBooking, currentMeterReadings]);
+    
+    // Navigate based on flight type after completion
+    setTimeout(() => {
+      if (isDualFlight) {
+        // For dual flights: go to debrief page
+        router.push(`/dashboard/bookings/debrief/${booking.id}`);
+      } else if (existingInvoice?.id) {
+        // For solo flights: go to invoice page
+        router.push(`/dashboard/invoices/view/${existingInvoice.id}`);
+      }
+    }, 1000); // Small delay to allow completion to process
+  }, [completeBooking, currentMeterReadings, existingInvoice, router, isDualFlight, booking.id]);
 
   // Handle add chargeable
   const handleAddChargeable = useCallback((item: Chargeable, quantity: number) => {
@@ -222,26 +235,6 @@ export default function BookingCompletionClient({
     deleteInvoiceItem(itemId);
   }, [localData, deleteInvoiceItem, resetComplete]);
 
-  // Navigation handlers
-  const handleNavigateToDebrief = useCallback(() => {
-    router.push(`/dashboard/bookings/debrief/${booking.id}`);
-  }, [router, booking.id]);
-
-  const handleNavigateToInvoice = useCallback(() => {
-    // After completion, we need to fetch the created invoice
-    // For now, just navigate to bookings
-    router.push(`/dashboard/bookings`);
-  }, [router]);
-
-  // Auto-redirect for solo flights after completion
-  React.useEffect(() => {
-    if (completeSuccess && isSoloFlight) {
-      setTimeout(() => {
-        router.push(`/dashboard/bookings`);
-      }, 1500);
-    }
-  }, [completeSuccess, isSoloFlight, router]);
-
   // Initial meter readings from flight log
   const initialMeterReadings = {
     hobbsStart: flightLog?.hobbs_start || undefined,
@@ -266,6 +259,14 @@ export default function BookingCompletionClient({
           <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{completeError}</AlertDescription>
+          </Alert>
+        )}
+
+        {/* Warning Alert */}
+        {completeWarning && (
+          <Alert className="mb-6 border-amber-200 bg-amber-50 text-amber-900">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800">{completeWarning}</AlertDescription>
           </Alert>
         )}
 
@@ -306,8 +307,6 @@ export default function BookingCompletionClient({
               completeSuccess={completeSuccess}
               isDualFlight={isDualFlight}
               aircraftTypeId={aircraft.aircraft_type_id || undefined}
-              onNavigateToDebrief={handleNavigateToDebrief}
-              onNavigateToInvoice={handleNavigateToInvoice}
             />
           </div>
         </div>
