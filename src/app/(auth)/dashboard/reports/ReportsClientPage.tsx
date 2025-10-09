@@ -29,6 +29,7 @@ interface TechLogReport {
   total_time_method: string;
   total_hours_start_of_day: string;
   total_hours_end_of_day: string;
+  end_of_day_tach: string;
 }
 
 interface ReportsClientPageProps {
@@ -167,6 +168,7 @@ export default function ReportsClientPage({ aircraft }: ReportsClientPageProps) 
       "Method",
       "Total Hours Start",
       "Total Hours End",
+      "End of Day Tach",
     ];
 
     const rows = reportData.map((row) => [
@@ -179,6 +181,7 @@ export default function ReportsClientPage({ aircraft }: ReportsClientPageProps) 
       row.total_time_method,
       row.total_hours_start_of_day,
       row.total_hours_end_of_day,
+      row.end_of_day_tach,
     ]);
 
     const csvContent = [
@@ -448,6 +451,12 @@ export default function ReportsClientPage({ aircraft }: ReportsClientPageProps) 
                     >
                       Total Hours {sortColumn === "total_hours_end_of_day" && (sortDirection === "asc" ? "↑" : "↓")}
                     </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-slate-50 text-right"
+                      onClick={() => handleSort("end_of_day_tach")}
+                    >
+                      End Tach {sortColumn === "end_of_day_tach" && (sortDirection === "asc" ? "↑" : "↓")}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -462,6 +471,7 @@ export default function ReportsClientPage({ aircraft }: ReportsClientPageProps) 
                         {parseFloat(row.daily_credited_time).toFixed(2)}
                       </TableCell>
                       <TableCell className="text-right">{parseFloat(row.total_hours_end_of_day).toFixed(2)}</TableCell>
+                      <TableCell className="text-right">{parseFloat(row.end_of_day_tach).toFixed(1)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

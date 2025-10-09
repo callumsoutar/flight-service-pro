@@ -153,7 +153,7 @@ export default function InvoiceTemplateSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="school_name" className="flex items-center gap-2">
                 <Building2 className="w-4 h-4" />
@@ -178,6 +178,25 @@ export default function InvoiceTemplateSettings() {
                 onChange={(e) => handleInputChange("gst_number", e.target.value)}
                 placeholder="e.g., 12-345-678"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="default_invoice_due_days" className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                Default Due Days
+              </Label>
+              <Input
+                id="default_invoice_due_days"
+                type="number"
+                min="1"
+                max="365"
+                value={formData.default_invoice_due_days}
+                onChange={(e) => handleInputChange("default_invoice_due_days", parseInt(e.target.value) || 7)}
+                placeholder="7"
+              />
+              <p className="text-xs text-muted-foreground">
+                Days until payment due
+              </p>
             </div>
           </div>
 
@@ -267,25 +286,6 @@ export default function InvoiceTemplateSettings() {
             />
             <p className="text-xs text-muted-foreground">
               Specify your payment terms and late payment policy
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="default_invoice_due_days" className="flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              Default Invoice Due Days
-            </Label>
-            <Input
-              id="default_invoice_due_days"
-              type="number"
-              min="1"
-              max="365"
-              value={formData.default_invoice_due_days}
-              onChange={(e) => handleInputChange("default_invoice_due_days", parseInt(e.target.value) || 7)}
-              placeholder="7"
-            />
-            <p className="text-xs text-muted-foreground">
-              Default number of days until invoice payment is due (e.g., 7 days)
             </p>
           </div>
         </CardContent>
