@@ -76,7 +76,10 @@ export async function GET(req: NextRequest) {
     .select(`
       *,
       membership_types!memberships_membership_type_id_fkey (
-        id, name, code, description, price, duration_months, benefits
+        id, name, code, description, price, duration_months, benefits,
+        chargeables (
+          id, name, rate, is_taxable
+        )
       ),
       invoices!memberships_invoice_id_fkey (
         id, status, invoice_number
@@ -221,14 +224,13 @@ export async function POST(req: NextRequest) {
 
       // Create invoice if requested
       let invoiceId = null;
-      if (validatedData.create_invoice && membershipType.price > 0) {
+      if (validatedData.create_invoice && membershipType.chargeables?.rate && membershipType.chargeables.rate > 0) {
         try {
           const invoiceResult = await createMembershipInvoice({
             userId: currentMembership.user_id,
             membershipTypeId: membershipType.id,
             membershipTypeName: membershipType.name,
             membershipTypeCode: membershipType.code,
-            price: membershipType.price,
             expiryDate: new Date(expiryDate)
           });
 
@@ -303,14 +305,13 @@ export async function POST(req: NextRequest) {
 
       // Create invoice if requested
       let invoiceId = null;
-      if (validatedData.create_invoice && membershipType.price > 0) {
+      if (validatedData.create_invoice && membershipType.chargeables?.rate && membershipType.chargeables.rate > 0) {
         try {
           const invoiceResult = await createMembershipInvoice({
             userId: validatedData.user_id,
             membershipTypeId: membershipType.id,
             membershipTypeName: membershipType.name,
             membershipTypeCode: membershipType.code,
-            price: membershipType.price,
             expiryDate: new Date(expiryDate)
           });
 

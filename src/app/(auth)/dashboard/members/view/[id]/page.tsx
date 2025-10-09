@@ -58,27 +58,38 @@ async function MemberViewPage({ params, user: _user, userRole: _userRole }: Memb
     has_auth_account: !!authUser
   };
   
-  const joinDate = formatJoinDate(member.created_at);
-
-  // Fetch membership status directly from database
+  // Fetch membership data and status
   let membershipStatus: MembershipStatus = "none";
+  let joinDate = formatJoinDate(member.created_at); // Fallback to account creation date
+  
   try {
     const { data: membershipData } = await supabase
       .from("memberships")
-      .select("*, membership_types(*)")
+      .select(`
+        *,
+        membership_types(*),
+        invoices!memberships_invoice_id_fkey (
+          id, status, invoice_number
+        )
+      `)
       .eq("user_id", id)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
+      .order("created_at", { ascending: true }) // Get oldest membership first
       .limit(1)
       .single();
 
     if (membershipData) {
-      // Calculate status based on membership data
+      // Use the oldest membership's start_date for "Member since"
+      joinDate = formatJoinDate(membershipData.start_date);
+      
+      // Calculate status based on membership data and invoice status
       const now = new Date();
       const expiryDate = new Date(membershipData.expiry_date);
       const gracePeriodEnd = new Date(expiryDate.getTime() + (membershipData.grace_period_days * 24 * 60 * 60 * 1000));
       
-      if (!membershipData.fee_paid) {
+      // Check if fee is paid via invoice status (replacing deprecated fee_paid field)
+      const feePaid = membershipData.invoices?.status === 'paid';
+      
+      if (!feePaid) {
         membershipStatus = "unpaid";
       } else if (now <= expiryDate) {
         membershipStatus = "active";
@@ -90,7 +101,7 @@ async function MemberViewPage({ params, user: _user, userRole: _userRole }: Memb
     }
   } catch (error) {
     console.error('Failed to fetch membership status:', error);
-    // membershipStatus remains "none" as fallback
+    // membershipStatus remains "none" as fallback, joinDate uses account creation date
   }
 
   return (

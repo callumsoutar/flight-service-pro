@@ -8,7 +8,10 @@ export function calculateMembershipStatus(membership: Membership): MembershipSta
   const expiryDate = new Date(membership.expiry_date);
   const gracePeriodEnd = new Date(expiryDate.getTime() + (membership.grace_period_days * 24 * 60 * 60 * 1000));
   
-  if (!membership.fee_paid) {
+  // Check if fee is paid via invoice status (replacing deprecated fee_paid field)
+  const feePaid = membership.invoices?.status === 'paid';
+  
+  if (!feePaid) {
     return "unpaid";
   }
   

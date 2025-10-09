@@ -6,7 +6,6 @@ const UpdateMembershipTypeSchema = z.object({
   name: z.string().min(1, "Name is required").optional(),
   code: z.string().min(1, "Code is required").optional(),
   description: z.string().optional(),
-  price: z.number().min(0, "Price must be non-negative").optional(),
   duration_months: z.number().int().min(1, "Duration must be at least 1 month").optional(),
   benefits: z.array(z.string()).optional(),
   is_active: z.boolean().optional(),

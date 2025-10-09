@@ -15,7 +15,6 @@ interface MembershipTypeFormData {
   name: string;
   code: string;
   description: string;
-  price: string;
   duration_months: string;
   benefits: string[];
   is_active: boolean;
@@ -39,7 +38,6 @@ export default function MembershipTypesConfig() {
     name: "",
     code: "",
     description: "",
-    price: "",
     duration_months: "",
     benefits: [],
     is_active: true,
@@ -50,7 +48,6 @@ export default function MembershipTypesConfig() {
     name: "",
     code: "",
     description: "",
-    price: "",
     duration_months: "12",
     benefits: [],
     is_active: true,
@@ -124,28 +121,23 @@ export default function MembershipTypesConfig() {
 
   useEffect(() => {
     if (selectedType) {
-      // Convert stored exclusive price to inclusive for display
-      const isTaxable = getChargeableTaxStatus(selectedType.chargeable_id);
-      const inclusivePrice = calculateTaxInclusiveRate(selectedType.price, isTaxable);
       setEditFormData({
         name: selectedType.name,
         code: selectedType.code,
         description: selectedType.description || "",
-        price: inclusivePrice.toFixed(2),
         duration_months: selectedType.duration_months.toString(),
         benefits: [...selectedType.benefits],
         is_active: selectedType.is_active ?? true,
         chargeable_id: selectedType.chargeable_id || null,
       });
     }
-  }, [selectedType, membershipChargeables, taxRate, getChargeableTaxStatus, calculateTaxInclusiveRate]);
+  }, [selectedType]);
 
   const resetAddForm = () => {
     setAddFormData({
       name: "",
       code: "",
       description: "",
-      price: "",
       duration_months: "12",
       benefits: [],
       is_active: true,
@@ -162,17 +154,13 @@ export default function MembershipTypesConfig() {
   };
 
   const handleAdd = async () => {
-    if (!addFormData.name.trim() || !addFormData.code.trim() || !addFormData.price || !addFormData.duration_months) {
-      setError("Name, code, price, and duration are required");
+    if (!addFormData.name.trim() || !addFormData.code.trim() || !addFormData.duration_months || !addFormData.chargeable_id) {
+      setError("Name, code, duration, and chargeable are required");
       return;
     }
 
     try {
       setSaving(true);
-      // Convert inclusive input to exclusive for storage
-      const isTaxable = getChargeableTaxStatus(addFormData.chargeable_id);
-      const inclusivePrice = parseFloat(addFormData.price);
-      const exclusivePrice = calculateTaxExclusiveRate(inclusivePrice, isTaxable);
 
       const response = await fetch("/api/membership_types", {
         method: "POST",
@@ -181,7 +169,6 @@ export default function MembershipTypesConfig() {
         },
         body: JSON.stringify({
           ...addFormData,
-          price: exclusivePrice,
           duration_months: parseInt(addFormData.duration_months),
           chargeable_id: addFormData.chargeable_id || null,
         }),
@@ -206,17 +193,13 @@ export default function MembershipTypesConfig() {
   const handleEdit = async () => {
     if (!selectedType) return;
 
-    if (!editFormData.name.trim() || !editFormData.code.trim() || !editFormData.price || !editFormData.duration_months) {
-      setError("Name, code, price, and duration are required");
+    if (!editFormData.name.trim() || !editFormData.code.trim() || !editFormData.duration_months || !editFormData.chargeable_id) {
+      setError("Name, code, duration, and chargeable are required");
       return;
     }
 
     try {
       setSaving(true);
-      // Convert inclusive input to exclusive for storage
-      const isTaxable = getChargeableTaxStatus(editFormData.chargeable_id);
-      const inclusivePrice = parseFloat(editFormData.price);
-      const exclusivePrice = calculateTaxExclusiveRate(inclusivePrice, isTaxable);
 
       // Update the membership type
       const response = await fetch(`/api/membership_types/${selectedType.id}`, {
@@ -226,7 +209,6 @@ export default function MembershipTypesConfig() {
         },
         body: JSON.stringify({
           ...editFormData,
-          price: exclusivePrice,
           duration_months: parseInt(editFormData.duration_months),
           chargeable_id: editFormData.chargeable_id || null,
         }),
@@ -235,25 +217,6 @@ export default function MembershipTypesConfig() {
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to update membership type");
-      }
-
-      // If there's a linked chargeable, update its rate to match (chargeable is source of truth for invoicing)
-      if (editFormData.chargeable_id) {
-        try {
-          await fetch(`/api/chargeables`, {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              id: editFormData.chargeable_id,
-              rate: exclusivePrice,
-            }),
-          });
-        } catch (chargeableErr) {
-          console.error("Failed to update linked chargeable:", chargeableErr);
-          // Don't fail the whole operation if chargeable update fails
-        }
       }
 
       await fetchMembershipTypes();
@@ -414,26 +377,6 @@ export default function MembershipTypesConfig() {
                   <p className="text-xs text-gray-500 mt-1">Unique identifier (auto-generated from name)</p>
                 </div>
                 <div>
-                  <Label htmlFor="add-price">Annual Fee (NZD, Tax Inclusive)</Label>
-                  <Input
-                    id="add-price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={addFormData.price}
-                    onChange={(e) => setAddFormData({ ...addFormData, price: e.target.value })}
-                    placeholder="0.00"
-                  />
-                  {addFormData.price && !isNaN(parseFloat(addFormData.price)) && (
-                    <div className="mt-2 text-xs text-gray-500">
-                      {getChargeableTaxStatus(addFormData.chargeable_id)
-                        ? `Tax Exclusive: ${formatCurrency(calculateTaxExclusiveRate(parseFloat(addFormData.price), true))}`
-                        : `Not linked to taxable chargeable (no conversion needed)`
-                      }
-                    </div>
-                  )}
-                </div>
-                <div>
                   <Label htmlFor="add-duration">Duration (Months)</Label>
                   <Input
                     id="add-duration"
@@ -466,7 +409,7 @@ export default function MembershipTypesConfig() {
                             <Link2 className="w-3 h-3" />
                             <span>{chargeable.name}</span>
                             <span className="text-xs text-gray-500">
-                              - ${chargeable.rate.toFixed(2)}
+                              - ${chargeable.is_taxable ? (chargeable.rate * 1.15).toFixed(2) : chargeable.rate.toFixed(2)}
                             </span>
                           </div>
                         </SelectItem>
@@ -532,7 +475,7 @@ export default function MembershipTypesConfig() {
                   </Button>
                   <Button
                     onClick={handleAdd}
-                    disabled={saving || !addFormData.name.trim() || !addFormData.code.trim() || !addFormData.price || !addFormData.duration_months}
+                    disabled={saving || !addFormData.name.trim() || !addFormData.code.trim() || !addFormData.duration_months || !addFormData.chargeable_id}
                   >
                     {saving ? "Creating..." : "Create"}
                   </Button>
@@ -573,7 +516,16 @@ export default function MembershipTypesConfig() {
                         </Badge>
                       )}
                     </div>
-                    <span className="font-semibold text-indigo-600">{formatCurrency(type.price)}</span>
+                    <span className="font-semibold text-indigo-600">
+                      {(() => {
+                        const chargeableRate = type.chargeables?.rate;
+                        if (chargeableRate && type.chargeables?.is_taxable) {
+                          const taxInclusiveRate = chargeableRate * 1.15; // 15% tax
+                          return formatCurrency(taxInclusiveRate);
+                        }
+                        return formatCurrency(chargeableRate || 0);
+                      })()}
+                    </span>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-gray-500">
                     <span>Code: {type.code}</span>
@@ -654,27 +606,6 @@ export default function MembershipTypesConfig() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="edit-price">Annual Fee (NZD, Tax Inclusive)</Label>
-                    <Input
-                      id="edit-price"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={editFormData.price}
-                      onChange={(e) => setEditFormData({ ...editFormData, price: e.target.value })}
-                      placeholder="0.00"
-                    />
-                    {editFormData.price && !isNaN(parseFloat(editFormData.price)) && (
-                      <div className="mt-2 text-xs text-gray-500">
-                        {getChargeableTaxStatus(editFormData.chargeable_id)
-                          ? `Tax Exclusive: ${formatCurrency(calculateTaxExclusiveRate(parseFloat(editFormData.price), true))}`
-                          : `Not linked to taxable chargeable (no conversion needed)`
-                        }
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
                     <Label htmlFor="edit-duration">Duration (Months)</Label>
                     <Input
                       id="edit-duration"
@@ -708,7 +639,7 @@ export default function MembershipTypesConfig() {
                             <Link2 className="w-3 h-3" />
                             <span>{chargeable.name}</span>
                             <span className="text-xs text-gray-500">
-                              - ${chargeable.rate.toFixed(2)}
+                              - ${chargeable.is_taxable ? (chargeable.rate * 1.15).toFixed(2) : chargeable.rate.toFixed(2)}
                             </span>
                           </div>
                         </SelectItem>
@@ -718,21 +649,8 @@ export default function MembershipTypesConfig() {
                   {editFormData.chargeable_id && selectedType?.chargeables && (
                     <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
                       <p className="text-blue-700 text-xs">
-                        Rate: ${selectedType.chargeables.rate.toFixed(2)} |
-                        Tax: {selectedType.chargeables.is_taxable ? 'Taxable' : 'Tax Exempt'}
+                        Rate: ${selectedType.chargeables.is_taxable ? (selectedType.chargeables.rate * 1.15).toFixed(2) : selectedType.chargeables.rate.toFixed(2)}
                       </p>
-                    </div>
-                  )}
-                  {editFormData.chargeable_id && selectedType?.chargeables &&
-                   parseFloat(editFormData.price) !== selectedType.chargeables.rate && (
-                    <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-amber-900 font-medium">Price Mismatch</p>
-                        <p className="text-amber-700 text-xs mt-1">
-                          Membership price (${parseFloat(editFormData.price).toFixed(2)}) doesn&apos;t match chargeable rate (${selectedType.chargeables.rate.toFixed(2)})
-                        </p>
-                      </div>
                     </div>
                   )}
                 </div>
@@ -835,7 +753,7 @@ export default function MembershipTypesConfig() {
             <div className="mt-auto pt-6 border-t">
               <Button
                 onClick={handleEdit}
-                disabled={saving || !editFormData.name.trim() || !editFormData.code.trim() || !editFormData.price || !editFormData.duration_months}
+                disabled={saving || !editFormData.name.trim() || !editFormData.code.trim() || !editFormData.duration_months || !editFormData.chargeable_id}
                 className="w-full"
               >
                 {saving ? "Saving..." : "Save Changes"}

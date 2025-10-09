@@ -6,7 +6,6 @@ const MembershipTypeSchema = z.object({
   name: z.string().min(1, "Name is required"),
   code: z.string().min(1, "Code is required"),
   description: z.string().optional(),
-  price: z.number().min(0, "Price must be non-negative"),
   duration_months: z.number().int().min(1, "Duration must be at least 1 month"),
   benefits: z.array(z.string()).default([]),
   is_active: z.boolean().default(true),
@@ -18,7 +17,6 @@ const UpdateMembershipTypeSchema = z.object({
   name: z.string().min(1).optional(),
   code: z.string().min(1).optional(),
   description: z.string().optional(),
-  price: z.number().min(0).optional(),
   duration_months: z.number().int().min(1).optional(),
   benefits: z.array(z.string()).optional(),
   is_active: z.boolean().optional(),
@@ -102,8 +100,8 @@ export async function POST(req: NextRequest) {
           name: `${validatedData.name} Fee`,
           description: `Membership fee for ${validatedData.name}`,
           chargeable_type_id: chargeableType.id,
-          rate: validatedData.price,
-          is_taxable: false, // Membership fees typically not taxable
+          rate: 0, // Default rate - should be updated via chargeable management
+          is_taxable: true, // Membership fees are typically taxable
           is_active: validatedData.is_active,
         }])
         .select()
@@ -171,7 +169,6 @@ export async function PATCH(req: NextRequest) {
     if (validatedData.name !== undefined) updateData.name = validatedData.name;
     if (validatedData.code !== undefined) updateData.code = validatedData.code;
     if (validatedData.description !== undefined) updateData.description = validatedData.description;
-    if (validatedData.price !== undefined) updateData.price = validatedData.price;
     if (validatedData.duration_months !== undefined) updateData.duration_months = validatedData.duration_months;
     if (validatedData.benefits !== undefined) updateData.benefits = validatedData.benefits;
     if (validatedData.is_active !== undefined) updateData.is_active = validatedData.is_active;

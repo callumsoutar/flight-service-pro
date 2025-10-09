@@ -10,7 +10,6 @@ export interface CreateMembershipInvoiceParams {
   membershipTypeId: string;
   membershipTypeName: string;
   membershipTypeCode: string;
-  price: number;
   expiryDate: Date;
 }
 
@@ -43,8 +42,7 @@ export async function createMembershipInvoice(
     const chargeableId = await getOrCreateMembershipChargeable(
       supabase,
       params.membershipTypeCode,
-      params.membershipTypeName,
-      params.price
+      params.membershipTypeName
     );
 
     if (!chargeableId) {
@@ -61,10 +59,25 @@ export async function createMembershipInvoice(
       ? params.expiryDate
       : thirtyDaysFromNow;
 
-    // 4. Calculate invoice item amounts using InvoiceService
+    // 4. Get the chargeable rate (which should be tax-inclusive)
+    const { data: chargeable } = await supabase
+      .from('chargeables')
+      .select('rate')
+      .eq('id', chargeableId)
+      .single();
+
+    if (!chargeable) {
+      throw new Error('Chargeable not found');
+    }
+
+    // 5. Calculate invoice item amounts using InvoiceService
+    // Note: chargeable.rate is tax-inclusive, so we need to calculate tax-exclusive amount
+    const taxInclusiveRate = parseFloat(chargeable.rate);
+    const taxExclusiveRate = taxInclusiveRate / (1 + taxRate);
+    
     const itemAmounts = InvoiceService.calculateItemAmounts({
       quantity: 1,
-      unit_price: params.price,
+      unit_price: taxExclusiveRate,
       tax_rate: taxRate
     });
 
@@ -101,7 +114,7 @@ export async function createMembershipInvoice(
       chargeable_id: chargeableId,
       description: `${params.membershipTypeName} Membership Fee`,
       quantity: 1,
-      unit_price: params.price,
+      unit_price: taxExclusiveRate,
       tax_rate: taxRate,
       amount: itemAmounts.amount,
       tax_amount: itemAmounts.tax_amount,
@@ -145,14 +158,12 @@ export async function createMembershipInvoice(
  * @param supabase - Supabase client
  * @param membershipTypeCode - Code of the membership type (e.g., "flying_member")
  * @param membershipTypeName - Display name of the membership type
- * @param price - Current price of the membership
  * @returns Chargeable ID or null if operation fails
  */
 async function getOrCreateMembershipChargeable(
   supabase: SupabaseClient,
   membershipTypeCode: string,
-  membershipTypeName: string,
-  price: number
+  membershipTypeName: string
 ): Promise<string | null> {
   try {
     // 1. Get the membership_fee chargeable type ID
@@ -170,43 +181,19 @@ async function getOrCreateMembershipChargeable(
     // 2. Look for existing active chargeable with this membership type code
     const { data: existingChargeable } = await supabase
       .from('chargeables')
-      .select('id, rate')
+      .select('id')
       .eq('chargeable_type_id', chargeableType.id)
       .eq('name', membershipTypeCode)
       .eq('is_active', true)
       .maybeSingle();
 
     if (existingChargeable) {
-      // Update rate if it has changed
-      if (existingChargeable.rate !== price) {
-        await supabase
-          .from('chargeables')
-          .update({ rate: price, updated_at: new Date().toISOString() })
-          .eq('id', existingChargeable.id);
-      }
       return existingChargeable.id;
     }
 
-    // 3. Create new chargeable if not found
-    const { data: newChargeable, error: createError } = await supabase
-      .from('chargeables')
-      .insert({
-        chargeable_type_id: chargeableType.id,
-        name: membershipTypeCode,
-        description: `${membershipTypeName} Membership`,
-        rate: price,
-        is_taxable: true,
-        is_active: true
-      })
-      .select('id')
-      .single();
-
-    if (createError || !newChargeable) {
-      console.error('Failed to create chargeable:', createError);
-      return null;
-    }
-
-    return newChargeable.id;
+    // 3. If not found, this is an error - chargeables should be pre-created
+    console.error(`No active chargeable found for membership type: ${membershipTypeCode}`);
+    return null;
 
   } catch (error) {
     console.error('Error in getOrCreateMembershipChargeable:', error);

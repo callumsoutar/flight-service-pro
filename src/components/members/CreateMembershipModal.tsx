@@ -172,7 +172,14 @@ export default function CreateMembershipModal({
                             </span>
                           </div>
                           <span className="text-sm font-semibold text-gray-900 ml-4">
-                            {type.price === 0 ? "Free" : `$${type.price}`}
+                            {type.chargeables?.rate === 0 ? "Free" : (() => {
+                              const chargeableRate = type.chargeables?.rate;
+                              if (chargeableRate && type.chargeables?.is_taxable) {
+                                const taxInclusiveRate = chargeableRate * 1.15; // 15% tax
+                                return `$${taxInclusiveRate.toFixed(2)}`;
+                              }
+                              return `$${chargeableRate}`;
+                            })()}
                           </span>
                         </div>
                       </SelectItem>
@@ -210,7 +217,14 @@ export default function CreateMembershipModal({
                         </div>
                         <div className="text-right ml-4">
                           <div className="text-2xl font-bold text-gray-900">
-                            {selectedType.price === 0 ? "Free" : `$${selectedType.price}`}
+                            {selectedType.chargeables?.rate === 0 ? "Free" : (() => {
+                              const chargeableRate = selectedType.chargeables?.rate;
+                              if (chargeableRate && selectedType.chargeables?.is_taxable) {
+                                const taxInclusiveRate = chargeableRate * 1.15; // 15% tax
+                                return `$${taxInclusiveRate.toFixed(2)}`;
+                              }
+                              return `$${chargeableRate}`;
+                            })()}
                           </div>
                         </div>
                       </div>

@@ -182,9 +182,16 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
                   <div className="space-y-0.5">
                     <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Annual Fee</p>
                     <p className="text-sm font-semibold text-gray-900">
-                      {membershipSummary.current_membership.membership_types?.price === 0
+                      {membershipSummary.current_membership.membership_types?.chargeables?.rate === 0
                         ? 'Free'
-                        : `$${membershipSummary.current_membership.membership_types?.price}`}
+                        : (() => {
+                            const chargeableRate = membershipSummary.current_membership.membership_types?.chargeables?.rate;
+                            if (chargeableRate && membershipSummary.current_membership.membership_types?.chargeables?.is_taxable) {
+                              const taxInclusiveRate = chargeableRate * 1.15; // 15% tax
+                              return `$${taxInclusiveRate.toFixed(2)}`;
+                            }
+                            return `$${chargeableRate}`;
+                          })()}
                     </p>
                   </div>
                   <div className="space-y-0.5">
@@ -313,7 +320,14 @@ export default function MemberMembershipsTab({ memberId }: MemberMembershipsTabP
                               </div>
                             </td>
                             <td className="py-3 pr-4 font-medium">
-                              {membership.membership_types?.price === 0 ? 'Free' : `$${membership.membership_types?.price}`}
+                              {membership.membership_types?.chargeables?.rate === 0 ? 'Free' : (() => {
+                                const chargeableRate = membership.membership_types?.chargeables?.rate;
+                                if (chargeableRate && membership.membership_types?.chargeables?.is_taxable) {
+                                  const taxInclusiveRate = chargeableRate * 1.15; // 15% tax
+                                  return `$${taxInclusiveRate.toFixed(2)}`;
+                                }
+                                return `$${chargeableRate}`;
+                              })()}
                             </td>
                             <td className="py-3 pr-4">
                               <Badge variant={membership.invoices?.status === 'paid' ? "default" : "secondary"} className="text-xs">

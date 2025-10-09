@@ -7,7 +7,6 @@ export interface MembershipType {
   name: string; // "Flying Member", "Social Member"
   code: string; // "flying_member", "social_member"
   description?: string;
-  price: number; // Annual fee (may be deprecated in favor of chargeable.rate)
   duration_months: number; // 12 for annual, 1 for monthly
   is_active: boolean;
   benefits: string[]; // Array of membership benefits
