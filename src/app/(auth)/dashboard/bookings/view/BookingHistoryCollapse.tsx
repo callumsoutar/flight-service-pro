@@ -91,7 +91,7 @@ export default function BookingHistoryCollapse({ bookingId, lessons }: BookingHi
     }
   }, [open, bookingId, logs.length, loading]);
 
-  function formatValue(value: unknown, field: string): string {
+  function formatValue(value: unknown): string {
     if (value === null || value === undefined) return '—';
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     if (typeof value === 'string' && value === '') return '—';
@@ -102,15 +102,6 @@ export default function BookingHistoryCollapse({ bookingId, lessons }: BookingHi
     if (!value || typeof value !== 'string') return '—';
     try {
       return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch {
-      return String(value);
-    }
-  }
-
-  function formatDateValue(value: unknown): string {
-    if (!value || typeof value !== 'string') return '—';
-    try {
-      return new Date(value).toLocaleDateString([], { month: 'short', day: '2-digit', year: 'numeric' });
     } catch {
       return String(value);
     }
@@ -139,18 +130,18 @@ export default function BookingHistoryCollapse({ bookingId, lessons }: BookingHi
               newDisplay = formatTimeValue(value.new);
             } else if (field === 'status') {
               // Status changes are most important - format them nicely
-              oldDisplay = formatValue(value.old, field);
-              newDisplay = formatValue(value.new, field);
+              oldDisplay = formatValue(value.old);
+              newDisplay = formatValue(value.new);
               changes.push(`${label}: ${oldDisplay} → ${newDisplay}`);
               continue;
             } else if (field === 'lesson_id') {
               const oldLesson = lessons.find((l: { id: string; name: string }) => l.id === value.old);
               const newLesson = lessons.find((l: { id: string; name: string }) => l.id === value.new);
-              oldDisplay = oldLesson ? oldLesson.name : formatValue(value.old, field);
-              newDisplay = newLesson ? newLesson.name : formatValue(value.new, field);
+              oldDisplay = oldLesson ? oldLesson.name : formatValue(value.old);
+              newDisplay = newLesson ? newLesson.name : formatValue(value.new);
             } else if (field === 'authorization_override') {
-              oldDisplay = formatValue(value.old, field);
-              newDisplay = formatValue(value.new, field);
+              oldDisplay = formatValue(value.old);
+              newDisplay = formatValue(value.new);
               if (newDisplay === 'Yes') {
                 changes.push(`Authorization override enabled`);
                 continue;
@@ -159,8 +150,8 @@ export default function BookingHistoryCollapse({ bookingId, lessons }: BookingHi
                 continue;
               }
             } else {
-              oldDisplay = formatValue(value.old, field);
-              newDisplay = formatValue(value.new, field);
+              oldDisplay = formatValue(value.old);
+              newDisplay = formatValue(value.new);
             }
             
             // Skip if no meaningful change

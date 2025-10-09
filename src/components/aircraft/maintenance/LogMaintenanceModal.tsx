@@ -52,7 +52,6 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
   
   // Store component data for calculations
   const [componentData, setComponentData] = useState<AircraftComponent | null>(null);
-  const [aircraftData, setAircraftData] = useState<{ total_hours: number | null } | null>(null);
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -70,7 +69,6 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
       setNextDueHours("");
       setNextDueDate("");
       setComponentData(null);
-      setAircraftData(null);
       setError(null);
       
       // Get current user
@@ -90,8 +88,7 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
           const res = await fetch(`/api/aircraft?id=${aircraft_id}`);
           if (res.ok) {
             const { aircraft } = await res.json();
-            setAircraftData(aircraft);
-            
+
             // Set initial hours at visit to aircraft's current total hours
             if (aircraft.total_hours) {
               setHoursAtVisit(String(aircraft.total_hours));

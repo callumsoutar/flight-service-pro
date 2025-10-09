@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,7 +32,6 @@ export default function MembershipTypesConfig() {
   const [newBenefit, setNewBenefit] = useState("");
   const [membershipChargeables, setMembershipChargeables] = useState<{id: string; name: string; rate: number; is_taxable: boolean}[]>([]);
   const [isBenefitsExpanded, setIsBenefitsExpanded] = useState(false);
-  const [taxRate, setTaxRate] = useState(0.15);
 
   const [editFormData, setEditFormData] = useState<MembershipTypeFormData>({
     name: "",
@@ -82,42 +81,11 @@ export default function MembershipTypesConfig() {
     }
   };
 
-  const fetchTaxRate = async () => {
-    try {
-      const response = await fetch("/api/tax_rates?is_default=true");
-      if (!response.ok) {
-        throw new Error("Failed to fetch tax rate");
-      }
-      const data = await response.json();
-      const defaultRate = data.tax_rates?.[0]?.rate;
-      setTaxRate(defaultRate || 0.15);
-    } catch {
-      console.warn("Could not fetch tax rate, using default 15%");
-      setTaxRate(0.15);
-    }
-  };
-
   useEffect(() => {
     fetchMembershipTypes();
     fetchMembershipChargeables();
-    fetchTaxRate();
   }, []);
 
-  const getChargeableTaxStatus = useCallback((chargeableId: string | null) => {
-    if (!chargeableId) return false;
-    const chargeable = membershipChargeables.find(c => c.id === chargeableId);
-    return chargeable?.is_taxable || false;
-  }, [membershipChargeables]);
-
-  const calculateTaxInclusiveRate = useCallback((rate: number, isTaxable: boolean = true) => {
-    if (!isTaxable) return rate;
-    return rate * (1 + taxRate);
-  }, [taxRate]);
-
-  const calculateTaxExclusiveRate = useCallback((inclusiveRate: number, isTaxable: boolean = true) => {
-    if (!isTaxable) return inclusiveRate;
-    return inclusiveRate / (1 + taxRate);
-  }, [taxRate]);
 
   useEffect(() => {
     if (selectedType) {

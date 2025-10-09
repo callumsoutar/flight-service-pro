@@ -41,8 +41,7 @@ export async function createMembershipInvoice(
     // 1. Get or create chargeable for this membership type
     const chargeableId = await getOrCreateMembershipChargeable(
       supabase,
-      params.membershipTypeCode,
-      params.membershipTypeName
+      params.membershipTypeCode
     );
 
     if (!chargeableId) {
@@ -162,8 +161,7 @@ export async function createMembershipInvoice(
  */
 async function getOrCreateMembershipChargeable(
   supabase: SupabaseClient,
-  membershipTypeCode: string,
-  membershipTypeName: string
+  membershipTypeCode: string
 ): Promise<string | null> {
   try {
     // 1. Get the membership_fee chargeable type ID

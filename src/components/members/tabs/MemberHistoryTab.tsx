@@ -113,7 +113,7 @@ export default function MemberHistoryTab({ member }: MemberHistoryTabProps) {
       .finally(() => setLoading(false));
   }, [member.id]);
 
-  function formatValue(value: unknown, field: string): string {
+  function formatValue(value: unknown): string {
     if (value === null || value === undefined) return '—';
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     if (typeof value === 'string' && value === '') return '—';
@@ -171,8 +171,8 @@ export default function MemberHistoryTab({ member }: MemberHistoryTabProps) {
               oldDisplay = formatDateValue(value.old);
               newDisplay = formatDateValue(value.new);
             } else {
-              oldDisplay = formatValue(value.old, field);
-              newDisplay = formatValue(value.new, field);
+              oldDisplay = formatValue(value.old);
+              newDisplay = formatValue(value.new);
             }
             
             // Skip if no meaningful change
@@ -202,8 +202,8 @@ export default function MemberHistoryTab({ member }: MemberHistoryTabProps) {
               oldDisplay = formatDateValue(value.old);
               newDisplay = formatDateValue(value.new);
             } else {
-              oldDisplay = formatValue(value.old, field);
-              newDisplay = formatValue(value.new, field);
+              oldDisplay = formatValue(value.old);
+              newDisplay = formatValue(value.new);
             }
             
             if (oldDisplay !== newDisplay && !(oldDisplay === '—' && newDisplay === '—')) {

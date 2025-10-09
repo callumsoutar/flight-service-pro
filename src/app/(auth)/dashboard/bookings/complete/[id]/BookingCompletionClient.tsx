@@ -61,7 +61,6 @@ export default function BookingCompletionClient({
 
   const flightLog = booking.flight_logs?.[0];
   const isDualFlight = booking.flight_type?.instruction_type === 'dual';
-  const isSoloFlight = booking.flight_type?.instruction_type === 'solo';
 
   // Initialize local state from existing invoice data on mount
   React.useEffect(() => {

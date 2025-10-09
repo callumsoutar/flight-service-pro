@@ -181,7 +181,7 @@ export default function BookingActions({
 
       // Fetch flight log for this booking
       const response = await fetch(`/api/flight-logs?booking_id=${actualBookingId}`);
-      let flightLogData = null;
+      let flightLogData = undefined;
       let checkedOutAircraft = null;
       let checkedOutInstructor = null;
 
@@ -238,6 +238,7 @@ export default function BookingActions({
       });
 
       // Generate PDF blob
+      // @ts-expect-error - CheckOutSheet returns a Document, type inference issue with React.createElement
       const blob = await pdf(doc).toBlob();
 
       // Open PDF directly in new window for printing

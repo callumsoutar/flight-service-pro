@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Trash2, CheckCircle2, MessageSquare, FileText, Loader2, Pencil, Check, X } from "lucide-react";
+import { Trash2, CheckCircle2, FileText, Loader2, Pencil, Check, X } from "lucide-react";
 import UnifiedChargeableSearch from "@/components/bookings/UnifiedChargeableSearch";
 import { roundToTwoDecimals } from "@/lib/utils";
 import type { Chargeable } from "@/types/chargeables";
