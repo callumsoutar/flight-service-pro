@@ -4,11 +4,14 @@ import DashboardTabbedSection from "@/components/dashboard/DashboardTabbedSectio
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import type { Booking } from "@/types/bookings";
 
-async function DashboardPage({ userRole }: ProtectedPageProps) {
+async function DashboardPage({ user, userRole }: ProtectedPageProps) {
   const supabase = await createClient();
 
-  // Fetch today's confirmed bookings and currently flying bookings
-  const { data: bookingsData } = await supabase
+  const isPrivilegedUser = ['instructor', 'admin', 'owner'].includes(userRole);
+  const isRestrictedUser = ['member', 'student'].includes(userRole);
+
+  // Build query based on user role
+  let bookingsQuery = supabase
     .from("bookings")
     .select(`
       id,
@@ -26,9 +29,20 @@ async function DashboardPage({ userRole }: ProtectedPageProps) {
       voucher_number,
       created_at,
       updated_at
-    `)
-    .in('status', ['confirmed', 'flying'])
-    .order("start_time", { ascending: true });
+    `);
+
+  if (isRestrictedUser) {
+    // Restricted users: show their own upcoming bookings (unconfirmed and confirmed)
+    bookingsQuery = bookingsQuery
+      .eq('user_id', user.id)
+      .in('status', ['unconfirmed', 'confirmed'])
+      .gte('start_time', new Date().toISOString());
+  } else {
+    // Privileged users: show all confirmed and currently flying bookings
+    bookingsQuery = bookingsQuery.in('status', ['confirmed', 'flying']);
+  }
+
+  const { data: bookingsData } = await bookingsQuery.order("start_time", { ascending: true });
 
   const bookings: Booking[] = bookingsData || [];
 

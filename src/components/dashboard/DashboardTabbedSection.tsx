@@ -60,6 +60,8 @@ export default function DashboardTabbedSection({
 
   // Flight Authorization logic
   const isPrivilegedUser = ['instructor', 'admin', 'owner'].includes(userRole);
+  const isRestrictedUser = ['member', 'student'].includes(userRole);
+
   const { data: authorizationsData, isLoading } = useFlightAuthorizations({
     status: 'pending',
     limit: 10
@@ -159,6 +161,42 @@ export default function DashboardTabbedSection({
   const totalTodayActivity = todaysBookings.length + currentlyFlying.length;
   const authorizationCount = authorizations.length;
 
+  // Restricted users: Simple upcoming bookings view
+  if (isRestrictedUser) {
+    return (
+      <Card className="border-2 border-gray-100 hover:border-gray-200 transition-colors">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg">Upcoming Bookings</CardTitle>
+            {bookings.length > 0 && (
+              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                {bookings.length} booking{bookings.length !== 1 ? 's' : ''}
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {bookings.length === 0 ? (
+            <div className="text-center py-12">
+              <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Upcoming Bookings</h3>
+              <p className="text-gray-600">You don&apos;t have any upcoming flight bookings.</p>
+            </div>
+          ) : (
+            <BookingsTable
+              bookings={bookings}
+              members={members}
+              instructors={instructors}
+              aircraftList={aircraftList}
+              compact={false}
+            />
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Privileged users: Tabbed view with today's activity and authorizations
   return (
     <>
       <Card className="border-2 border-gray-100 hover:border-gray-200 transition-colors">

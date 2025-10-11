@@ -207,6 +207,7 @@ const FlightSchedulerInner = () => {
   // State for current user
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUserLoading, setCurrentUserLoading] = useState(true);
 
   // State for cancellation categories (only fetch when needed)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -222,6 +223,8 @@ const FlightSchedulerInner = () => {
         setCurrentUser(user);
       } catch (error) {
         // Error getting current user - silently handle
+      } finally {
+        setCurrentUserLoading(false);
       }
     };
     getCurrentUser();
@@ -469,7 +472,7 @@ const FlightSchedulerInner = () => {
             String(bookingLocalDate.getMonth() + 1).padStart(2, '0') + '-' +
             String(bookingLocalDate.getDate()).padStart(2, '0');
 
-          if (bookingLocalDateStr === localDateStr && ['confirmed', 'flying', 'complete', 'unconfirmed'].includes(booking.status || '')) {
+          if (bookingLocalDateStr === localDateStr && ['unconfirmed', 'confirmed', 'briefing', 'flying', 'complete'].includes(booking.status || '')) {
             const startTime = bookingDate.getHours() + (bookingDate.getMinutes() / 60);
         const endTime = new Date(booking.end_time);
             if (isNaN(endTime.getTime())) return;
@@ -768,6 +771,20 @@ const FlightSchedulerInner = () => {
     if (visibleSlots.length === 0) return '';
     return `${visibleSlots[0]} - ${visibleSlots[visibleSlots.length - 1]}`;
   };
+
+  // Memoize whether previous day navigation should be disabled
+  const isPreviousDayDisabled = useMemo(() => {
+    if (isDateChanging) return true;
+    if (!isRestricted) return false;
+    
+    // For restricted users, disable if previous day is before today
+    const previousDay = new Date(selectedDate);
+    previousDay.setDate(selectedDate.getDate() - 1);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    previousDay.setHours(0, 0, 0, 0);
+    return previousDay < today;
+  }, [isDateChanging, isRestricted, selectedDate]);
 
   // Get booking style - restored from original
   const getBookingStyle = (booking: Booking, rowHeight: number) => {
@@ -1401,7 +1418,8 @@ const FlightSchedulerInner = () => {
     }
   };
 
-  if (loading || businessHoursLoading) {
+  // Wait for currentUser to load for restricted users to prevent race condition
+  if (loading || businessHoursLoading || (isRestricted && currentUserLoading)) {
     return (
       <div className="w-full min-h-screen flex items-center justify-center">
         <div className="flex items-center space-x-2">
@@ -1440,110 +1458,106 @@ const FlightSchedulerInner = () => {
     );
   }
 
-  // Persistent Header Component (doesn't re-render with scheduler data)
-  const SchedulerHeader = React.memo(() => {
-    return (
-      <div className="bg-white p-4 border-b border-gray-200 rounded-t-lg sticky top-0 z-30">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => {
-                const previousDay = new Date(selectedDate);
-                previousDay.setDate(selectedDate.getDate() - 1);
-                setSelectedDate(previousDay);
-              }}
-              disabled={isDateChanging}
-              className={`text-xl transition-all duration-200 p-1 rounded-full ${
-                isDateChanging
-                  ? 'text-gray-400 cursor-not-allowed'
-                  : 'text-gray-600 hover:text-blue-500 hover:bg-gray-100 active:scale-95'
-              }`}
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="font-bold text-lg text-gray-800 hover:text-blue-600 hover:bg-blue-50"
-                >
-                  <CalendarIcon className="w-5 h-5 mr-2" />
-                  {format(selectedDate, "EEEE, dd MMMM yyyy")}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => date && setSelectedDate(date)}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-
-            <button
-              onClick={() => {
-                const nextDay = new Date(selectedDate);
-                nextDay.setDate(selectedDate.getDate() + 1);
-                setSelectedDate(nextDay);
-              }}
-              disabled={isDateChanging}
-              className={`text-xl transition-all duration-200 p-1 rounded-full ${
-                isDateChanging
-                  ? 'text-gray-400 cursor-not-allowed'
-                  : 'text-gray-600 hover:text-blue-500 hover:bg-gray-100 active:scale-95'
-              }`}
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-          <div className="text-sm">
-            <button
-              onClick={() => setSelectedDate(new Date())}
-              disabled={isDateChanging}
-              className={`px-4 py-2 rounded-full font-medium transition-all duration-200 ${
-                isDateChanging
-                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                  : 'bg-blue-500 hover:bg-blue-600 active:scale-95 cursor-pointer text-white'
-              }`}
-            >
-              Today
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  });
-  SchedulerHeader.displayName = 'SchedulerHeader';
-
   return (
       <div className="w-full min-h-screen flex flex-col items-center">
-        <div className="w-full max-w-[96vw] px-6 pt-8 pb-12 flex flex-col gap-8">
-          {/* Persistent Header */}
-          <SchedulerHeader />
+        <div className="w-full max-w-[96vw] px-6 pt-8 pb-12">
+          <div className="relative">
+            {/* Refreshing overlay - only show for manual refreshes, not date changes */}
+            {refreshing && !isDateChanging && (
+              <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center rounded-md">
+                <div className="bg-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                  <span className="text-sm text-gray-700">Updating schedule...</span>
+                </div>
+              </div>
+            )}
 
-          {/* Main Scheduler - separated from header to prevent unnecessary re-renders */}
-          <div className="w-full overflow-hidden mx-auto">
-            <div className="relative">
-              {/* Refreshing overlay - only show for manual refreshes, not date changes */}
-              {refreshing && !isDateChanging && (
-                <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center rounded-md">
-                  <div className="bg-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                    <span className="text-sm text-gray-700">Updating schedule...</span>
+            <div
+              ref={timelineRef}
+              className={`w-full bg-white select-none rounded overflow-x-auto border border-gray-200/50 min-w-[800px] max-w-full transition-opacity duration-300 ${
+                isDateChanging ? 'opacity-75' : 'opacity-100'
+              }`}
+              onWheel={handleWheelScroll}
+            >
+              {/* Date Navigation Header */}
+              <div className="bg-white p-4 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <button
+                      onClick={() => {
+                        const previousDay = new Date(selectedDate);
+                        previousDay.setDate(selectedDate.getDate() - 1);
+                        setSelectedDate(previousDay);
+                      }}
+                      disabled={isPreviousDayDisabled}
+                      className={`text-xl transition-all duration-200 p-1 rounded-full ${
+                        isPreviousDayDisabled
+                          ? 'text-gray-400 cursor-not-allowed'
+                          : 'text-gray-600 hover:text-blue-500 hover:bg-gray-100 active:scale-95'
+                      }`}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          className="font-bold text-lg text-gray-800 hover:text-blue-600 hover:bg-blue-50"
+                        >
+                          <CalendarIcon className="w-5 h-5 mr-2" />
+                          {format(selectedDate, "EEEE, dd MMMM yyyy")}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={selectedDate}
+                          onSelect={(date) => date && setSelectedDate(date)}
+                          disabled={isRestricted ? (date) => {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const checkDate = new Date(date);
+                            checkDate.setHours(0, 0, 0, 0);
+                            return checkDate < today;
+                          } : undefined}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+
+                    <button
+                      onClick={() => {
+                        const nextDay = new Date(selectedDate);
+                        nextDay.setDate(selectedDate.getDate() + 1);
+                        setSelectedDate(nextDay);
+                      }}
+                      disabled={isDateChanging}
+                      className={`text-xl transition-all duration-200 p-1 rounded-full ${
+                        isDateChanging
+                          ? 'text-gray-400 cursor-not-allowed'
+                          : 'text-gray-600 hover:text-blue-500 hover:bg-gray-100 active:scale-95'
+                      }`}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="text-sm">
+                    <button
+                      onClick={() => setSelectedDate(new Date())}
+                      disabled={isDateChanging}
+                      className={`px-5 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+                        isDateChanging
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white shadow-sm'
+                      }`}
+                    >
+                      Today
+                    </button>
                   </div>
                 </div>
-              )}
+              </div>
 
-
-              <div
-                ref={timelineRef}
-                className={`w-full bg-white select-none rounded-md overflow-x-auto shadow-lg border min-w-[800px] max-w-full transition-opacity duration-300 ${
-                  isDateChanging ? 'opacity-75' : 'opacity-100'
-                }`}
-                onWheel={handleWheelScroll}
-              >
               {/* Time Header with Navigation */}
               <div className="flex border-b border-gray-300 bg-gradient-to-r from-blue-50 to-indigo-50">
                 <div className="w-52 border-r border-gray-200 flex items-center justify-center bg-white">
@@ -1615,128 +1629,126 @@ const FlightSchedulerInner = () => {
                   : aircraftItem.registration;
                 return renderResourceRow(displayName, false);
               })}
-              </div>
             </div>
           </div>
-        </div>
 
-        {/* Modals */}
-        {showNewBookingModal && (
-          <NewBookingModal
-            open={showNewBookingModal}
-            onClose={() => {
-              setShowNewBookingModal(false);
-              setSelectedAircraft(null);
-              setSelectedTimeSlot(null);
-              setPrefilledBookingData(null);
+          {/* Modals */}
+          {showNewBookingModal && (
+            <NewBookingModal
+              open={showNewBookingModal}
+              onClose={() => {
+                setShowNewBookingModal(false);
+                setSelectedAircraft(null);
+                setSelectedTimeSlot(null);
+                setPrefilledBookingData(null);
 
-              // Clear user_id from URL if present
-              const userId = searchParams.get('user_id');
-              if (userId) {
-                router.replace('/dashboard/scheduler');
-              }
-            }}
-            aircraft={aircraft.map(a => ({
-              id: a.id,
-              registration: a.registration,
-              type: a.type,
-              aircraft_type_id: a.aircraft_type_id,
-              aircraft_type: a.aircraft_type,
-              prioritise_scheduling: a.prioritise_scheduling
-            }))}
-            bookings={rawBookings}
-            prefilledData={prefilledBookingData || (selectedTimeSlot ? {
-              date: selectedDate,
-              startTime: selectedTimeSlot
-            } : undefined)}
-            onBookingCreated={addBookingOptimistically}
-          />
-        )}
-
-        {showCancelBookingModal && selectedBooking && (
-          <CancelBookingModal
-            open={showCancelBookingModal}
-            onOpenChange={(open) => {
-              if (!open) {
-                setShowCancelBookingModal(false);
-                setSelectedBooking(null);
-              }
-            }}
-            onSubmit={handleCancelBooking}
-            categories={Array.isArray(cancellationCategories) ? cancellationCategories : []}
-            bookingId={selectedBooking.id}
-          />
-        )}
-
-        {showChangeAircraftModal && selectedBooking && (
-          <ChangeAircraftModal
-            open={showChangeAircraftModal}
-            onOpenChange={(open) => {
-              if (!open) {
-                setShowChangeAircraftModal(false);
-                setSelectedBooking(null);
-              }
-            }}
-            booking={{
-              id: selectedBooking.id,
-              name: selectedBooking.name,
-              aircraft: selectedBooking.aircraft,
-              start_time: formatTime(selectedBooking.start),
-              end_time: formatTime(selectedBooking.start + selectedBooking.duration)
-            }}
-            aircraft={aircraft.map(a => ({
-              id: a.id,
-              registration: a.registration,
-              type: a.type,
-              aircraft_type_id: a.aircraft_type_id,
-              aircraft_type: a.aircraft_type,
-              prioritise_scheduling: a.prioritise_scheduling
-            }))}
-            onAircraftChanged={async (bookingId, newAircraftId) => {
-              try {
-                const response = await fetch('/api/bookings', {
-                  method: 'PATCH',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    id: bookingId,
-                    aircraft_id: newAircraftId,
-                  }),
-                });
-
-                if (!response.ok) {
-                  const errorData = await response.json();
-                  throw new Error(errorData.error || 'Failed to change aircraft');
+                // Clear user_id from URL if present
+                const userId = searchParams.get('user_id');
+                if (userId) {
+                  router.replace('/dashboard/scheduler');
                 }
+              }}
+              aircraft={aircraft.map(a => ({
+                id: a.id,
+                registration: a.registration,
+                type: a.type,
+                aircraft_type_id: a.aircraft_type_id,
+                aircraft_type: a.aircraft_type,
+                prioritise_scheduling: a.prioritise_scheduling
+              }))}
+              bookings={rawBookings}
+              prefilledData={prefilledBookingData || (selectedTimeSlot ? {
+                date: selectedDate,
+                startTime: selectedTimeSlot
+              } : undefined)}
+              onBookingCreated={addBookingOptimistically}
+            />
+          )}
 
-                toast.success('Aircraft changed successfully');
-                fetchAllData(false); // Refresh data
-                setShowChangeAircraftModal(false);
-                setSelectedBooking(null);
-              } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Failed to change aircraft';
-                toast.error(errorMessage);
-              }
-            }}
-          />
-        )}
+          {showCancelBookingModal && selectedBooking && (
+            <CancelBookingModal
+              open={showCancelBookingModal}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setShowCancelBookingModal(false);
+                  setSelectedBooking(null);
+                }
+              }}
+              onSubmit={handleCancelBooking}
+              categories={Array.isArray(cancellationCategories) ? cancellationCategories : []}
+              bookingId={selectedBooking.id}
+            />
+          )}
 
-        {showContactDetailsModal && selectedBooking && (
-          <ContactDetailsModal
-            open={showContactDetailsModal}
-            onOpenChange={(open) => {
-              if (!open) {
-                setShowContactDetailsModal(false);
-                setSelectedBooking(null);
-              }
-            }}
-            userId={selectedBooking.user_id || null}
-          />
-        )}
+          {showChangeAircraftModal && selectedBooking && (
+            <ChangeAircraftModal
+              open={showChangeAircraftModal}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setShowChangeAircraftModal(false);
+                  setSelectedBooking(null);
+                }
+              }}
+              booking={{
+                id: selectedBooking.id,
+                name: selectedBooking.name,
+                aircraft: selectedBooking.aircraft,
+                start_time: formatTime(selectedBooking.start),
+                end_time: formatTime(selectedBooking.start + selectedBooking.duration)
+              }}
+              aircraft={aircraft.map(a => ({
+                id: a.id,
+                registration: a.registration,
+                type: a.type,
+                aircraft_type_id: a.aircraft_type_id,
+                aircraft_type: a.aircraft_type,
+                prioritise_scheduling: a.prioritise_scheduling
+              }))}
+              onAircraftChanged={async (bookingId, newAircraftId) => {
+                try {
+                  const response = await fetch('/api/bookings', {
+                    method: 'PATCH',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      id: bookingId,
+                      aircraft_id: newAircraftId,
+                    }),
+                  });
 
-        {/* Booking Hover Modal */}
-        {hoveredBooking && (() => {
+                  if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to change aircraft');
+                  }
+
+                  toast.success('Aircraft changed successfully');
+                  fetchAllData(false); // Refresh data
+                  setShowChangeAircraftModal(false);
+                  setSelectedBooking(null);
+                } catch (error) {
+                  const errorMessage = error instanceof Error ? error.message : 'Failed to change aircraft';
+                  toast.error(errorMessage);
+                }
+              }}
+            />
+          )}
+
+          {showContactDetailsModal && selectedBooking && (
+            <ContactDetailsModal
+              open={showContactDetailsModal}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setShowContactDetailsModal(false);
+                  setSelectedBooking(null);
+                }
+              }}
+              userId={selectedBooking.user_id || null}
+            />
+          )}
+
+          {/* Booking Hover Modal */}
+          {hoveredBooking && (() => {
           // Calculate position for hover tooltip (approximate size: 280px width, 200px height)
           const position = calculatePopupPosition(mousePosition.x + 15, mousePosition.y, 280, 200);
           return (
@@ -1791,10 +1803,10 @@ const FlightSchedulerInner = () => {
             </div>
             </div>
           );
-        })()}
+          })()}
 
-        {/* Time Slot Hover Tooltip */}
-        {hoveredTimeSlot && !hoveredBooking && (() => {
+          {/* Time Slot Hover Tooltip */}
+          {hoveredTimeSlot && !hoveredBooking && (() => {
           // Calculate position for time slot tooltip (approximate size: 200px width, 100px height)
           const position = calculatePopupPosition(mousePosition.x + 15, mousePosition.y, 200, 100);
           return (
@@ -1817,66 +1829,67 @@ const FlightSchedulerInner = () => {
             </div>
             </div>
           );
-        })()}
+          })()}
 
-        {/* Context Menu */}
-        {contextMenu && (
-          <div
-            className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-2 min-w-[200px]"
-            style={{
-              left: contextMenu.x,
-              top: contextMenu.y,
-              transform: contextMenu.transform
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-3 py-2 border-b border-gray-100">
-              <div className="font-medium text-gray-900 text-sm truncate">
-                {contextMenu.booking.name}
+          {/* Context Menu */}
+          {contextMenu && (
+            <div
+              className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-2 min-w-[200px]"
+              style={{
+                left: contextMenu.x,
+                top: contextMenu.y,
+                transform: contextMenu.transform
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-3 py-2 border-b border-gray-100">
+                <div className="font-medium text-gray-900 text-sm truncate">
+                  {contextMenu.booking.name}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {getBookingTimeRange(contextMenu.booking)}
+                </div>
               </div>
-              <div className="text-xs text-gray-500">
-                {getBookingTimeRange(contextMenu.booking)}
-              </div>
-            </div>
-            
-            <div className="py-1">
-              <button
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-150"
-                onClick={() => handleContextMenuAction('contact-details', contextMenu.booking)}
-              >
-                <User className="w-4 h-4" />
-                View Contact Details
-              </button>
 
-              <button
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-150"
-                onClick={() => handleContextMenuAction('change-aircraft', contextMenu.booking)}
-              >
-                <Plane className="w-4 h-4" />
-                Change Aircraft
-              </button>
-
-              {/* Confirm Booking - only show for unconfirmed bookings */}
-              {contextMenu.booking.status === 'unconfirmed' && (
+              <div className="py-1">
                 <button
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-green-600 hover:bg-green-50 hover:text-green-700 transition-colors duration-150"
-                  onClick={() => handleContextMenuAction('confirm', contextMenu.booking)}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-150"
+                  onClick={() => handleContextMenuAction('contact-details', contextMenu.booking)}
                 >
-                  <CalendarIcon className="w-4 h-4" />
-                  Confirm Booking
+                  <User className="w-4 h-4" />
+                  View Contact Details
                 </button>
-              )}
 
-              <button
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors duration-150"
-                onClick={() => handleContextMenuAction('cancel', contextMenu.booking)}
-              >
-                <X className="w-4 h-4" />
-                Cancel Booking
-              </button>
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-150"
+                  onClick={() => handleContextMenuAction('change-aircraft', contextMenu.booking)}
+                >
+                  <Plane className="w-4 h-4" />
+                  Change Aircraft
+                </button>
+
+                {/* Confirm Booking - only show for unconfirmed bookings */}
+                {contextMenu.booking.status === 'unconfirmed' && (
+                  <button
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-green-600 hover:bg-green-50 hover:text-green-700 transition-colors duration-150"
+                    onClick={() => handleContextMenuAction('confirm', contextMenu.booking)}
+                  >
+                    <CalendarIcon className="w-4 h-4" />
+                    Confirm Booking
+                  </button>
+                )}
+
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors duration-150"
+                  onClick={() => handleContextMenuAction('cancel', contextMenu.booking)}
+                >
+                  <X className="w-4 h-4" />
+                  Cancel Booking
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
   );
 };

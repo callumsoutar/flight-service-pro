@@ -47,7 +47,8 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
   }
 
   if (isRestrictedUser) {
-    // For restricted users: fetch only data for their bookings
+    // For restricted users: fetch only member/instructor data for their bookings,
+    // but fetch ALL aircraft so they can book any available aircraft
     const uniqueMemberIds = Array.from(new Set(bookings.map(b => b.user_id).filter(Boolean)));
     let memberUsers: { id: string; first_name?: string; last_name?: string }[] = [];
     if (uniqueMemberIds.length > 0) {
@@ -76,26 +77,22 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
       name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.id,
     }));
 
-    const uniqueAircraftIds = Array.from(new Set(bookings.map(b => b.aircraft_id).filter(Boolean)));
-    let aircraft: { id: string; registration: string; type: string }[] = [];
-    if (uniqueAircraftIds.length > 0) {
-      const { data: aircraftRows } = await supabase
-        .from("aircraft")
-        .select("id, registration, type")
-        .in("id", uniqueAircraftIds);
-      aircraft = aircraftRows || [];
-    }
-    aircraftList = aircraft.map(a => ({
+    // Fetch ALL on_line aircraft for new booking creation (not just ones in existing bookings)
+    const { data: aircraftRows } = await supabase
+      .from("aircraft")
+      .select("id, registration, type, on_line")
+      .eq("on_line", true);
+    aircraftList = (aircraftRows || []).map(a => ({
       id: a.id,
       registration: a.registration,
       type: a.type || "Unknown",
     }));
   } else if (isPrivilegedUser) {
-    // For privileged users: fetch ALL members, instructors, and aircraft for search functionality
+    // For privileged users: fetch ALL members, instructors, and on_line aircraft for search functionality
     const [memberUsersResponse, instructorDataResponse, aircraftResponse] = await Promise.all([
       supabase.from("users").select("id, first_name, last_name"),
       supabase.from("instructors").select("id, first_name, last_name"),
-      supabase.from("aircraft").select("id, registration, type")
+      supabase.from("aircraft").select("id, registration, type, on_line").eq("on_line", true)
     ]);
 
     members = (memberUsersResponse.data || []).map(user => ({
