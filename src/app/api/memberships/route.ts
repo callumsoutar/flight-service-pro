@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
     .select(`
       *,
       membership_types!memberships_membership_type_id_fkey (
-        id, name, code, description, price, duration_months, benefits,
+        id, name, code, description, duration_months, benefits, chargeable_id,
         chargeables (
           id, name, rate, is_taxable
         )

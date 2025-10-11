@@ -475,11 +475,11 @@ const FlightSchedulerInner = () => {
         .map((instructor: any) => {
           // Build endorsements string from boolean properties
           const endorsements = [];
-          if (instructor.aerobatics_removal) endorsements.push('aerobatics');
-          if (instructor.ifr_removal) endorsements.push('ifr');
-          if (instructor.night_removal) endorsements.push('night');
-          if (instructor.tawa_removal) endorsements.push('tawa');
-          if (instructor.multi_removal) endorsements.push('multi');
+          if (instructor.aerobatics_removal) endorsements.push('Aerobatics');
+          if (instructor.ifr_removal) endorsements.push('IFR');
+          if (instructor.night_removal) endorsements.push('Night');
+          if (instructor.tawa_removal) endorsements.push('TAWA');
+          if (instructor.multi_removal) endorsements.push('Multi');
           
           const endorsementsString = endorsements.length > 0 ? endorsements.join(', ') : null;
 
@@ -1309,7 +1309,7 @@ const FlightSchedulerInner = () => {
     
     return (
       <div key={resourceKey} className="flex border-b border-gray-200 resource-row group transition-all duration-200" data-resource={resourceKey} style={{ height: `${rowHeight}px` }}>
-        <div className={`w-52 p-4 text-sm font-semibold border-r border-gray-100 flex items-center transition-all duration-200 ${
+        <div className={`w-52 p-4 text-sm font-semibold border-r border-gray-100 border-b border-gray-200 flex items-center transition-all duration-200 ${
           isInstructor
             ? 'bg-gray-50 text-gray-900'
             : 'bg-gray-50 text-gray-700'
@@ -1710,7 +1710,7 @@ const FlightSchedulerInner = () => {
               )}
 
               {/* Divider */}
-              <div className="border-t-2 border-gray-300 bg-gray-100 h-1"></div>
+              <div className="border-t border-gray-200 h-px"></div>
 
               {/* Aircraft Section */}
               {aircraft.map(aircraftItem => {

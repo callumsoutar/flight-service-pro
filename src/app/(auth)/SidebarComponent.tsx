@@ -81,12 +81,12 @@ export function SidebarComponent() {
   // Render skeleton loading state while role data is loading
   if (rolesLoading) {
     return (
-      <aside className="fixed left-0 top-0 h-full w-56 bg-[#101D42] border-r border-gray-200 text-white flex flex-col z-30 overflow-visible">
+      <aside className="fixed left-0 top-0 h-full w-56 bg-[#101D42] border-r border-gray-200 text-white flex flex-col z-30 overflow-hidden">
         <div className="flex items-center gap-2 h-14 px-6 font-bold text-xl tracking-tight border-b border-[#89d2dc]/30">
           <LucidePlane className="w-6 h-6 text-[#89d2dc]" />
           Flight Desk Pro
         </div>
-        <nav className="flex-1 overflow-y-auto overflow-x-visible py-4 px-3 gap-0.5 flex flex-col">
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 gap-0.5 flex flex-col">
           {/* Skeleton loading for navigation items */}
           {Array.from({ length: 6 }).map((_, index) => (
             <div key={index} className="px-3 py-2 rounded-lg mb-1">
@@ -112,12 +112,12 @@ export function SidebarComponent() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-56 bg-[#101D42] border-r border-gray-200 text-white flex flex-col z-30 overflow-visible">
+    <aside className="fixed left-0 top-0 h-full w-56 bg-[#101D42] border-r border-gray-200 text-white flex flex-col z-30 overflow-hidden">
       <div className="flex items-center gap-2 h-14 px-6 font-bold text-xl tracking-tight border-b border-[#89d2dc]/30">
         <LucidePlane className="w-6 h-6 text-[#89d2dc]" />
         Flight Desk Pro
       </div>
-      <nav className="flex-1 overflow-y-auto overflow-x-visible py-4 px-3 gap-0.5 flex flex-col">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 gap-0.5 flex flex-col">
         {filteredNavOptions.map((item, index) => {
           // Determine the correct href based on user role and item configuration
           let href = item.href;
