@@ -7,7 +7,7 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
   const supabase = await createClient();
   let bookings: Booking[] = [];
   let members: { id: string; name: string }[] = [];
-  let instructors: { id: string; name: string }[] = [];
+  let instructors: { id: string; user_id: string; first_name?: string; last_name?: string; users?: { email?: string }; name: string }[] = [];
   let aircraftList: { id: string; registration: string; type: string }[] = [];
 
   const isPrivilegedUser = ['instructor', 'admin', 'owner'].includes(userRole);
@@ -64,16 +64,20 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
     }));
 
     const uniqueInstructorIds = Array.from(new Set(bookings.map(b => b.instructor_id).filter(Boolean)));
-    let instructorRows: { id: string; first_name?: string; last_name?: string }[] = [];
+    let instructorRows: { id: string; user_id: string; first_name?: string; last_name?: string; users?: { email?: string }[] }[] = [];
     if (uniqueInstructorIds.length > 0) {
       const { data: instructorData } = await supabase
         .from("instructors")
-        .select("id, first_name, last_name")
+        .select("id, user_id, first_name, last_name, users(email)")
         .in("id", uniqueInstructorIds);
       instructorRows = instructorData || [];
     }
     instructors = instructorRows.map(instructor => ({
       id: instructor.id,
+      user_id: instructor.user_id,
+      first_name: instructor.first_name,
+      last_name: instructor.last_name,
+      users: Array.isArray(instructor.users) && instructor.users.length > 0 ? instructor.users[0] : undefined,
       name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.id,
     }));
 
@@ -91,7 +95,7 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
     // For privileged users: fetch ALL members, instructors, and on_line aircraft for search functionality
     const [memberUsersResponse, instructorDataResponse, aircraftResponse] = await Promise.all([
       supabase.from("users").select("id, first_name, last_name"),
-      supabase.from("instructors").select("id, first_name, last_name"),
+      supabase.from("instructors").select("id, user_id, first_name, last_name, users(email)"),
       supabase.from("aircraft").select("id, registration, type, on_line").eq("on_line", true)
     ]);
 
@@ -102,6 +106,10 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
 
     instructors = (instructorDataResponse.data || []).map(instructor => ({
       id: instructor.id,
+      user_id: instructor.user_id,
+      first_name: instructor.first_name,
+      last_name: instructor.last_name,
+      users: Array.isArray(instructor.users) && instructor.users.length > 0 ? instructor.users[0] : undefined,
       name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.id,
     }));
 

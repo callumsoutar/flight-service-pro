@@ -17,14 +17,30 @@ type InstructorSelectProps = {
   value: InstructorResult | null;
   disabled?: boolean;
   unavailableInstructorIds?: Set<string>; // Set of instructor IDs that are unavailable due to conflicts
+  providedInstructors?: any[]; // Optional pre-fetched instructors to avoid duplicate API calls
 };
 
-export default function InstructorSelect({ onSelect, value, disabled = false, unavailableInstructorIds }: InstructorSelectProps) {
+export default function InstructorSelect({ onSelect, value, disabled = false, unavailableInstructorIds, providedInstructors }: InstructorSelectProps) {
   const [instructors, setInstructors] = useState<InstructorResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // If instructors are provided, use them directly (no fetch needed)
+    if (providedInstructors && providedInstructors.length > 0) {
+      const transformedInstructors = providedInstructors.map((instructor: any) => ({
+        id: instructor.id,
+        user_id: instructor.user_id,
+        first_name: instructor.first_name || "",
+        last_name: instructor.last_name || "",
+        email: instructor.users?.email || "",
+      }));
+      setInstructors(transformedInstructors);
+      setLoading(false);
+      return;
+    }
+
+    // Fallback: fetch if not provided
     setLoading(true);
     setError(null);
     
@@ -46,7 +62,7 @@ export default function InstructorSelect({ onSelect, value, disabled = false, un
         setError("Failed to load instructors");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [providedInstructors]);
 
   const selectedInstructor = value ? instructors.find(i => i.id === value.id) : null;
 

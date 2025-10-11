@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import BookingsClientView from '@/components/bookings/BookingsClientView';
 import ImprovedPrivilegedBookingsView from '@/components/bookings/ImprovedPrivilegedBookingsView';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,14 @@ import type { Booking, BookingStatus } from '@/types/bookings';
 import { SettingsProvider } from '@/contexts/SettingsContext';
 
 interface MemberOption { id: string; name: string; }
-interface InstructorOption { id: string; name: string; }
+interface InstructorOption { 
+  id: string; 
+  user_id: string;
+  first_name?: string;
+  last_name?: string;
+  users?: { email?: string };
+  name: string; 
+}
 interface AircraftOption { id: string; registration: string; type: string; }
 
 interface BookingsPageClientProps {
@@ -36,6 +43,44 @@ export default function BookingsPageClient({ bookings, members, instructors, air
   const [modalOpen, setModalOpen] = useState(false);
   const [currentBookings, setCurrentBookings] = useState<Booking[]>(bookings);
   const statusCounts = getStatusCounts(currentBookings);
+
+  // Shared dropdown data for NewBookingModal (fetched once, reused)
+  const [dropdownData, setDropdownData] = useState<{
+    flightTypes: { id: string; name: string }[];
+    lessons: { id: string; name: string }[];
+    loaded: boolean;
+  }>({
+    flightTypes: [],
+    lessons: [],
+    loaded: false
+  });
+
+  // Fetch dropdown data once on mount (shared across modals)
+  useEffect(() => {
+    if (dropdownData.loaded) return;
+
+    Promise.all([
+      fetch('/api/flight_types'),
+      fetch('/api/lessons')
+    ])
+      .then(async ([ftRes, lsRes]) => {
+        const [ftData, lsData] = await Promise.all([ftRes.json(), lsRes.json()]);
+        setDropdownData({
+          flightTypes: (ftData.flight_types || []).map((f: { id: string; name: string }) => ({ 
+            id: f.id, 
+            name: f.name 
+          })),
+          lessons: (lsData.lessons || []).map((l: { id: string; name: string }) => ({ 
+            id: l.id, 
+            name: l.name 
+          })),
+          loaded: true
+        });
+      })
+      .catch((error) => {
+        console.error('Error fetching dropdown data:', error);
+      });
+  }, [dropdownData.loaded]);
 
   // Function to update a booking's status in local state
   const updateBookingStatus = useCallback((bookingId: string, newStatus: string) => {
@@ -115,6 +160,9 @@ export default function BookingsPageClient({ bookings, members, instructors, air
           onClose={() => setModalOpen(false)}
           aircraft={aircraftList}
           bookings={currentBookings}
+          instructors={instructors}
+          flightTypes={dropdownData.flightTypes}
+          lessons={dropdownData.lessons}
         />
       </main>
     </SettingsProvider>

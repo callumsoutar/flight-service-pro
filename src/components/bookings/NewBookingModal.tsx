@@ -110,6 +110,10 @@ interface NewBookingModalProps {
     userId?: string;
   };
   onBookingCreated?: (newBookingData: import("@/types/bookings").Booking) => void;
+  // Optional props to avoid duplicate fetching (passed from parent)
+  instructors?: any[];
+  flightTypes?: Option[];
+  lessons?: Option[];
 }
 
 export const NewBookingModal: React.FC<NewBookingModalProps> = ({
@@ -120,6 +124,9 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
   refresh,
   prefilledData,
   onBookingCreated,
+  instructors: providedInstructors,
+  flightTypes: providedFlightTypes,
+  lessons: providedLessons,
 }) => {
   // Form state
   const [activeTab, setActiveTab] = useState("regular");
@@ -299,9 +306,19 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     fetchCurrentUser();
   }, [open]);
 
-  // Fetch dropdown data on open
+  // Fetch dropdown data on open (only if not provided by parent)
   useEffect(() => {
     if (!open) return;
+
+    // Use provided data if available, otherwise fetch
+    if (providedFlightTypes && providedLessons) {
+      setFlightTypes(providedFlightTypes);
+      setLessons(providedLessons);
+      setDropdownLoading(false);
+      return;
+    }
+
+    // Fallback: fetch if not provided
     setDropdownLoading(true);
     Promise.all([
       fetch("/api/flight_types").then(res => res.json()),
@@ -315,7 +332,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
         setError("Failed to load dropdown data");
       })
       .finally(() => setDropdownLoading(false));
-  }, [open]);
+  }, [open, providedFlightTypes, providedLessons]);
 
   // When start date changes, auto-set end date to be at least the same as start date
   useEffect(() => {
@@ -372,25 +389,40 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
 
       // Handle instructor prefilling
       if (prefilledData.instructorId && prefilledData.instructorUserId) {
-        // Fetch instructor details to create proper InstructorResult object
-        fetch('/api/instructors')
-          .then(res => res.json())
-          .then(data => {
-            const instructorData = (data.instructors || []).find((inst: { id: string; first_name?: string; last_name?: string; users?: { email?: string }; user_id: string }) => inst.id === prefilledData.instructorId);
-            if (instructorData) {
-              const instructorResult = {
-                id: instructorData.id,
-                user_id: instructorData.user_id,
-                first_name: instructorData.first_name || "",
-                last_name: instructorData.last_name || "",
-                email: instructorData.users?.email || "",
-              };
-              setInstructor(instructorResult);
-            }
-          })
-          .catch(() => {
-            // Failed to fetch instructor details for prefilling - silently handle
-          });
+        // If instructors are provided, use them directly
+        if (providedInstructors && providedInstructors.length > 0) {
+          const instructorData = providedInstructors.find((inst: any) => inst.id === prefilledData.instructorId);
+          if (instructorData) {
+            const instructorResult = {
+              id: instructorData.id,
+              user_id: instructorData.user_id,
+              first_name: instructorData.first_name || "",
+              last_name: instructorData.last_name || "",
+              email: instructorData.users?.email || "",
+            };
+            setInstructor(instructorResult);
+          }
+        } else {
+          // Fallback: fetch instructor details if not provided
+          fetch('/api/instructors')
+            .then(res => res.json())
+            .then(data => {
+              const instructorData = (data.instructors || []).find((inst: { id: string; first_name?: string; last_name?: string; users?: { email?: string }; user_id: string }) => inst.id === prefilledData.instructorId);
+              if (instructorData) {
+                const instructorResult = {
+                  id: instructorData.id,
+                  user_id: instructorData.user_id,
+                  first_name: instructorData.first_name || "",
+                  last_name: instructorData.last_name || "",
+                  email: instructorData.users?.email || "",
+                };
+                setInstructor(instructorResult);
+              }
+            })
+            .catch(() => {
+              // Failed to fetch instructor details for prefilling - silently handle
+            });
+        }
       }
 
       // Handle user/member prefilling
@@ -408,7 +440,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
           });
       }
     }
-  }, [prefilledData, aircraft]);
+  }, [prefilledData, aircraft, providedInstructors]);
 
   // Validate type rating when instructor or aircraft changes
   useEffect(() => {
@@ -1158,6 +1190,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       <InstructorSelect
                         value={instructor}
                         unavailableInstructorIds={unavailable.instructors}
+                        providedInstructors={providedInstructors}
                         onSelect={(selectedInstructor) => {
                           // Prevent selection of conflicted instructors
                           if (selectedInstructor && unavailable.instructors.has(selectedInstructor.id)) {
@@ -1406,6 +1439,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       <InstructorSelect
                         value={instructor}
                         unavailableInstructorIds={unavailable.instructors}
+                        providedInstructors={providedInstructors}
                         onSelect={(selectedInstructor) => {
                           // Prevent selection of conflicted instructors
                           if (selectedInstructor && unavailable.instructors.has(selectedInstructor.id)) {

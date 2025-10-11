@@ -4,6 +4,7 @@ import { BookingStages, BOOKING_STAGES, STATUS_TO_STAGE_IDX } from "@/components
 import { Booking } from "@/types/bookings";
 import React from "react";
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from "@/lib/SupabaseServerClient";
 import BookingStagesOptions from "@/components/bookings/BookingStagesOptions";
 import BookingHistoryCollapse from "../BookingHistoryCollapse";
@@ -11,7 +12,6 @@ import { User } from "@/types/users";
 import { Aircraft } from "@/types/aircraft";
 import { Observation } from "@/types/observations";
 import BookingActions from "@/components/bookings/BookingActionsClient";
-import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 import BookingConfirmActionClient from "@/components/bookings/BookingConfirmActionClient";
 import { StatusBadge } from "@/components/bookings/StatusBadge";
 import { JoinedInstructor } from "../BookingResources";
@@ -285,19 +285,50 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
   return (
     <div className="w-full min-h-screen flex flex-col items-center">
       <div className="w-full max-w-6xl px-4 pt-8 pb-12 flex flex-col gap-8">
-        {/* Title and actions row */}
+        {/* Booking info header and actions row */}
         <div className="flex flex-row items-center w-full mb-2 gap-4">
-          <div className="flex-1 min-w-0 flex flex-col items-start gap-0">
-            <h1 className="text-[3rem] font-extrabold tracking-tight text-gray-900" style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1 }}>Booking Details</h1>
+          <div className="flex-1 min-w-0 flex flex-col items-start gap-2">
+            {/* Member name with link */}
             {booking && booking.user_id && (
-              <BookingMemberLink
-                userId={booking.user_id}
-                firstName={booking.user?.first_name || member?.first_name}
-                lastName={booking.user?.last_name || member?.last_name}
-                currentUserRole={userRole}
-              />
+              <div className="flex items-center gap-3">
+                {(() => {
+                  const memberName = [booking.user?.first_name || member?.first_name, booking.user?.last_name || member?.last_name].filter(Boolean).join(" ") || booking.user_id;
+                  const isPrivileged = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+                  
+                  return isPrivileged ? (
+                    <Link
+                      href={`/dashboard/members/view/${booking.user_id}`}
+                      className="text-2xl font-bold text-gray-900 hover:text-blue-600 transition-colors"
+                    >
+                      {memberName}
+                    </Link>
+                  ) : (
+                    <span className="text-2xl font-bold text-gray-900">
+                      {memberName}
+                    </span>
+                  );
+                })()}
+                {/* Member role badge */}
+                <span className="px-3 py-1 bg-gray-100 text-gray-600 text-sm font-medium rounded-lg border">
+                  Member
+                </span>
+              </div>
+            )}
+            
+            {/* Aircraft info */}
+            {aircraft && (
+              <div className="flex items-center gap-2 text-lg text-gray-600">
+                <span className="font-medium">{aircraft.registration}</span>
+                {aircraft.type && (
+                  <>
+                    <span className="text-gray-400">•</span>
+                    <span>{aircraft.type}</span>
+                  </>
+                )}
+              </div>
             )}
           </div>
+          
           <StatusBadge status={status} className="text-lg px-4 py-2 font-semibold" />
           <div className="flex-none flex items-center justify-end gap-3">
             {/* Render Confirm button if booking is unconfirmed and user is not restricted */}
@@ -325,7 +356,10 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
             )}
           </div>
         </div>
-        <BookingStages stages={BOOKING_STAGES} currentStage={currentStage} />
+        {/* Only show booking stages for non-restricted users (instructors, admins, owners) */}
+        {!isRestrictedUser && (
+          <BookingStages stages={BOOKING_STAGES} currentStage={currentStage} />
+        )}
 
         
         {/* Main content row: 2/3 and 1/3 split using flex */}

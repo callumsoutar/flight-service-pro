@@ -351,7 +351,10 @@ export default function BookingDetails({ booking, members, instructors, aircraft
       remarks: data.remarks,
       booking_type: data.booking_type,
       instructor_id: data.instructor !== PLACEHOLDER_VALUES.INSTRUCTOR && data.instructor.trim() !== "" ? sanitizeUuid(data.instructor) : null,
-      user_id: data.member.trim() !== "" ? sanitizeUuid(data.member) : null,
+      // For restricted users, preserve existing values for member and lesson since they can't modify these fields
+      user_id: (!mounted || isRoleLoading || isRestrictedUser) 
+        ? booking.user_id 
+        : (data.member.trim() !== "" ? sanitizeUuid(data.member) : null),
       aircraft_id: data.aircraft !== PLACEHOLDER_VALUES.AIRCRAFT && data.aircraft.trim() !== "" 
         ? sanitizeUuid(data.aircraft) : null,
       lesson_id: data.lesson !== PLACEHOLDER_VALUES.LESSON && data.lesson.trim() !== "" 
@@ -533,25 +536,27 @@ export default function BookingDetails({ booking, members, instructors, aircraft
           </div>
 
           {/* Member/Instructor */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
-            <div>
-              <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Member</label>
-              <Controller
-                name="member"
-                control={control}
-                render={({ field }) => (
-                  <div className="relative">
-                    <MemberSelect
-                      value={memberValue}
-                      onSelect={user => {
-                        field.onChange(user ? user.id : "");
-                      }}
-                      disabled={isReadOnly}
-                    />
-                  </div>
-                )}
-              />
-            </div>
+          <div className={`grid grid-cols-1 gap-8 mb-6 ${(!mounted || isRoleLoading || isRestrictedUser) ? '' : 'md:grid-cols-2'}`}>
+            {!mounted || isRoleLoading || isRestrictedUser ? null : (
+              <div>
+                <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Select Member</label>
+                <Controller
+                  name="member"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="relative">
+                      <MemberSelect
+                        value={memberValue}
+                        onSelect={user => {
+                          field.onChange(user ? user.id : "");
+                        }}
+                        disabled={isReadOnly}
+                      />
+                    </div>
+                  )}
+                />
+              </div>
+            )}
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><UserIcon className="w-4 h-4" /> Instructor</label>
               <Controller
@@ -593,7 +598,7 @@ export default function BookingDetails({ booking, members, instructors, aircraft
             </div>
           </div>
 
-          {/* Aircraft, Flight Type, Lesson, Booking Type */}
+          {/* Aircraft and Lesson */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><Plane className="w-4 h-4" /> Aircraft</label>
@@ -616,22 +621,6 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                 </Select>
               )} />
             </div>
-            <div className={!mounted || isRoleLoading || isRestrictedUser ? 'hidden' : 'block'}>
-              <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BadgeCheck className="w-4 h-4" /> Flight Type</label>
-              <Controller name="flight_type" control={control} render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select flight type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={PLACEHOLDER_VALUES.FLIGHT_TYPE}>No flight type selected</SelectItem>
-                    {flightTypes.map(f => (
-                      <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )} />
-            </div>
             <div>
               <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BookOpen className="w-4 h-4" /> Lesson</label>
               <Controller name="lesson" control={control} render={({ field }) => (
@@ -648,23 +637,43 @@ export default function BookingDetails({ booking, members, instructors, aircraft
                 </Select>
               )} />
             </div>
-            {(!mounted || isRoleLoading || isRestrictedUser) ? null : (
+          </div>
+
+          {/* Flight Type and Booking Type */}
+          <div className={`grid grid-cols-1 gap-8 mb-6 ${(!mounted || isRoleLoading || isRestrictedUser) ? '' : 'md:grid-cols-2'}`}>
+            {!mounted || isRoleLoading || isRestrictedUser ? null : (
               <div>
-                <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="w-4 h-4" /> Booking Type</label>
-                <Controller name="booking_type" control={control} render={({ field }) => (
+                <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><BadgeCheck className="w-4 h-4" /> Flight Type</label>
+                <Controller name="flight_type" control={control} render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select booking type" />
+                      <SelectValue placeholder="Select flight type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {["flight", "groundwork", "maintenance", "other"].map((type) => (
-                        <SelectItem key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</SelectItem>
+                      <SelectItem value={PLACEHOLDER_VALUES.FLIGHT_TYPE}>No flight type selected</SelectItem>
+                      {flightTypes.map(f => (
+                        <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 )} />
               </div>
             )}
+            <div>
+              <label className="block text-xs font-semibold mb-2 flex items-center gap-1"><ClipboardList className="w-4 h-4" /> Booking Type</label>
+              <Controller name="booking_type" control={control} render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select booking type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["flight", "groundwork", "maintenance", "other"].map((type) => (
+                      <SelectItem key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )} />
+            </div>
           </div>
 
           {/* Description & Remarks */}

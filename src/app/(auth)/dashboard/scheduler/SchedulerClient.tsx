@@ -5,7 +5,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { CalendarIcon, ChevronLeft, ChevronRight, X, Plane, Clock, User, Plane as PlaneIcon, AlertCircle, Loader2, Check } from "lucide-react";
+import { CalendarIcon, ChevronLeft, ChevronRight, X, Plane, Clock, User, Plane as PlaneIcon, AlertCircle, Loader2, Check, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { NewBookingModal } from "@/components/bookings/NewBookingModal";
 import { CancelBookingModal } from "@/components/bookings/CancelBookingModal";
@@ -114,24 +114,33 @@ const FlightSchedulerInner = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [_isCalendarOpen, _setIsCalendarOpen] = useState(false);
 
-  // State for bookings
-  const [_bookings, setBookings] = useState<Booking[]>([]);
+  // Batched scheduler state - reduces re-renders from 7 to 1
+  const [schedulerData, setSchedulerData] = useState({
+    aircraft: [] as Aircraft[],
+    availableInstructors: [] as Instructor[],
+    rawBookings: [] as any[],
+    bookings: [] as Booking[],
+    bookingsByResource: {} as Record<string, Booking[]>,
+    rosterRules: [] as RosterRule[],
+    shiftOverrides: [] as ShiftOverride[]
+  });
+
+  // Shared dropdown data for modals (fetched once, reused)
+  const [dropdownData, setDropdownData] = useState<{
+    flightTypes: { id: string; name: string }[];
+    lessons: { id: string; name: string }[];
+    loaded: boolean;
+  }>({
+    flightTypes: [],
+    lessons: [],
+    loaded: false
+  });
+
+  // State for UI controls
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isDateChanging, setIsDateChanging] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // State for aircraft
-  const [aircraft, setAircraft] = useState<Aircraft[]>([]);
-  const [_aircraftLoading, setAircraftLoading] = useState(true);
-
-  // State for instructors
-  const [_instructors, _setInstructors] = useState<Instructor[]>([]);
-  const [_instructorsLoading, setInstructorsLoading] = useState(true);
-
-  // State for roster rules and shift overrides
-  const [_rosterRules, setRosterRules] = useState<RosterRule[]>([]);
-  const [_shiftOverrides, setShiftOverrides] = useState<ShiftOverride[]>([]);
 
   // State for modals
   const [showNewBookingModal, setShowNewBookingModal] = useState(false);
@@ -175,15 +184,29 @@ const FlightSchedulerInner = () => {
   } | null>(null);
   const [clickTimeout, setClickTimeout] = useState<NodeJS.Timeout | null>(null);
 
-  // State for available instructors (processed)
-  const [availableInstructors, setAvailableInstructors] = useState<Instructor[]>([]);
+  // Destructure scheduler data for easier access
+  const { aircraft, availableInstructors, rawBookings, bookingsByResource } = schedulerData;
 
-  // State for bookings by resource
-  const [bookingsByResource, setBookingsByResource] = useState<Record<string, Booking[]>>({});
-
-  // State for raw booking data for conflict checking
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [rawBookings, setRawBookings] = useState<any[]>([]);
+  // Backwards compatibility - expose setters that update the batched state
+  const setAircraft = (newAircraft: Aircraft[]) =>
+    setSchedulerData(prev => ({ ...prev, aircraft: newAircraft }));
+  const setAvailableInstructors = (newInstructors: Instructor[]) =>
+    setSchedulerData(prev => ({ ...prev, availableInstructors: newInstructors }));
+  const setRawBookings = (newRawBookings: any[]) =>
+    setSchedulerData(prev => ({ ...prev, rawBookings: newRawBookings }));
+  const setBookings = (newBookings: Booking[]) =>
+    setSchedulerData(prev => ({ ...prev, bookings: newBookings }));
+  const setBookingsByResource = (newBookingsByResource: Record<string, Booking[]> | ((prev: Record<string, Booking[]>) => Record<string, Booking[]>)) => {
+    if (typeof newBookingsByResource === 'function') {
+      setSchedulerData(prev => ({ ...prev, bookingsByResource: newBookingsByResource(prev.bookingsByResource) }));
+    } else {
+      setSchedulerData(prev => ({ ...prev, bookingsByResource: newBookingsByResource }));
+    }
+  };
+  const setRosterRules = (newRosterRules: RosterRule[]) =>
+    setSchedulerData(prev => ({ ...prev, rosterRules: newRosterRules }));
+  const setShiftOverrides = (newShiftOverrides: ShiftOverride[]) =>
+    setSchedulerData(prev => ({ ...prev, shiftOverrides: newShiftOverrides }));
 
   // Hooks
   const { mutate: cancelBooking } = useCancelBooking();
@@ -214,6 +237,21 @@ const FlightSchedulerInner = () => {
   const [cancellationCategories, setCancellationCategories] = useState<any[]>([]);
   const [isFetchingCategories, setIsFetchingCategories] = useState(false);
 
+  // Debounce utility for mouse event handlers
+  const debounce = <T extends (...args: any[]) => void>(func: T, wait: number) => {
+    let timeout: NodeJS.Timeout | null = null;
+    return ((...args: Parameters<T>) => {
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(() => func(...args), wait);
+    }) as T;
+  };
+
+  // Debounced mouse handlers (memoized to prevent recreation on every render)
+  const debouncedSetMousePosition = useMemo(
+    () => debounce((x: number, y: number) => setMousePosition({ x, y }), 10),
+    []
+  );
+
   // Get current user
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -229,6 +267,33 @@ const FlightSchedulerInner = () => {
     };
     getCurrentUser();
   }, []);
+
+  // Fetch dropdown data once on mount (shared across modals)
+  useEffect(() => {
+    if (dropdownData.loaded) return;
+
+    Promise.all([
+      fetch('/api/flight_types'),
+      fetch('/api/lessons')
+    ])
+      .then(async ([ftRes, lsRes]) => {
+        const [ftData, lsData] = await Promise.all([ftRes.json(), lsRes.json()]);
+        setDropdownData({
+          flightTypes: (ftData.flight_types || []).map((f: { id: string; name: string }) => ({ 
+            id: f.id, 
+            name: f.name 
+          })),
+          lessons: (lsData.lessons || []).map((l: { id: string; name: string }) => ({ 
+            id: l.id, 
+            name: l.name 
+          })),
+          loaded: true
+        });
+      })
+      .catch((error) => {
+        console.error('Error fetching dropdown data:', error);
+      });
+  }, [dropdownData.loaded]);
 
   // Handle user_id from URL parameter to pre-open booking modal
   useEffect(() => {
@@ -284,6 +349,16 @@ const FlightSchedulerInner = () => {
     };
   }, [currentUser, isRestricted]);
 
+  // Get display name for booking - always show user's name if available, fallback to purpose
+  const getBookingDisplayName = useMemo(() => {
+    return (booking: Booking): string => {
+      // booking.name already contains the proper fallback chain:
+      // first_name + last_name -> email -> purpose -> 'Flight'
+      // This applies to all users, restricted or not
+      return booking.name;
+    };
+  }, []);
+
   // Configuration
   const VISIBLE_SLOTS = 24;
   const _ROW_HEIGHT = 60;
@@ -324,7 +399,8 @@ const FlightSchedulerInner = () => {
     return slots;
   };
 
-  const timeSlots = generateTimeSlots();
+  // Memoize time slots generation to prevent recalculation on every render
+  const timeSlots = useMemo(() => generateTimeSlots(), [businessHours]);
 
   // Fetch all data - restored from original
   const fetchAllData = async (isInitialLoad = false, isDateChange = false) => {
@@ -449,11 +525,17 @@ const FlightSchedulerInner = () => {
         return hasValidRosterRule || hasValidOverride;
       });
 
-      // Process bookings
+      // Process bookings - optimized with Map for O(1) lookups
       const bookingsByResource: Record<string, Booking[]> = {};
       const convertedBookings: Booking[] = [];
       const additionalInstructors: Instructor[] = [];
       const additionalAircraft: Aircraft[] = [];
+
+      // Create Maps for fast O(1) lookups instead of array.find() O(n)
+      const instructorMap = new Map<string, Instructor>(filteredInstructors.map((inst: Instructor) => [inst.id, inst]));
+      const aircraftMap = new Map<string, any>(onlineAircraft.map((ac: any) => [ac.id, ac]));
+      const additionalInstructorSet = new Set<string>();
+      const additionalAircraftSet = new Set<string>();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (bookingsData.bookings || []).forEach((booking: any) => {
@@ -509,7 +591,7 @@ const FlightSchedulerInner = () => {
 
             // Group by instructor - show booking even if instructor not currently scheduled
             if (booking.instructor_id) {
-              const instructor = filteredInstructors.find((inst: Instructor) => inst.id === booking.instructor_id);
+              const instructor = instructorMap.get(booking.instructor_id);
               const instructorName = instructor ? instructor.name : schedulerBooking.instructor;
 
               // If instructor not found in filtered list, still show the booking with original instructor name
@@ -522,27 +604,22 @@ const FlightSchedulerInner = () => {
               bookingsByResource[displayName].push(schedulerBooking);
 
               // Collect additional instructors (not in filtered list) for later addition
-              if (!instructor && booking.instructor) {
-                const exists = additionalInstructors.find(inst => inst.id === booking.instructor_id);
-                if (!exists) {
-                  additionalInstructors.push({
-                    id: booking.instructor_id,
-                    user_id: booking.instructor.user_id || '',
-                    name: schedulerBooking.instructor,
-                    first_name: booking.instructor.first_name,
-                    last_name: booking.instructor.last_name,
-                    instructor_category: booking.instructor.instructor_category || null
-                  });
-                }
+              if (!instructor && booking.instructor && !additionalInstructorSet.has(booking.instructor_id)) {
+                additionalInstructorSet.add(booking.instructor_id);
+                additionalInstructors.push({
+                  id: booking.instructor_id,
+                  user_id: booking.instructor.user_id || '',
+                  name: schedulerBooking.instructor,
+                  first_name: booking.instructor.first_name,
+                  last_name: booking.instructor.last_name,
+                  instructor_category: booking.instructor.instructor_category || null
+                });
               }
             }
 
             // Group by aircraft - show booking even if aircraft not marked as online
             if (booking.aircraft_id) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const aircraftMatch = onlineAircraft.find((aircraftData: any) =>
-                aircraftData.id === booking.aircraft_id || aircraftData.registration === booking.aircraft?.registration
-              );
+              const aircraftMatch = aircraftMap.get(booking.aircraft_id);
               const aircraftDisplay = aircraftMatch
                 ? (aircraftMatch.type ? `${aircraftMatch.registration} (${aircraftMatch.type})` : aircraftMatch.registration)
                 : (booking.aircraft?.registration
@@ -555,16 +632,14 @@ const FlightSchedulerInner = () => {
               bookingsByResource[aircraftDisplay].push({ ...schedulerBooking, instructor: schedulerBooking.instructor || 'No Instructor' });
 
               // Collect additional aircraft (not in online list) for later addition
-              if (!aircraftMatch && booking.aircraft_id) {
-                const exists = additionalAircraft.find(ac => ac.id === booking.aircraft_id);
-                if (!exists) {
-                  additionalAircraft.push({
-                    id: booking.aircraft_id,
-                    registration: booking.aircraft?.registration || `Aircraft ${booking.aircraft_id.substring(0, 8)}`,
-                    type: booking.aircraft?.type || 'Unknown',
-                    status: 'active'
-                  });
-                }
+              if (!aircraftMatch && booking.aircraft_id && !additionalAircraftSet.has(booking.aircraft_id)) {
+                additionalAircraftSet.add(booking.aircraft_id);
+                additionalAircraft.push({
+                  id: booking.aircraft_id,
+                  registration: booking.aircraft?.registration || `Aircraft ${booking.aircraft_id.substring(0, 8)}`,
+                  type: booking.aircraft?.type || 'Unknown',
+                  status: 'active'
+                });
               }
             }
 
@@ -582,28 +657,32 @@ const FlightSchedulerInner = () => {
         }
       });
 
-      // Set all state atomically - single update per state
-      setAircraft([...onlineAircraft, ...additionalAircraft]);
-      setAvailableInstructors([...filteredInstructors, ...additionalInstructors]);
-      setRawBookings(bookingsData.bookings || []);
-      setBookings(convertedBookings);
-      setBookingsByResource(bookingsByResource);
-      setRosterRules(rosterRulesData.roster_rules || []);
-      setShiftOverrides(shiftOverridesData.shift_overrides || []);
+      // Set all state in a single batch update - reduces 7 re-renders to 1
+      setSchedulerData({
+        aircraft: [...onlineAircraft, ...additionalAircraft],
+        availableInstructors: [...filteredInstructors, ...additionalInstructors],
+        rawBookings: bookingsData.bookings || [],
+        bookings: convertedBookings,
+        bookingsByResource: bookingsByResource,
+        rosterRules: rosterRulesData.roster_rules || [],
+        shiftOverrides: shiftOverridesData.shift_overrides || []
+      });
 
     } catch (err) {
       setError("Failed to load scheduler data");
-      setAircraft([]);
-      setAvailableInstructors([]);
-      setBookings([]);
-      setBookingsByResource({});
-      setRawBookings([]);
+      setSchedulerData({
+        aircraft: [],
+        availableInstructors: [],
+        rawBookings: [],
+        bookings: [],
+        bookingsByResource: {},
+        rosterRules: [],
+        shiftOverrides: []
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
       setIsDateChanging(false);
-      setAircraftLoading(false);
-      setInstructorsLoading(false);
     }
   };
 
@@ -786,112 +865,114 @@ const FlightSchedulerInner = () => {
     return previousDay < today;
   }, [isDateChanging, isRestricted, selectedDate]);
 
-  // Get booking style - restored from original
-  const getBookingStyle = (booking: Booking, rowHeight: number) => {
-    const visibleSlots = getVisibleTimeSlots;
-    
-    if (visibleSlots.length === 0) {
-      return { display: 'none' };
-    }
-    
-    const firstVisibleTime = convertTimeToPosition(visibleSlots[0]);
-    const lastVisibleTime = convertTimeToPosition(visibleSlots[visibleSlots.length - 1]) + 0.5;
-    
-    // Check if booking is visible in current viewport
-    const bookingEnd = booking.start + booking.duration;
-    const isVisible = booking.start < lastVisibleTime && bookingEnd > firstVisibleTime;
-    
-    if (!isVisible) {
-      return { display: 'none' };
-    }
-    
-    // Calculate position relative to visible area with precise slot positioning
-    const timelineStart = firstVisibleTime;
-    const timelineEnd = lastVisibleTime;
-    const timelineSpan = timelineEnd - timelineStart;
-    
-    // Calculate the actual start and end positions within the visible timeline
-    const actualStart = Math.max(timelineStart, booking.start);
-    const actualEnd = Math.min(timelineEnd, bookingEnd);
-    
-    // Convert to percentages of the visible timeline
-    const startPercent = ((actualStart - timelineStart) / timelineSpan) * 100;
-    const endPercent = ((actualEnd - timelineStart) / timelineSpan) * 100;
-    const widthPercent = endPercent - startPercent;
-    
-    // Ensure minimum width for very short bookings
-    const finalWidth = Math.max(widthPercent, 1);
-    
-    // Check if user can access this booking
-    const canAccess = canAccessBooking(booking);
-    
-    let backgroundColor = '#6366f1'; // Modern indigo for 'confirmed'
-    const opacity = '1';
-    let cursor = 'pointer';
-    
-    // Status-based colors (takes priority over type-based colors)
-    switch (booking.status) {
-      case 'confirmed':
-        backgroundColor = '#6366f1'; // Modern indigo
-        break;
-      case 'flying':
-        backgroundColor = '#f59e0b'; // Modern amber
-        break;
-      case 'complete':
-        backgroundColor = '#10b981'; // Modern emerald
-        break;
-      case 'unconfirmed':
-        backgroundColor = '#6b7280'; // Modern gray
-        break;
-      default:
-        // Keep default indigo for confirmed and any other status
-        break;
-    }
-    
-    // Type-based colors (only if not overridden by status)
-    if (booking.status === 'confirmed') {
-      if (booking.type === 'maintenance') {
-        backgroundColor = '#e11d48'; // Modern red
-      }
-      if (booking.type === 'trial' || booking.name === 'TRIAL FLIGHT') {
-        backgroundColor = '#0ea5e9'; // Modern sky blue
-      }
-      if (booking.type === 'fuel' || booking.name.includes('F...')) {
-        backgroundColor = '#14b8a6'; // Modern teal
-      }
-    }
-    
-    // Only change cursor for restricted users who cannot access the booking
-    if (isRestricted && !canAccess) {
-      cursor = 'not-allowed';
-    }
+  // Memoized booking style calculation - prevents recalculation on every render
+  const getBookingStyle = useMemo(() => {
+    return (booking: Booking, rowHeight: number) => {
+      const visibleSlots = getVisibleTimeSlots;
 
-    return {
-      position: 'absolute' as const,
-      left: `${startPercent}%`,
-      width: `${finalWidth}%`,
-      height: `${rowHeight - 2}px`,
-      background: backgroundColor,
-      color: 'white',
-      fontSize: '11px',
-      fontWeight: '500',
-      padding: '6px 8px',
-      borderRadius: '6px',
-      border: '1px solid rgba(255, 255, 255, 0.2)',
-      whiteSpace: 'nowrap' as const,
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      zIndex: 20,
-      top: '1px',
-      cursor: cursor,
-      userSelect: 'none' as const,
-      display: 'flex',
-      alignItems: 'center',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-      transition: 'all 0.2s ease-in-out',
-      opacity: opacity
+      if (visibleSlots.length === 0) {
+        return { display: 'none' as const };
+      }
+
+      const firstVisibleTime = convertTimeToPosition(visibleSlots[0]);
+      const lastVisibleTime = convertTimeToPosition(visibleSlots[visibleSlots.length - 1]) + 0.5;
+
+      // Check if booking is visible in current viewport
+      const bookingEnd = booking.start + booking.duration;
+      const isVisible = booking.start < lastVisibleTime && bookingEnd > firstVisibleTime;
+
+      if (!isVisible) {
+        return { display: 'none' as const };
+      }
+
+      // Calculate position relative to visible area with precise slot positioning
+      const timelineStart = firstVisibleTime;
+      const timelineEnd = lastVisibleTime;
+      const timelineSpan = timelineEnd - timelineStart;
+
+      // Calculate the actual start and end positions within the visible timeline
+      const actualStart = Math.max(timelineStart, booking.start);
+      const actualEnd = Math.min(timelineEnd, bookingEnd);
+
+      // Convert to percentages of the visible timeline
+      const startPercent = ((actualStart - timelineStart) / timelineSpan) * 100;
+      const endPercent = ((actualEnd - timelineStart) / timelineSpan) * 100;
+      const widthPercent = endPercent - startPercent;
+
+      // Ensure minimum width for very short bookings
+      const finalWidth = Math.max(widthPercent, 1);
+
+      // Check if user can access this booking
+      const canAccess = canAccessBooking(booking);
+
+      let backgroundColor = '#6366f1'; // Modern indigo for 'confirmed'
+      const opacity = '1';
+      let cursor = 'pointer';
+
+      // Status-based colors (takes priority over type-based colors)
+      switch (booking.status) {
+        case 'confirmed':
+          backgroundColor = '#6366f1'; // Modern indigo
+          break;
+        case 'flying':
+          backgroundColor = '#f59e0b'; // Modern amber
+          break;
+        case 'complete':
+          backgroundColor = '#10b981'; // Modern emerald
+          break;
+        case 'unconfirmed':
+          backgroundColor = '#6b7280'; // Modern gray
+          break;
+        default:
+          // Keep default indigo for confirmed and any other status
+          break;
+      }
+
+      // Type-based colors (only if not overridden by status)
+      if (booking.status === 'confirmed') {
+        if (booking.type === 'maintenance') {
+          backgroundColor = '#e11d48'; // Modern red
+        }
+        if (booking.type === 'trial' || booking.name === 'TRIAL FLIGHT') {
+          backgroundColor = '#0ea5e9'; // Modern sky blue
+        }
+        if (booking.type === 'fuel' || booking.name.includes('F...')) {
+          backgroundColor = '#14b8a6'; // Modern teal
+        }
+      }
+
+      // Only change cursor for restricted users who cannot access the booking
+      if (isRestricted && !canAccess) {
+        cursor = 'not-allowed';
+      }
+
+      return {
+        position: 'absolute' as const,
+        left: `${startPercent}%`,
+        width: `${finalWidth}%`,
+        height: `${rowHeight - 2}px`,
+        background: backgroundColor,
+        color: 'white',
+        fontSize: '11px',
+        fontWeight: '500',
+        padding: '6px 8px',
+        borderRadius: '6px',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        whiteSpace: 'nowrap' as const,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        zIndex: 20,
+        top: '1px',
+        cursor: cursor,
+        userSelect: 'none' as const,
+        display: 'flex',
+        alignItems: 'center',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+        transition: 'all 0.2s ease-in-out',
+        opacity: opacity
+      };
     };
-  };
+  }, [getVisibleTimeSlots, isRestricted, canAccessBooking]);
 
 
   // Handle cell click (for creating new bookings)
@@ -1079,7 +1160,7 @@ const FlightSchedulerInner = () => {
   // Handle booking hover
   const handleBookingMouseEnter = (event: React.MouseEvent, booking: Booking) => {
     setHoveredBooking(booking);
-    setMousePosition({ x: event.clientX, y: event.clientY });
+    debouncedSetMousePosition(event.clientX, event.clientY);
   };
 
   const handleBookingMouseLeave = () => {
@@ -1088,7 +1169,7 @@ const FlightSchedulerInner = () => {
 
   const handleBookingMouseMove = (event: React.MouseEvent) => {
     if (hoveredBooking) {
-      setMousePosition({ x: event.clientX, y: event.clientY });
+      debouncedSetMousePosition(event.clientX, event.clientY);
     }
   };
 
@@ -1096,7 +1177,7 @@ const FlightSchedulerInner = () => {
   const handleTimeSlotHover = (resource: string, timeSlot: string, isInstructor: boolean, event: React.MouseEvent) => {
     if (isTimeSlotInPast(timeSlot)) return; // Don't show hover for past time slots
     setHoveredTimeSlot({ resource, timeSlot, isInstructor });
-    setMousePosition({ x: event.clientX, y: event.clientY });
+    debouncedSetMousePosition(event.clientX, event.clientY);
   };
 
   const handleTimeSlotLeave = () => {
@@ -1247,9 +1328,9 @@ const FlightSchedulerInner = () => {
           {/* Time grid cells - using CSS Grid to match header alignment */}
           <div
             className="grid w-full h-full absolute inset-0"
-            style={{ gridTemplateColumns: `repeat(${getVisibleTimeSlots.length}, 1fr)` }}
+            style={{ gridTemplateColumns: `repeat(${visibleSlots.length}, 1fr)` }}
           >
-            {getVisibleTimeSlots.map((timeSlot) => {
+            {visibleSlots.map((timeSlot) => {
               const isPast = isTimeSlotInPast(timeSlot);
               return (
                 <div
@@ -1262,9 +1343,9 @@ const FlightSchedulerInner = () => {
                   data-timeslot={timeSlot}
                   onClick={() => handleCellClick(resourceKey!, timeSlot, isInstructor)}
                   onMouseEnter={(e) => handleTimeSlotHover(resourceKey!, timeSlot, isInstructor, e)}
-                onMouseLeave={handleTimeSlotLeave}
-              >
-              </div>
+                  onMouseLeave={handleTimeSlotLeave}
+                >
+                </div>
               );
             })}
           </div>
@@ -1317,7 +1398,7 @@ const FlightSchedulerInner = () => {
                 className={`transition-all duration-200 group relative ${!shouldRestrictInteraction ? 'hover:shadow-xl' : 'cursor-not-allowed'}`}
               >
                 {/* Booking content */}
-                <span className="px-3 block truncate">{booking.name}</span>
+                <span className="px-3 block truncate">{getBookingDisplayName(booking)}</span>
               </div>
             );
           })}
@@ -1418,13 +1499,13 @@ const FlightSchedulerInner = () => {
     }
   };
 
-  // Wait for currentUser to load for restricted users to prevent race condition
+  // Loading state
   if (loading || businessHoursLoading || (isRestricted && currentUserLoading)) {
     return (
       <div className="w-full min-h-screen flex items-center justify-center">
-        <div className="flex items-center space-x-2">
-          <Loader2 className="w-6 h-6 animate-spin" />
-          <span>Loading scheduler...</span>
+        <div className="flex flex-col items-center space-y-3">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+          <span className="text-sm text-gray-600">Loading scheduler...</span>
         </div>
       </div>
     );
@@ -1546,10 +1627,10 @@ const FlightSchedulerInner = () => {
                     <button
                       onClick={() => setSelectedDate(new Date())}
                       disabled={isDateChanging}
-                      className={`px-5 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+                      className={`font-medium text-sm transition-all duration-200 underline ${
                         isDateChanging
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white shadow-sm'
+                          ? 'text-gray-400 cursor-not-allowed'
+                          : 'text-blue-500 hover:text-blue-600'
                       }`}
                     >
                       Today
@@ -1657,6 +1738,9 @@ const FlightSchedulerInner = () => {
                 prioritise_scheduling: a.prioritise_scheduling
               }))}
               bookings={rawBookings}
+              instructors={availableInstructors}
+              flightTypes={dropdownData.flightTypes}
+              lessons={dropdownData.lessons}
               prefilledData={prefilledBookingData || (selectedTimeSlot ? {
                 date: selectedDate,
                 startTime: selectedTimeSlot
@@ -1765,7 +1849,7 @@ const FlightSchedulerInner = () => {
               <div className="border-b border-blue-200 pb-2 mb-2">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-semibold text-gray-900 text-sm">{hoveredBooking.student}</h3>
+                    <h3 className="font-semibold text-gray-900 text-sm">{getBookingDisplayName(hoveredBooking)}</h3>
                     <p className="text-xs text-gray-500">{hoveredBooking.booking_type || 'flight'}</p>
                   </div>
                   {/* Green tick for completed bookings */}
@@ -1844,7 +1928,7 @@ const FlightSchedulerInner = () => {
             >
               <div className="px-3 py-2 border-b border-gray-100">
                 <div className="font-medium text-gray-900 text-sm truncate">
-                  {contextMenu.booking.name}
+                  {getBookingDisplayName(contextMenu.booking)}
                 </div>
                 <div className="text-xs text-gray-500">
                   {getBookingTimeRange(contextMenu.booking)}
@@ -1852,40 +1936,64 @@ const FlightSchedulerInner = () => {
               </div>
 
               <div className="py-1">
-                <button
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-150"
-                  onClick={() => handleContextMenuAction('contact-details', contextMenu.booking)}
-                >
-                  <User className="w-4 h-4" />
-                  View Contact Details
-                </button>
+                {isRestricted ? (
+                  <>
+                    {/* Restricted users see simplified menu */}
+                    <button
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-150"
+                      onClick={() => handleContextMenuAction('view', contextMenu.booking)}
+                    >
+                      <Eye className="w-4 h-4" />
+                      View Booking
+                    </button>
 
-                <button
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-150"
-                  onClick={() => handleContextMenuAction('change-aircraft', contextMenu.booking)}
-                >
-                  <Plane className="w-4 h-4" />
-                  Change Aircraft
-                </button>
+                    <button
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors duration-150"
+                      onClick={() => handleContextMenuAction('cancel', contextMenu.booking)}
+                    >
+                      <X className="w-4 h-4" />
+                      Cancel Booking
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {/* Non-restricted users see full menu */}
+                    <button
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-150"
+                      onClick={() => handleContextMenuAction('contact-details', contextMenu.booking)}
+                    >
+                      <User className="w-4 h-4" />
+                      View Contact Details
+                    </button>
 
-                {/* Confirm Booking - only show for unconfirmed bookings */}
-                {contextMenu.booking.status === 'unconfirmed' && (
-                  <button
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-green-600 hover:bg-green-50 hover:text-green-700 transition-colors duration-150"
-                    onClick={() => handleContextMenuAction('confirm', contextMenu.booking)}
-                  >
-                    <CalendarIcon className="w-4 h-4" />
-                    Confirm Booking
-                  </button>
+                    <button
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-150"
+                      onClick={() => handleContextMenuAction('change-aircraft', contextMenu.booking)}
+                    >
+                      <Plane className="w-4 h-4" />
+                      Change Aircraft
+                    </button>
+
+                    {/* Confirm Booking - only show for unconfirmed bookings */}
+                    {contextMenu.booking.status === 'unconfirmed' && (
+                      <button
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-green-600 hover:bg-green-50 hover:text-green-700 transition-colors duration-150"
+                        onClick={() => handleContextMenuAction('confirm', contextMenu.booking)}
+                      >
+                        <CalendarIcon className="w-4 h-4" />
+                        Confirm Booking
+                      </button>
+                    )}
+
+                    <button
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors duration-150"
+                      onClick={() => handleContextMenuAction('cancel', contextMenu.booking)}
+                    >
+                      <X className="w-4 h-4" />
+                      Cancel Booking
+                    </button>
+                  </>
                 )}
-
-                <button
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors duration-150"
-                  onClick={() => handleContextMenuAction('cancel', contextMenu.booking)}
-                >
-                  <X className="w-4 h-4" />
-                  Cancel Booking
-                </button>
               </div>
             </div>
           )}
