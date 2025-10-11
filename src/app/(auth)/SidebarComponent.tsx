@@ -81,8 +81,9 @@ export function SidebarComponent() {
   // Render skeleton loading state while role data is loading
   if (rolesLoading) {
     return (
-      <aside className="fixed left-0 top-0 h-full w-56 bg-[#F7F5F2] border-r border-gray-200 text-gray-900 flex flex-col z-30 overflow-visible">
-        <div className="flex items-center h-14 px-6 font-bold text-xl tracking-tight border-b border-gray-200">
+      <aside className="fixed left-0 top-0 h-full w-56 bg-[#101D42] border-r border-gray-200 text-white flex flex-col z-30 overflow-visible">
+        <div className="flex items-center gap-2 h-14 px-6 font-bold text-xl tracking-tight border-b border-[#89d2dc]/30">
+          <LucidePlane className="w-6 h-6 text-[#89d2dc]" />
           Flight Desk Pro
         </div>
         <nav className="flex-1 overflow-y-auto overflow-x-visible py-4 px-3 gap-0.5 flex flex-col">
@@ -111,12 +112,13 @@ export function SidebarComponent() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-56 bg-[#F7F5F2] border-r border-gray-200 text-gray-900 flex flex-col z-30 overflow-visible">
-      <div className="flex items-center h-14 px-6 font-bold text-xl tracking-tight border-b border-gray-200">
+    <aside className="fixed left-0 top-0 h-full w-56 bg-[#101D42] border-r border-gray-200 text-white flex flex-col z-30 overflow-visible">
+      <div className="flex items-center gap-2 h-14 px-6 font-bold text-xl tracking-tight border-b border-[#89d2dc]/30">
+        <LucidePlane className="w-6 h-6 text-[#89d2dc]" />
         Flight Desk Pro
       </div>
       <nav className="flex-1 overflow-y-auto overflow-x-visible py-4 px-3 gap-0.5 flex flex-col">
-        {filteredNavOptions.map((item) => {
+        {filteredNavOptions.map((item, index) => {
           // Determine the correct href based on user role and item configuration
           let href = item.href;
           if (item.dynamicHref && item.tab === 'members') {
@@ -128,59 +130,65 @@ export function SidebarComponent() {
             }
           }
 
+          // Determine if we need a divider after this item
+          const needsDividerAfter = item.tab === 'scheduler' || item.tab === 'staff' || item.tab === 'training';
+
           return (
-            <div
-              key={item.label}
-              className="relative group"
-              onMouseEnter={(e) => {
-                if (item.hasSubmenu) {
-                  if (hideTimeout) {
-                    clearTimeout(hideTimeout);
-                    setHideTimeout(null);
+            <React.Fragment key={item.label}>
+              <div
+                className="relative group"
+                onMouseEnter={(e) => {
+                  if (item.hasSubmenu) {
+                    if (hideTimeout) {
+                      clearTimeout(hideTimeout);
+                      setHideTimeout(null);
+                    }
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setSubmenuPosition({
+                      top: rect.top,
+                      left: rect.right + 16
+                    });
+                    setShowStaffSubmenu(true);
                   }
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setSubmenuPosition({
-                    top: rect.top,
-                    left: rect.right + 16
-                  });
-                  setShowStaffSubmenu(true);
-                }
-              }}
-              onMouseLeave={() => {
-                if (item.hasSubmenu) {
-                  const timeout = setTimeout(() => setShowStaffSubmenu(false), 150);
-                  setHideTimeout(timeout);
-                }
-              }}
-            >
-              <Link
-                href={href}
-                className="flex items-center justify-between px-3 py-2.5 rounded-md text-gray-700 hover:text-gray-900 font-medium text-base transition-all duration-150 sidebar-link"
+                }}
+                onMouseLeave={() => {
+                  if (item.hasSubmenu) {
+                    const timeout = setTimeout(() => setShowStaffSubmenu(false), 150);
+                    setHideTimeout(timeout);
+                  }
+                }}
               >
-                <div className="flex items-center gap-3">
-                  <item.icon className="w-5 h-5" />
-                  <span className="sidebar-link-label">
-                    {item.label}
-                  </span>
-                </div>
-                {item.hasSubmenu && (
-                  <LucideChevronRight className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                )}
-              </Link>
-              
-            </div>
+                <Link
+                  href={href}
+                  className="flex items-center justify-between px-3 py-2.5 rounded-md text-white hover:bg-white/10 hover:text-white font-extrabold text-base transition-all duration-150 sidebar-link"
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon className="w-5 h-5 text-white" />
+                    <span className="sidebar-link-label">
+                      {item.label}
+                    </span>
+                  </div>
+                  {item.hasSubmenu && (
+                    <LucideChevronRight className="w-4 h-4 text-[#89d2dc] opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                  )}
+                </Link>
+              </div>
+              {needsDividerAfter && index < filteredNavOptions.length - 1 && (
+                <div className="w-full h-px bg-[#89d2dc]/30 my-2 mx-3" />
+              )}
+            </React.Fragment>
           );
         })}
       </nav>
       <div className="mt-auto mb-4 px-3">
-        <div className="w-full h-px mb-3 bg-gray-200" />
+        <div className="w-full h-px mb-3 bg-[#89d2dc]/30" />
         {/* Show Settings for all users - different destinations based on role */}
         {!rolesLoading && (
           <Link
             href={userRole === 'admin' || userRole === 'owner' ? "/settings" : "/dashboard/profile"}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-700 hover:text-gray-900 font-medium text-base transition-all duration-150 sidebar-link mb-2"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-md text-white hover:bg-white/10 hover:text-white font-extrabold text-base transition-all duration-150 sidebar-link mb-2"
           >
-            <LucideSettings className="w-5 h-5" />
+            <LucideSettings className="w-5 h-5 text-white" />
             <span className="sidebar-link-label">
               Settings
             </span>
@@ -191,7 +199,7 @@ export function SidebarComponent() {
       {/* Portal-based Submenu */}
       {showStaffSubmenu && typeof window !== 'undefined' && createPortal(
         <div
-          className="fixed w-48 rounded-lg shadow-xl submenu-container bg-[#F7F5F2] border border-gray-200"
+          className="fixed w-48 rounded-lg shadow-xl submenu-container bg-[#101D42] border border-gray-200"
           style={{
             zIndex: 10000,
             top: submenuPosition.top,
@@ -214,13 +222,7 @@ export function SidebarComponent() {
               <Link
                 key={subItem.label}
                 href={subItem.href}
-                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 transition-all duration-200 font-medium tracking-wide rounded-md"
-                style={{
-                  fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
-                  fontSize: '1.089rem',
-                  fontWeight: 500,
-                  letterSpacing: '0.02em',
-                }}
+                className="block px-3 py-2.5 text-white hover:bg-white/10 hover:text-white transition-all duration-200 font-medium text-base rounded-md"
               >
                 {subItem.label}
               </Link>

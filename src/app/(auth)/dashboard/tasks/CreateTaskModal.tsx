@@ -205,8 +205,8 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         {/* Header */}
         <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-9 h-9 bg-indigo-100 rounded-lg">
-              <Plus className="w-4 h-4 text-indigo-600" />
+            <div className="flex items-center justify-center w-9 h-9 bg-[#89d2dc]/20 rounded-lg">
+              <Plus className="w-4 h-4 text-[#6564db]" />
             </div>
             <div className="flex-1">
               <h2 className="text-xl font-semibold text-slate-900">Create New Task</h2>
@@ -395,7 +395,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 <Button
                   type="submit"
                   disabled={isCreating || !title || !status || !priority || !category || !dueDate}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm"
+                  className="bg-[#6564db] hover:bg-[#232ed1] text-white px-4 py-2 text-sm"
                 >
                   {isCreating ? "Creating..." : "Create Task"}
                 </Button>

@@ -148,8 +148,8 @@ export default function LandingFeeSelector({ onAdd, taxRate, aircraftTypeId }: L
                               setError(null);
                             }}
                             className={
-                              "flex items-center justify-between px-2 py-2 rounded-md hover:bg-indigo-50 transition text-left cursor-pointer" +
-                              (selected?.id === fee.id ? " bg-indigo-50" : "")
+                              "flex items-center justify-between px-2 py-2 rounded-md hover:bg-[#89d2dc]/10 transition text-left cursor-pointer" +
+                              (selected?.id === fee.id ? " bg-[#89d2dc]/10" : "")
                             }
                           >
                             <div className="flex-1">
@@ -166,7 +166,7 @@ export default function LandingFeeSelector({ onAdd, taxRate, aircraftTypeId }: L
                             </div>
                             {hasRate && (
                               <div className="flex flex-col items-end ml-4">
-                                <div className="font-semibold text-indigo-600 text-sm">
+                                <div className="font-semibold text-[#6564db] text-sm">
                                   ${inclusiveRate.toFixed(2)}
                                 </div>
                                 {!fee.is_taxable && (

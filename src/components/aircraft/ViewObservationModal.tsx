@@ -36,7 +36,7 @@ const getStageColor = (stage: ObservationStage): string => {
   switch (stage) {
     case 'open': return 'bg-blue-100 text-blue-800 border-blue-200';
     case 'investigation': return 'bg-orange-100 text-orange-800 border-orange-200';
-    case 'resolution': return 'bg-purple-100 text-purple-800 border-purple-200';
+    case 'resolution': return 'bg-[#89d2dc]/20 text-[#6564db] border-[#89d2dc]/40';
     case 'closed': return 'bg-gray-100 text-gray-800 border-gray-200';
     default: return 'bg-gray-100 text-gray-800 border-gray-200';
   }

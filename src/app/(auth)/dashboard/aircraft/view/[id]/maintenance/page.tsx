@@ -74,7 +74,7 @@ async function AircraftMaintenancePage({ params, user: _user, userRole: _userRol
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-0">
         <div>
           <div className="flex items-center gap-2 text-lg font-semibold text-muted-foreground">
-            <a href={`/dashboard/aircraft/view/${id}`} className="text-indigo-600 hover:underline text-base flex items-center gap-1">
+            <a href={`/dashboard/aircraft/view/${id}`} className="text-[#6564db] hover:underline text-base flex items-center gap-1">
               <ArrowLeft className="w-4 h-4" /> Back to Aircraft
             </a>
           </div>
@@ -91,9 +91,9 @@ async function AircraftMaintenancePage({ params, user: _user, userRole: _userRol
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="p-6 flex flex-col gap-2 shadow-sm border border-gray-200 bg-white">
           <div className="font-semibold text-lg flex items-center gap-2 mb-2">
-            <GaugeCircle className="w-5 h-5 text-indigo-500" /> Total Hours
+            <GaugeCircle className="w-5 h-5 text-[#6564db]" /> Total Hours
           </div>
-          <div className="text-3xl font-bold text-indigo-600">{aircraft.total_hours || 0}</div>
+          <div className="text-3xl font-bold text-[#6564db]">{aircraft.total_hours || 0}</div>
         </Card>
         <Card className="p-6 flex flex-col gap-2 shadow-sm border border-gray-200 bg-white">
           <div className="font-semibold text-lg flex items-center gap-2 mb-2">

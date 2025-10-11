@@ -81,7 +81,7 @@ const DebriefClientShell: React.FC<DebriefClientShellProps> = ({ booking, member
             Save & Review
           </Button>
           <Button
-            className="h-10 px-6 text-base font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-indigo-300"
+            className="h-10 px-6 text-base font-bold bg-[#6564db] hover:bg-[#232ed1] text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-[#89d2dc]"
             onClick={handleSaveAndInvoice}
             title={hasInvoice ? "Save debrief and continue to payment" : "Save debrief and create invoice"}
           >

@@ -43,9 +43,9 @@ export default function AircraftViewClient({ aircraft, components: _components, 
               <Tabs.Trigger
                 key={tab.id}
                 value={tab.id}
-                className={`inline-flex items-center gap-2 px-4 py-2 pb-1 text-base font-medium border-b-2 border-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400
-                  data-[state=active]:border-indigo-700 data-[state=active]:text-indigo-800
-                  data-[state=inactive]:text-muted-foreground hover:text-indigo-600 whitespace-nowrap`}
+                className={`inline-flex items-center gap-2 px-4 py-2 pb-1 text-base font-medium border-b-2 border-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#89d2dc]
+                  data-[state=active]:border-[#6564db] data-[state=active]:text-[#6564db]
+                  data-[state=inactive]:text-muted-foreground hover:text-[#6564db] whitespace-nowrap`}
                 style={{ background: "none", boxShadow: "none", borderRadius: 0 }}
               >
                 <Icon className="w-5 h-5" />
@@ -61,7 +61,7 @@ export default function AircraftViewClient({ aircraft, components: _components, 
             {/* Aircraft Details */}
             <Card className="p-6 flex flex-col gap-2 shadow-sm border border-gray-200 bg-white">
               <div className="font-semibold text-lg flex items-center gap-2 mb-2">
-                <Info className="w-5 h-5 text-indigo-500" /> Aircraft Details
+                <Info className="w-5 h-5 text-[#6564db]" /> Aircraft Details
               </div>
               <div className="flex flex-col gap-1 text-sm">
                 <div className="flex justify-between"><span>Registration</span><span className="font-medium">{aircraftState.registration}</span></div>
@@ -72,7 +72,7 @@ export default function AircraftViewClient({ aircraft, components: _components, 
             {/* Readings */}
             <Card className="p-6 flex flex-col gap-2 shadow-sm border border-gray-200 bg-white">
               <div className="font-semibold text-lg flex items-center gap-2 mb-2">
-                <Settings className="w-5 h-5 text-indigo-500" /> Readings
+                <Settings className="w-5 h-5 text-[#6564db]" /> Readings
               </div>
               <div className="flex flex-col gap-1 text-sm">
                 <div className="flex justify-between"><span>Total Time</span><span className="font-medium">{aircraftState.total_hours}</span></div>
@@ -83,7 +83,7 @@ export default function AircraftViewClient({ aircraft, components: _components, 
             {/* Next Maintenance Due */}
             <Card className="p-6 flex flex-col gap-2 shadow-sm border border-gray-200 bg-white">
               <div className="font-semibold text-lg flex items-center gap-2 mb-2">
-                <Wrench className="w-5 h-5 text-indigo-500" /> Next Maintenance Due
+                <Wrench className="w-5 h-5 text-[#6564db]" /> Next Maintenance Due
               </div>
               <div className="flex flex-col gap-1 text-sm">
                 <div className="flex justify-between">

@@ -66,7 +66,7 @@ async function AircraftViewPage({ params, user: _user, userRole: _userRole }: Ai
       <div className="w-full max-w-6xl mx-auto flex flex-col gap-8">
         {/* Back link */}
         <div className="flex items-center gap-2 text-lg font-semibold text-muted-foreground mb-2">
-          <a href="/dashboard/aircraft" className="text-indigo-600 hover:underline text-base flex items-center gap-1">
+          <a href="/dashboard/aircraft" className="text-[#6564db] hover:underline text-base flex items-center gap-1">
             <ArrowLeft className="w-4 h-4" /> Back to Aircraft
           </a>
         </div>
@@ -79,7 +79,7 @@ async function AircraftViewPage({ params, user: _user, userRole: _userRole }: Ai
           <Button
             asChild
             variant="default"
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow"
+            className="flex items-center gap-2 bg-[#6564db] hover:bg-[#232ed1] text-white shadow"
             title="View all maintenance, services, and history for this aircraft"
           >
             <a href={`/dashboard/aircraft/view/${id}/maintenance`}>

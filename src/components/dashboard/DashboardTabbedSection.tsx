@@ -24,7 +24,8 @@ import {
   User,
   Clock,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  ClipboardList
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -119,8 +120,36 @@ export default function DashboardTabbedSection({
     });
   };
 
+  // Handle booking confirmation
+  const handleConfirmBooking = async (bookingId: string) => {
+    try {
+      const response = await fetch('/api/bookings', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: bookingId,
+          status: 'confirmed',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to confirm booking');
+      }
+
+      toast.success('Booking confirmed successfully');
+      // Refresh the page to update the data
+      window.location.reload();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to confirm booking';
+      toast.error(errorMessage);
+    }
+  };
+
   // Bookings logic
-  const { todaysBookings, currentlyFlying } = React.useMemo(() => {
+  const { todaysBookings, currentlyFlying, requestedBookings } = React.useMemo(() => {
     const today = new Date();
     const localToday = today.getFullYear() + '-' +
                       String(today.getMonth() + 1).padStart(2, '0') + '-' +
@@ -145,8 +174,9 @@ export default function DashboardTabbedSection({
     });
 
     const currentlyFlying = bookings.filter(booking => booking.status === 'flying');
+    const requestedBookings = bookings.filter(booking => booking.status === 'unconfirmed');
 
-    return { todaysBookings, currentlyFlying };
+    return { todaysBookings, currentlyFlying, requestedBookings };
   }, [bookings]);
 
   const formatDate = () => {
@@ -160,6 +190,7 @@ export default function DashboardTabbedSection({
 
   const totalTodayActivity = todaysBookings.length + currentlyFlying.length;
   const authorizationCount = authorizations.length;
+  const requestedCount = requestedBookings.length;
 
   // Restricted users: Simple upcoming bookings view
   if (isRestrictedUser) {
@@ -209,6 +240,11 @@ export default function DashboardTabbedSection({
                   {totalTodayActivity} today
                 </Badge>
               )}
+              {isPrivilegedUser && requestedCount > 0 && (
+                <Badge variant="default" className="bg-yellow-100 text-yellow-800">
+                  {requestedCount} requested
+                </Badge>
+              )}
               {isPrivilegedUser && authorizationCount > 0 && (
                 <Badge variant="default" className="bg-orange-100 text-orange-800">
                   {authorizationCount} pending
@@ -223,7 +259,7 @@ export default function DashboardTabbedSection({
             <TabsList className="inline-flex bg-transparent border-0 rounded-none p-0 h-auto space-x-8 px-6">
               <TabsTrigger
                 value="today"
-                className="inline-flex items-center gap-2 px-1 py-3 text-sm font-medium border-b-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-700 data-[state=inactive]:text-gray-500 hover:text-gray-700 whitespace-nowrap bg-transparent"
+                className="inline-flex items-center gap-2 px-1 py-3 text-sm font-medium border-b-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#89d2dc] data-[state=active]:border-[#6564db] data-[state=active]:text-[#6564db] data-[state=inactive]:text-gray-500 hover:text-gray-700 whitespace-nowrap bg-transparent"
                 style={{ background: "none", boxShadow: "none", borderRadius: 0 }}
               >
                 <Calendar className="w-4 h-4 text-green-600" />
@@ -236,8 +272,23 @@ export default function DashboardTabbedSection({
               </TabsTrigger>
               {isPrivilegedUser && (
                 <TabsTrigger
+                  value="requested"
+                  className="inline-flex items-center gap-2 px-1 py-3 text-sm font-medium border-b-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#89d2dc] data-[state=active]:border-[#6564db] data-[state=active]:text-[#6564db] data-[state=inactive]:text-gray-500 hover:text-gray-700 whitespace-nowrap bg-transparent"
+                  style={{ background: "none", boxShadow: "none", borderRadius: 0 }}
+                >
+                  <ClipboardList className="w-4 h-4 text-yellow-600" />
+                  <span>Requested Bookings</span>
+                  {requestedCount > 0 && (
+                    <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none rounded-full bg-yellow-100 text-yellow-700">
+                      {requestedCount}
+                    </span>
+                  )}
+                </TabsTrigger>
+              )}
+              {isPrivilegedUser && (
+                <TabsTrigger
                   value="authorizations"
-                  className="inline-flex items-center gap-2 px-1 py-3 text-sm font-medium border-b-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-700 data-[state=inactive]:text-gray-500 hover:text-gray-700 whitespace-nowrap bg-transparent"
+                  className="inline-flex items-center gap-2 px-1 py-3 text-sm font-medium border-b-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#89d2dc] data-[state=active]:border-[#6564db] data-[state=active]:text-[#6564db] data-[state=inactive]:text-gray-500 hover:text-gray-700 whitespace-nowrap bg-transparent"
                   style={{ background: "none", boxShadow: "none", borderRadius: 0 }}
                 >
                   <FileCheck className="w-4 h-4 text-orange-600" />
@@ -254,10 +305,10 @@ export default function DashboardTabbedSection({
 
           <CardContent className="pt-6">
             <TabsContent value="today" className="h-full flex flex-col m-0">
-              <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+              <div className="flex-1 overflow-y-auto space-y-8 pr-2">
                 {/* Today's Bookings */}
                 <div>
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-2 mb-4">
                     <Calendar className="w-4 h-4 text-green-600" />
                     <h4 className="font-medium text-gray-900">Today&apos;s Bookings</h4>
                     <span className="text-sm text-gray-500">{formatDate()}</span>
@@ -281,7 +332,7 @@ export default function DashboardTabbedSection({
 
                 {/* Currently Flying */}
                 <div>
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-2 mb-4">
                     <Plane className="w-4 h-4 text-blue-600" />
                     <h4 className="font-medium text-gray-900">Currently Flying</h4>
                   </div>
@@ -303,6 +354,43 @@ export default function DashboardTabbedSection({
                 </div>
               </div>
             </TabsContent>
+
+            {isPrivilegedUser && (
+              <TabsContent value="requested" className="h-full flex flex-col m-0">
+                <div className="flex-1 overflow-y-auto pr-2">
+                  <div className="flex items-center gap-3 mb-4">
+                    <ClipboardList className="w-5 h-5 text-yellow-600" />
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Requested Bookings</h3>
+                      <p className="text-sm text-gray-600">Bookings awaiting confirmation</p>
+                    </div>
+                    {requestedCount > 0 && (
+                      <span className="ml-auto inline-flex items-center justify-center px-3 py-1 text-sm font-medium rounded-full bg-yellow-100 text-yellow-700">
+                        {requestedCount} booking{requestedCount !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+
+                  {requestedBookings.length === 0 ? (
+                    <div className="text-center py-12 bg-gray-50 rounded-lg">
+                      <ClipboardList className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Requested Bookings</h3>
+                      <p className="text-gray-600">All bookings are confirmed or processed.</p>
+                    </div>
+                  ) : (
+                    <BookingsTable
+                      bookings={requestedBookings}
+                      members={members}
+                      instructors={instructors}
+                      aircraftList={aircraftList}
+                      statusFilter="unconfirmed"
+                      showConfirmButton={true}
+                      onConfirmBooking={handleConfirmBooking}
+                    />
+                  )}
+                </div>
+              </TabsContent>
+            )}
 
             {isPrivilegedUser && (
               <TabsContent value="authorizations" className="h-full flex flex-col m-0">

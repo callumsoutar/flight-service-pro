@@ -30,14 +30,14 @@ async function EquipmentViewPage({ params, user: _user, userRole: _userRole }: E
       <div className="w-full max-w-4xl mx-auto flex flex-col gap-8">
         {/* Back link */}
         <div className="flex items-center gap-2 text-lg font-semibold text-muted-foreground mb-2">
-          <a href="/dashboard/equipment" className="text-indigo-600 hover:underline text-base flex items-center gap-1">
+          <a href="/dashboard/equipment" className="text-[#6564db] hover:underline text-base flex items-center gap-1">
             <ArrowLeft className="w-4 h-4" /> Back to Equipment
           </a>
         </div>
         {/* Equipment header and actions */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
           <div className="flex items-center gap-4">
-            <Package className="w-10 h-10 text-indigo-700" />
+            <Package className="w-10 h-10 text-[#6564db]" />
             <div>
               <div className="text-2xl font-bold">{equipment.name}</div>
               <div className="text-muted-foreground text-sm">{equipment.type} &bull; Serial: {equipment.serial_number}</div>

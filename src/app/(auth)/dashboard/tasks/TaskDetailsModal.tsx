@@ -121,13 +121,23 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
 
   useEffect(() => {
     if (task) {
+      console.log('Task loaded in modal:', task);
+      console.log('Assigned instructor:', task.assigned_to_instructor);
+      console.log('Assigned instructor ID:', task.assigned_to_instructor?.id);
+      console.log('Raw assigned_to_instructor_id:', task.assigned_to_instructor_id);
+      
       setTempTitle(task.title);
       setTempDescription(task.description || "");
       setTempStatus(task.status);
       setTempPriority(task.priority);
       setTempCategory(task.category);
       setTempDueDate(task.due_date ? new Date(task.due_date) : undefined);
-      setTempAssignedToInstructorId(task.assigned_to_instructor?.id || "");
+      
+      // FIXED: Prioritize the raw ID field over the joined object
+      // The joined object might be null even when assigned_to_instructor_id has a value
+      const instructorId = task.assigned_to_instructor_id || task.assigned_to_instructor?.id || "";
+      console.log('Setting instructor ID to:', instructorId);
+      setTempAssignedToInstructorId(instructorId);
       setIsDirty(false);
     }
   }, [task]);
@@ -137,6 +147,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     if (!task) return;
     
     const originalDueDate = task.due_date ? new Date(task.due_date) : undefined;
+    const originalInstructorId = task.assigned_to_instructor_id || task.assigned_to_instructor?.id || "";
     const hasChanges = (
       tempTitle !== task.title ||
       tempDescription !== (task.description || "") ||
@@ -144,7 +155,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       tempPriority !== task.priority ||
       tempCategory !== task.category ||
       tempDueDate?.getTime() !== originalDueDate?.getTime() ||
-      tempAssignedToInstructorId !== (task.assigned_to_instructor?.id || "")
+      tempAssignedToInstructorId !== originalInstructorId
     );
     
     setIsDirty(hasChanges);
@@ -156,9 +167,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       const response = await fetch('/api/instructors');
       if (response.ok) {
         const data = await response.json();
+        console.log('Fetched instructors:', data.instructors);
         setInstructors(data.instructors || []);
       } else {
-        console.error('Failed to fetch instructors');
+        console.error('Failed to fetch instructors:', response.status, response.statusText);
         setInstructors([]);
       }
     } catch (error) {
@@ -169,7 +181,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     }
   };
 
-  const saveChanges = async () => {
+  const saveChanges = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!task || !isDirty) return;
     
     setSaving(true);
@@ -184,9 +197,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       if (tempDueDate?.getTime() !== (task.due_date ? new Date(task.due_date).getTime() : undefined)) {
         updates.due_date = tempDueDate ? tempDueDate.toISOString().split('T')[0] : null;
       }
-      if (tempAssignedToInstructorId !== (task.assigned_to_instructor?.id || "")) {
+      const currentInstructorId = task.assigned_to_instructor_id || task.assigned_to_instructor?.id || "";
+      if (tempAssignedToInstructorId !== currentInstructorId) {
         updates.assigned_to_instructor_id = tempAssignedToInstructorId || null;
       }
+      
+      console.log('Saving task updates:', updates);
       
       const response = await fetch(`/api/tasks/${taskId}`, {
         method: 'PATCH',
@@ -221,7 +237,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     setTempPriority(task.priority);
     setTempCategory(task.category);
     setTempDueDate(task.due_date ? new Date(task.due_date) : undefined);
-    setTempAssignedToInstructorId(task.assigned_to_instructor?.id || "");
+    setTempAssignedToInstructorId(task.assigned_to_instructor_id || task.assigned_to_instructor?.id || "");
     
     setIsDirty(false);
   };
@@ -399,8 +415,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
         {/* Header */}
         <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-9 h-9 bg-indigo-100 rounded-lg">
-              <Eye className="w-4 h-4 text-indigo-600" />
+            <div className="flex items-center justify-center w-9 h-9 bg-[#89d2dc]/20 rounded-lg">
+              <Eye className="w-4 h-4 text-[#6564db]" />
             </div>
             <div className="flex-1">
               <h2 className="text-xl font-semibold text-slate-900">Task Details</h2>
@@ -668,7 +684,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                 <Button
                   type="submit"
                   disabled={saving || !isDirty}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm"
+                  className="bg-[#6564db] hover:bg-[#232ed1] text-white px-4 py-2 text-sm"
                 >
                   {saving ? "Saving..." : "Save Changes"}
                 </Button>

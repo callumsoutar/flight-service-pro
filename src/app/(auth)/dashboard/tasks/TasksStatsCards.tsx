@@ -25,8 +25,8 @@ export default function TasksStatsCards({ tasks }: TasksStatsCardsProps) {
     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
       <div className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm hover:shadow-md transition-shadow">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
-            <CheckSquare className="w-4 h-4 text-indigo-600" />
+          <div className="w-8 h-8 bg-[#89d2dc]/20 rounded-lg flex items-center justify-center">
+            <CheckSquare className="w-4 h-4 text-[#6564db]" />
           </div>
           <div>
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total</p>

@@ -288,7 +288,7 @@ export default function UpcomingMaintenanceTable({ aircraft_id }: UpcomingMainte
     <div className="flex flex-col gap-6 mt-8">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold">Upcoming Maintenance</h2>
-        <Button className="bg-indigo-600 text-white font-semibold" onClick={() => setNewModalOpen(true)}>+ Add Component</Button>
+        <Button className="bg-[#6564db] text-white font-semibold" onClick={() => setNewModalOpen(true)}>+ Add Component</Button>
       </div>
       <div className="overflow-x-auto rounded-lg border border-muted bg-white">
         <table className="min-w-full text-sm">

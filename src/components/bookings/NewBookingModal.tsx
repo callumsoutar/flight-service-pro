@@ -92,6 +92,15 @@ interface AircraftOption {
   prioritise_scheduling?: boolean;
 }
 
+interface InstructorOption {
+  id: string;
+  user_id: string;
+  first_name?: string;
+  last_name?: string;
+  name?: string;
+  users?: { email: string };
+}
+
 interface NewBookingModalProps {
   open: boolean;
   onClose: () => void;
@@ -111,7 +120,7 @@ interface NewBookingModalProps {
   };
   onBookingCreated?: (newBookingData: import("@/types/bookings").Booking) => void;
   // Optional props to avoid duplicate fetching (passed from parent)
-  instructors?: any[];
+  instructors?: InstructorOption[];
   flightTypes?: Option[];
   lessons?: Option[];
 }
@@ -391,7 +400,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       if (prefilledData.instructorId && prefilledData.instructorUserId) {
         // If instructors are provided, use them directly
         if (providedInstructors && providedInstructors.length > 0) {
-          const instructorData = providedInstructors.find((inst: any) => inst.id === prefilledData.instructorId);
+          const instructorData = providedInstructors.find((inst) => inst.id === prefilledData.instructorId);
           if (instructorData) {
             const instructorResult = {
               id: instructorData.id,
@@ -923,7 +932,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
         <div className="p-8 pb-0 flex-shrink-0">
           <DialogHeader className="mb-1">
             <DialogTitle className="text-3xl font-bold mb-1 tracking-tight flex items-center gap-2">
-              <CalendarIcon className="w-7 h-7 text-indigo-600" /> New Booking
+              <CalendarIcon className="w-7 h-7 text-[#6564db]" /> New Booking
             </DialogTitle>
             <DialogDescription className="mb-3 text-base text-muted-foreground font-normal">
               Enter details for the new booking. Required fields are marked with <span className="text-red-500">*</span>.
@@ -952,7 +961,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
               {/* Scheduled Times - Common to both tabs */}
               <div className="border rounded-xl p-6 bg-muted/70 mb-6">
                   <div className="font-semibold text-lg mb-5 flex items-center gap-2 pb-3 border-b border-muted-foreground/10">
-                    <CalendarIcon className="w-5 h-5 text-indigo-600" /> SCHEDULED TIMES
+                    <CalendarIcon className="w-5 h-5 text-[#6564db]" /> SCHEDULED TIMES
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
                     <div className="max-w-[340px] w-full">
@@ -1220,7 +1229,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span tabIndex={0} className="cursor-pointer text-muted-foreground hover:text-indigo-600 focus:outline-none">
+                                <span tabIndex={0} className="cursor-pointer text-muted-foreground hover:text-[#6564db] focus:outline-none">
                                   <Plane className="w-4 h-4" aria-label="Aircraft indicators info" />
                                 </span>
                               </TooltipTrigger>
@@ -1465,7 +1474,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span tabIndex={0} className="cursor-pointer text-muted-foreground hover:text-indigo-600 focus:outline-none">
+                                <span tabIndex={0} className="cursor-pointer text-muted-foreground hover:text-[#6564db] focus:outline-none">
                                   <Plane className="w-4 h-4" aria-label="Aircraft indicators info" />
                                 </span>
                               </TooltipTrigger>
@@ -1586,7 +1595,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
             <div className="flex-shrink-0 p-8 pt-0">
               <DialogFooter className="border-t pt-6 flex flex-col sm:flex-row gap-2 sm:gap-3 w-full">
                 <DialogClose asChild>
-                  <Button variant="outline" type="button" className="w-full sm:w-auto border-2 border-muted hover:border-indigo-400 transition-colors cursor-pointer">Cancel</Button>
+                  <Button variant="outline" type="button" className="w-full sm:w-auto border-2 border-muted hover:border-[#89d2dc] transition-colors cursor-pointer">Cancel</Button>
                 </DialogClose>
                 {/* Save and Confirm button - only visible to privileged users */}
                 {!isRestrictedUser && (
@@ -1599,7 +1608,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                     Save and Confirm
                   </Button>
                 )}
-                <Button type="submit" className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-md hover:shadow-lg transition-all cursor-pointer" disabled={loading}
+                <Button type="submit" className="w-full sm:w-auto bg-[#6564db] hover:bg-[#232ed1] text-white font-semibold shadow-md hover:shadow-lg transition-all cursor-pointer" disabled={loading}
                   onClick={e => handleSubmit(e)}
                 >
                   {isRestrictedRole ? 'Save Booking' : 'Save'}

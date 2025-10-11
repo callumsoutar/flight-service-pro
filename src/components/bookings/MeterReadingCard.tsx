@@ -197,7 +197,7 @@ export default function MeterReadingCard({
                   type="number"
                   value={tachStart}
                   onChange={(e) => setTachStart(e.target.value)}
-                  className={`w-full rounded border px-3 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 no-spinner ${chargingBy === "tacho" ? 'border-green-300' : 'border-gray-300'}`}
+                  className={`w-full rounded border px-3 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#6564db] no-spinner ${chargingBy === "tacho" ? 'border-green-300' : 'border-gray-300'}`}
                   placeholder="0.0"
                   step="0.1"
                 />
@@ -208,7 +208,7 @@ export default function MeterReadingCard({
                   type="number"
                   value={tachEnd}
                   onChange={(e) => setTachEnd(e.target.value)}
-                  className={`w-full rounded border px-3 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 no-spinner ${chargingBy === "tacho" ? 'border-green-300' : 'border-gray-300'}`}
+                  className={`w-full rounded border px-3 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#6564db] no-spinner ${chargingBy === "tacho" ? 'border-green-300' : 'border-gray-300'}`}
                   placeholder=""
                   step="0.1"
                 />
@@ -235,7 +235,7 @@ export default function MeterReadingCard({
                   type="number"
                   value={hobbsStart}
                   onChange={(e) => setHobbsStart(e.target.value)}
-                  className={`w-full rounded border px-3 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 no-spinner ${chargingBy === "hobbs" ? 'border-blue-300' : 'border-gray-300'}`}
+                  className={`w-full rounded border px-3 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#6564db] no-spinner ${chargingBy === "hobbs" ? 'border-blue-300' : 'border-gray-300'}`}
                   placeholder="0.0"
                   step="0.1"
                 />
@@ -246,7 +246,7 @@ export default function MeterReadingCard({
                   type="number"
                   value={hobbsEnd}
                   onChange={(e) => setHobbsEnd(e.target.value)}
-                  className={`w-full rounded border px-3 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 no-spinner ${chargingBy === "hobbs" ? 'border-blue-300' : 'border-gray-300'}`}
+                  className={`w-full rounded border px-3 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#6564db] no-spinner ${chargingBy === "hobbs" ? 'border-blue-300' : 'border-gray-300'}`}
                   placeholder=""
                   step="0.1"
                 />
@@ -299,7 +299,7 @@ export default function MeterReadingCard({
                     type="number"
                     value={soloEndHobbs}
                     onChange={(e) => setSoloEndHobbs(e.target.value)}
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 no-spinner"
+                    className="w-full rounded border border-gray-300 px-3 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#6564db] no-spinner"
                     placeholder="Final reading"
                     min={parseFloat(hobbsEnd) || 0}
                     step="0.1"
@@ -319,7 +319,7 @@ export default function MeterReadingCard({
         <Button
           onClick={handleCalculate}
           disabled={!isValid || isCalculating}
-          className="w-full bg-purple-700 hover:bg-purple-800 text-white"
+          className="w-full bg-[#6564db] hover:bg-[#232ed1] text-white"
           size="lg"
         >
           {isCalculating ? (

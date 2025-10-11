@@ -68,8 +68,8 @@ const REPORT_TYPES = [
     title: "Instructor Report",
     description: "Instructor activity, student progress, and instructional hours",
     icon: GraduationCap,
-    color: "text-purple-600",
-    bgColor: "bg-purple-50",
+    color: "text-[#6564db]",
+    bgColor: "bg-[#89d2dc]/10",
   },
   {
     id: "trial-flights" as const,
@@ -225,7 +225,7 @@ export default function ReportsClientPage({ aircraft }: ReportsClientPageProps) 
                     <Icon className={`w-6 h-6 ${report.color}`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-semibold text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors">
+                    <h3 className="text-base font-semibold text-gray-900 mb-1 group-hover:text-[#6564db] transition-colors">
                       {report.title}
                     </h3>
                     <p className="text-sm text-gray-500 leading-relaxed">
@@ -398,7 +398,7 @@ export default function ReportsClientPage({ aircraft }: ReportsClientPageProps) 
         <CardContent>
           {loading ? (
             <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#6564db] mx-auto"></div>
               <p className="mt-4 text-gray-600">Loading report data...</p>
             </div>
           ) : error ? (

@@ -118,7 +118,7 @@ const FlightSchedulerInner = () => {
   const [schedulerData, setSchedulerData] = useState({
     aircraft: [] as Aircraft[],
     availableInstructors: [] as Instructor[],
-    rawBookings: [] as any[],
+    rawBookings: [] as unknown[],
     bookings: [] as Booking[],
     bookingsByResource: {} as Record<string, Booking[]>,
     rosterRules: [] as RosterRule[],
@@ -192,7 +192,7 @@ const FlightSchedulerInner = () => {
     setSchedulerData(prev => ({ ...prev, aircraft: newAircraft }));
   const setAvailableInstructors = (newInstructors: Instructor[]) =>
     setSchedulerData(prev => ({ ...prev, availableInstructors: newInstructors }));
-  const setRawBookings = (newRawBookings: any[]) =>
+  const setRawBookings = (newRawBookings: unknown[]) =>
     setSchedulerData(prev => ({ ...prev, rawBookings: newRawBookings }));
   const setBookings = (newBookings: Booking[]) =>
     setSchedulerData(prev => ({ ...prev, bookings: newBookings }));
@@ -228,17 +228,16 @@ const FlightSchedulerInner = () => {
   const { isRestricted, isLoading: roleLoading, error: roleError } = useIsRestrictedUser();
 
   // State for current user
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null);
   const [currentUserLoading, setCurrentUserLoading] = useState(true);
 
   // State for cancellation categories (only fetch when needed)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [cancellationCategories, setCancellationCategories] = useState<any[]>([]);
+  const [cancellationCategories, setCancellationCategories] = useState<import("@/types/bookings").CancellationCategory[]>([]);
   const [isFetchingCategories, setIsFetchingCategories] = useState(false);
 
   // Debounce utility for mouse event handlers
-  const debounce = <T extends (...args: any[]) => void>(func: T, wait: number) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const debounce = <T extends (...args: any[]) => void>(func: T, wait: number): T => {
     let timeout: NodeJS.Timeout | null = null;
     return ((...args: Parameters<T>) => {
       if (timeout) clearTimeout(timeout);
@@ -363,8 +362,9 @@ const FlightSchedulerInner = () => {
   const VISIBLE_SLOTS = 24;
   const _ROW_HEIGHT = 60;
 
-  // Generate time slots based on business hours (30-minute intervals)
-  const generateTimeSlots = (): string[] => {
+  // Memoize time slots generation to prevent recalculation on every render
+  const timeSlots = useMemo(() => {
+    // Generate time slots based on business hours (30-minute intervals)
     const slots: string[] = [];
 
     // Default fallback times if business hours not available
@@ -397,10 +397,7 @@ const FlightSchedulerInner = () => {
     }
 
     return slots;
-  };
-
-  // Memoize time slots generation to prevent recalculation on every render
-  const timeSlots = useMemo(() => generateTimeSlots(), [businessHours]);
+  }, [businessHours]);
 
   // Fetch all data - restored from original
   const fetchAllData = async (isInitialLoad = false, isDateChange = false) => {
@@ -533,66 +530,70 @@ const FlightSchedulerInner = () => {
 
       // Create Maps for fast O(1) lookups instead of array.find() O(n)
       const instructorMap = new Map<string, Instructor>(filteredInstructors.map((inst: Instructor) => [inst.id, inst]));
-      const aircraftMap = new Map<string, any>(onlineAircraft.map((ac: any) => [ac.id, ac]));
+      const aircraftMap = new Map<string, Aircraft>(onlineAircraft.map((ac: Aircraft) => [ac.id, ac]));
       const additionalInstructorSet = new Set<string>();
       const additionalAircraftSet = new Set<string>();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (bookingsData.bookings || []).forEach((booking: any) => {
+      (bookingsData.bookings || []).forEach((booking: Record<string, unknown>) => {
         try {
           if (!booking.start_time || !booking.end_time) {
             return;
           }
-          const bookingDate = new Date(booking.start_time);
+          const bookingDate = new Date(booking.start_time as string);
           if (isNaN(bookingDate.getTime())) {
             return;
           }
           // Convert booking time to local date for comparison with selectedDate
-          const bookingLocalDate = new Date(booking.start_time);
+          const bookingLocalDate = new Date(booking.start_time as string);
           // Get local date string in same format as selectedDate
           const bookingLocalDateStr = bookingLocalDate.getFullYear() + '-' +
             String(bookingLocalDate.getMonth() + 1).padStart(2, '0') + '-' +
             String(bookingLocalDate.getDate()).padStart(2, '0');
 
-          if (bookingLocalDateStr === localDateStr && ['unconfirmed', 'confirmed', 'briefing', 'flying', 'complete'].includes(booking.status || '')) {
+          if (bookingLocalDateStr === localDateStr && ['unconfirmed', 'confirmed', 'briefing', 'flying', 'complete'].includes((booking.status as string) || '')) {
             const startTime = bookingDate.getHours() + (bookingDate.getMinutes() / 60);
-        const endTime = new Date(booking.end_time);
+        const endTime = new Date(booking.end_time as string);
             if (isNaN(endTime.getTime())) return;
             const duration = (endTime.getTime() - bookingDate.getTime()) / (1000 * 60 * 60);
             if (duration <= 0) return;
 
+            const user = booking.user as { first_name?: string; last_name?: string; email?: string; id?: string } | undefined;
+            const instructor = booking.instructor as { first_name?: string; last_name?: string; email?: string } | undefined;
+            const aircraft = booking.aircraft as { registration?: string } | undefined;
+
             const schedulerBooking: Booking = {
-          id: booking.id,
+          id: booking.id as string,
               start: startTime,
           duration: duration,
-              name: booking.user?.first_name && booking.user?.last_name
-                ? `${booking.user.first_name} ${booking.user.last_name}`
-                : booking.user?.email || booking.purpose || 'Flight',
+              name: user?.first_name && user?.last_name
+                ? `${user.first_name} ${user.last_name}`
+                : user?.email || (booking.purpose as string) || 'Flight',
               type: 'booking',
-              student: booking.user?.first_name && booking.user?.last_name
-                ? `${booking.user.first_name} ${booking.user.last_name}`
-                : booking.user?.email || booking.user?.id || 'Student',
-              instructor: booking.instructor?.first_name && booking.instructor?.last_name
-                ? `${booking.instructor.first_name} ${booking.instructor.last_name}`
-                : booking.instructor?.email || 'No Instructor',
-              aircraft: booking.aircraft?.registration || 'Aircraft',
-              status: booking.status || 'confirmed',
-          purpose: booking.purpose,
-          remarks: booking.remarks,
-          lesson_id: booking.lesson_id,
-          flight_type_id: booking.flight_type_id,
-          booking_type: booking.booking_type,
-          created_at: booking.created_at,
-          updated_at: booking.updated_at,
-              user_id: booking.user_id || undefined
+              student: user?.first_name && user?.last_name
+                ? `${user.first_name} ${user.last_name}`
+                : user?.email || user?.id || 'Student',
+              instructor: instructor?.first_name && instructor?.last_name
+                ? `${instructor.first_name} ${instructor.last_name}`
+                : instructor?.email || 'No Instructor',
+              aircraft: aircraft?.registration || 'Aircraft',
+              status: (booking.status as string) || 'confirmed',
+          purpose: booking.purpose as string | undefined,
+          remarks: booking.remarks as string | undefined,
+          lesson_id: booking.lesson_id as string | undefined,
+          flight_type_id: booking.flight_type_id as string | undefined,
+          booking_type: booking.booking_type as string | undefined,
+          created_at: booking.created_at as string | undefined,
+          updated_at: booking.updated_at as string | undefined,
+              user_id: (booking.user_id as string) || undefined
             };
 
             convertedBookings.push(schedulerBooking);
 
             // Group by instructor - show booking even if instructor not currently scheduled
-            if (booking.instructor_id) {
-              const instructor = instructorMap.get(booking.instructor_id);
-              const instructorName = instructor ? instructor.name : schedulerBooking.instructor;
+            const bookingInstructorId = booking.instructor_id as string | undefined;
+            if (bookingInstructorId) {
+              const instructorRecord = instructorMap.get(bookingInstructorId);
+              const instructorName = instructorRecord ? instructorRecord.name : schedulerBooking.instructor;
 
               // If instructor not found in filtered list, still show the booking with original instructor name
               const displayName = instructorName || schedulerBooking.instructor;
@@ -600,31 +601,39 @@ const FlightSchedulerInner = () => {
               if (!bookingsByResource[displayName]) {
                 bookingsByResource[displayName] = [];
               }
-              if (instructor) schedulerBooking.instructor = instructor.name!;
+              if (instructorRecord) schedulerBooking.instructor = instructorRecord.name!;
               bookingsByResource[displayName].push(schedulerBooking);
 
               // Collect additional instructors (not in filtered list) for later addition
-              if (!instructor && booking.instructor && !additionalInstructorSet.has(booking.instructor_id)) {
-                additionalInstructorSet.add(booking.instructor_id);
+              const bookingInstructorObj = booking.instructor as {
+                user_id?: string;
+                first_name?: string;
+                last_name?: string;
+                instructor_category?: { id: string; name: string; description: string | null; country: string } | null;
+              } | undefined;
+              if (!instructorRecord && bookingInstructorObj && !additionalInstructorSet.has(bookingInstructorId)) {
+                additionalInstructorSet.add(bookingInstructorId);
                 additionalInstructors.push({
-                  id: booking.instructor_id,
-                  user_id: booking.instructor.user_id || '',
+                  id: bookingInstructorId,
+                  user_id: bookingInstructorObj.user_id || '',
                   name: schedulerBooking.instructor,
-                  first_name: booking.instructor.first_name,
-                  last_name: booking.instructor.last_name,
-                  instructor_category: booking.instructor.instructor_category || null
+                  first_name: bookingInstructorObj.first_name,
+                  last_name: bookingInstructorObj.last_name,
+                  instructor_category: bookingInstructorObj.instructor_category || null
                 });
               }
             }
 
             // Group by aircraft - show booking even if aircraft not marked as online
-            if (booking.aircraft_id) {
-              const aircraftMatch = aircraftMap.get(booking.aircraft_id);
+            const bookingAircraftId = booking.aircraft_id as string | undefined;
+            if (bookingAircraftId) {
+              const aircraftMatch = aircraftMap.get(bookingAircraftId);
+              const bookingAircraftObj = booking.aircraft as { registration?: string; type?: string } | undefined;
               const aircraftDisplay = aircraftMatch
                 ? (aircraftMatch.type ? `${aircraftMatch.registration} (${aircraftMatch.type})` : aircraftMatch.registration)
-                : (booking.aircraft?.registration
-                    ? (booking.aircraft.type ? `${booking.aircraft.registration} (${booking.aircraft.type})` : booking.aircraft.registration)
-                    : `Aircraft ${booking.aircraft_id.substring(0, 8)} (Unknown)`);
+                : (bookingAircraftObj?.registration
+                    ? (bookingAircraftObj.type ? `${bookingAircraftObj.registration} (${bookingAircraftObj.type})` : bookingAircraftObj.registration)
+                    : `Aircraft ${bookingAircraftId.substring(0, 8)} (Unknown)`);
 
               if (!bookingsByResource[aircraftDisplay]) {
                 bookingsByResource[aircraftDisplay] = [];
@@ -632,19 +641,19 @@ const FlightSchedulerInner = () => {
               bookingsByResource[aircraftDisplay].push({ ...schedulerBooking, instructor: schedulerBooking.instructor || 'No Instructor' });
 
               // Collect additional aircraft (not in online list) for later addition
-              if (!aircraftMatch && booking.aircraft_id && !additionalAircraftSet.has(booking.aircraft_id)) {
-                additionalAircraftSet.add(booking.aircraft_id);
+              if (!aircraftMatch && bookingAircraftId && !additionalAircraftSet.has(bookingAircraftId)) {
+                additionalAircraftSet.add(bookingAircraftId);
                 additionalAircraft.push({
-                  id: booking.aircraft_id,
-                  registration: booking.aircraft?.registration || `Aircraft ${booking.aircraft_id.substring(0, 8)}`,
-                  type: booking.aircraft?.type || 'Unknown',
+                  id: bookingAircraftId,
+                  registration: bookingAircraftObj?.registration || `Aircraft ${bookingAircraftId.substring(0, 8)}`,
+                  type: bookingAircraftObj?.type || 'Unknown',
                   status: 'active'
                 });
               }
             }
 
             // Fallback: if booking has no instructor_id or aircraft_id, show it under a generic category
-            if (!booking.instructor_id && !booking.aircraft_id) {
+            if (!bookingInstructorId && !bookingAircraftId) {
               const fallbackKey = 'Unassigned Bookings';
               if (!bookingsByResource[fallbackKey]) {
                 bookingsByResource[fallbackKey] = [];
@@ -905,14 +914,14 @@ const FlightSchedulerInner = () => {
       // Check if user can access this booking
       const canAccess = canAccessBooking(booking);
 
-      let backgroundColor = '#6366f1'; // Modern indigo for 'confirmed'
+      let backgroundColor = '#6564db'; // Slate blue for 'confirmed'
       const opacity = '1';
       let cursor = 'pointer';
 
       // Status-based colors (takes priority over type-based colors)
       switch (booking.status) {
         case 'confirmed':
-          backgroundColor = '#6366f1'; // Modern indigo
+          backgroundColor = '#6564db'; // Slate blue
           break;
         case 'flying':
           backgroundColor = '#f59e0b'; // Modern amber
@@ -924,7 +933,7 @@ const FlightSchedulerInner = () => {
           backgroundColor = '#6b7280'; // Modern gray
           break;
         default:
-          // Keep default indigo for confirmed and any other status
+          // Keep default slate blue for confirmed and any other status
           break;
       }
 
@@ -1135,7 +1144,7 @@ const FlightSchedulerInner = () => {
         break;
       case 'change-aircraft':
         // Find the raw booking data to get proper timestamps
-        const rawBooking = rawBookings.find(rb => rb.id === booking.id);
+        const rawBooking = rawBookings.find(rb => (rb as { id: string }).id === booking.id);
         if (rawBooking) {
           setSelectedBooking(booking);
           setShowChangeAircraftModal(true);
@@ -1301,9 +1310,9 @@ const FlightSchedulerInner = () => {
     return (
       <div key={resourceKey} className="flex border-b border-gray-200 resource-row group transition-all duration-200" data-resource={resourceKey} style={{ height: `${rowHeight}px` }}>
         <div className={`w-52 p-4 text-sm font-semibold border-r border-gray-100 flex items-center transition-all duration-200 ${
-          isInstructor 
-            ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-900' 
-            : 'bg-gradient-to-r from-gray-50 to-slate-50 text-gray-700'
+          isInstructor
+            ? 'bg-gray-50 text-gray-900'
+            : 'bg-gray-50 text-gray-700'
         }`} style={{ height: `${rowHeight}px` }}>
           <div className="flex items-center space-x-3 w-full">
             {isInstructor && (
@@ -1640,7 +1649,7 @@ const FlightSchedulerInner = () => {
               </div>
 
               {/* Time Header with Navigation */}
-              <div className="flex border-b border-gray-300 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div className="flex border-b border-gray-300 bg-white">
                 <div className="w-52 border-r border-gray-200 flex items-center justify-center bg-white">
                   <div className="flex items-center space-x-2">
                     <button 
@@ -1678,7 +1687,7 @@ const FlightSchedulerInner = () => {
                     {getVisibleTimeSlots.map((timeSlot) => (
                       <div
                         key={timeSlot}
-                        className="border-r border-gray-200 text-[10px] py-1 px-0.5 text-center bg-gradient-to-r from-blue-50 to-indigo-50 font-semibold text-gray-700 hover:bg-gradient-to-b hover:from-blue-100 hover:to-indigo-100 transition-all duration-200 min-w-[22px]"
+                        className="border-r border-gray-200 text-[10px] py-1 px-0.5 text-center bg-white font-semibold text-gray-700 hover:bg-gray-50 transition-all duration-200 min-w-[22px]"
                       >
                         {timeSlot}
                       </div>
@@ -1701,7 +1710,7 @@ const FlightSchedulerInner = () => {
               )}
 
               {/* Divider */}
-              <div className="border-t-2 border-gradient-to-r from-blue-400 to-purple-400 bg-gradient-to-r from-blue-100 to-purple-100 h-1"></div>
+              <div className="border-t-2 border-gray-300 bg-gray-100 h-1"></div>
 
               {/* Aircraft Section */}
               {aircraft.map(aircraftItem => {
@@ -1737,7 +1746,7 @@ const FlightSchedulerInner = () => {
                 aircraft_type: a.aircraft_type,
                 prioritise_scheduling: a.prioritise_scheduling
               }))}
-              bookings={rawBookings}
+              bookings={rawBookings as import("@/types/bookings").Booking[]}
               instructors={availableInstructors}
               flightTypes={dropdownData.flightTypes}
               lessons={dropdownData.lessons}

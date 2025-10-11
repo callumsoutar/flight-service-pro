@@ -411,7 +411,7 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
                 className="flex flex-row items-center gap-2 pb-3 pt-3 cursor-pointer hover:bg-gray-50 transition-colors border-b"
                 onClick={() => setIsLessonBreakdownExpanded(!isLessonBreakdownExpanded)}
               >
-                <ListChecks className="w-5 h-5 text-violet-600 mr-1" />
+                <ListChecks className="w-5 h-5 text-[#6564db] mr-1" />
                 <CardTitle className="text-lg flex-1">Lesson Breakdown</CardTitle>
                 <span className="text-xs text-gray-500 mr-2">
                   {isLessonBreakdownExpanded ? 'Click to collapse' : 'Click to expand'}
@@ -472,7 +472,7 @@ const DebriefFormClient = forwardRef<DebriefFormClientHandle, DebriefFormClientP
                 className="flex flex-row items-center gap-2 pb-3 pt-3 cursor-pointer hover:bg-gray-50 transition-colors border-b"
                 onClick={() => setIsNextStepsExpanded(!isNextStepsExpanded)}
               >
-                <ArrowRightCircle className="w-5 h-5 text-indigo-600 mr-1" />
+                <ArrowRightCircle className="w-5 h-5 text-[#6564db] mr-1" />
                 <CardTitle className="text-lg flex-1">Next Steps</CardTitle>
                 <span className="text-xs text-gray-500 mr-2">
                   {isNextStepsExpanded ? 'Click to collapse' : 'Click to expand'}

@@ -9,13 +9,13 @@ import type { Booking, BookingStatus } from '@/types/bookings';
 import { SettingsProvider } from '@/contexts/SettingsContext';
 
 interface MemberOption { id: string; name: string; }
-interface InstructorOption { 
-  id: string; 
+interface InstructorOption {
+  id: string;
   user_id: string;
   first_name?: string;
   last_name?: string;
-  users?: { email?: string };
-  name: string; 
+  users?: { email: string };
+  name: string;
 }
 interface AircraftOption { id: string; registration: string; type: string; }
 
@@ -110,7 +110,7 @@ export default function BookingsPageClient({ bookings, members, instructors, air
             </p>
           </div>
           <Button
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-lg shadow text-base flex items-center gap-2"
+            className="bg-[#6564db] hover:bg-[#232ed1] text-white font-semibold px-6 py-2 rounded-lg shadow text-base flex items-center gap-2"
             onClick={() => setModalOpen(true)}
           >
             <Send className="w-5 h-5" /> New Booking
@@ -121,9 +121,9 @@ export default function BookingsPageClient({ bookings, members, instructors, air
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8">
               <div className="bg-white rounded-xl shadow p-6 flex flex-col items-start">
-                <span className="mb-2"><CalendarDays className="w-6 h-6 text-indigo-600" /></span>
+                <span className="mb-2"><CalendarDays className="w-6 h-6 text-[#6564db]" /></span>
                 <h3 className="text-zinc-600 font-medium mb-2">Total</h3>
-                <p className="text-3xl font-bold text-indigo-600">{statusCounts.total}</p>
+                <p className="text-3xl font-bold text-[#6564db]">{statusCounts.total}</p>
               </div>
               <div className="bg-white rounded-xl shadow p-6 flex flex-col items-start">
                 <span className="mb-2"><Clock className="w-6 h-6 text-green-600" /></span>

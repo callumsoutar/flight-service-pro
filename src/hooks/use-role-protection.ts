@@ -87,6 +87,7 @@ export function useRoleProtection({
  * Returns true if user is member or student, false for owner/admin/instructor
  */
 export function useIsRestrictedUser() {
+  // Always call the hook unconditionally at the top level
   const { data: userRoleData, isLoading, error } = useCurrentUserRoles();
   const userRole = userRoleData?.role?.toLowerCase() || '';
 

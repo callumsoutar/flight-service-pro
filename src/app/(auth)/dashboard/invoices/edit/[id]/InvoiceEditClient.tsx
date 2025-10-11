@@ -600,7 +600,7 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="w-full max-w-xs justify-start text-left font-normal focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full max-w-xs justify-start text-left font-normal focus:ring-2 focus:ring-[#6564db] focus:border-[#6564db]"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {invoiceDate ? format(invoiceDate, "PPP") : <span>Pick a date</span>}
@@ -622,7 +622,7 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
                 placeholder="Enter reference (optional)"
                 value={reference}
                 onChange={e => setReference(e.target.value)}
-                className="w-full focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full focus:ring-2 focus:ring-[#6564db] focus:border-[#6564db]"
               />
             </div>
             <div>
@@ -631,7 +631,7 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="w-full max-w-xs justify-start text-left font-normal focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full max-w-xs justify-start text-left font-normal focus:ring-2 focus:ring-[#6564db] focus:border-[#6564db]"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}
@@ -874,7 +874,7 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className="w-full max-w-xs justify-start text-left font-normal focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full max-w-xs justify-start text-left font-normal focus:ring-2 focus:ring-[#6564db] focus:border-[#6564db]"
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {invoiceDate ? format(invoiceDate, "PPP") : <span>Pick a date</span>}
@@ -896,7 +896,7 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
               placeholder="Enter reference (optional)"
               value={reference}
               onChange={e => setReference(e.target.value)}
-              className="w-full focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full focus:ring-2 focus:ring-[#6564db] focus:border-[#6564db]"
             />
           </div>
           <div>
@@ -905,7 +905,7 @@ export default function InvoiceEditClient({ id, mode = 'edit' }: InvoiceEditClie
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className="w-full max-w-xs justify-start text-left font-normal focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full max-w-xs justify-start text-left font-normal focus:ring-2 focus:ring-[#6564db] focus:border-[#6564db]"
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}

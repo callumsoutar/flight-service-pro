@@ -7,7 +7,6 @@ import type { Booking } from "@/types/bookings";
 async function DashboardPage({ user, userRole }: ProtectedPageProps) {
   const supabase = await createClient();
 
-  const isPrivilegedUser = ['instructor', 'admin', 'owner'].includes(userRole);
   const isRestrictedUser = ['member', 'student'].includes(userRole);
 
   // Build query based on user role
@@ -38,8 +37,8 @@ async function DashboardPage({ user, userRole }: ProtectedPageProps) {
       .in('status', ['unconfirmed', 'confirmed'])
       .gte('start_time', new Date().toISOString());
   } else {
-    // Privileged users: show all confirmed and currently flying bookings
-    bookingsQuery = bookingsQuery.in('status', ['confirmed', 'flying']);
+    // Privileged users: show unconfirmed, confirmed, and currently flying bookings
+    bookingsQuery = bookingsQuery.in('status', ['unconfirmed', 'confirmed', 'flying']);
   }
 
   const { data: bookingsData } = await bookingsQuery.order("start_time", { ascending: true });

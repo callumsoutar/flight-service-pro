@@ -17,9 +17,9 @@ export default function EquipmentStatsCards({ equipment, openIssuanceByEquipment
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
       <div className="bg-white rounded-xl shadow p-6 flex flex-col items-start">
-        <span className="mb-2"><Wrench className="w-6 h-6 text-indigo-600" /></span>
+        <span className="mb-2"><Wrench className="w-6 h-6 text-[#6564db]" /></span>
         <h3 className="text-zinc-600 font-medium mb-2">Total Equipment</h3>
-        <p className="text-3xl font-bold text-indigo-600">{total}</p>
+        <p className="text-3xl font-bold text-[#6564db]">{total}</p>
       </div>
       <div className="bg-white rounded-xl shadow p-6 flex flex-col items-start">
         <span className="mb-2"><Users className="w-6 h-6 text-yellow-500" /></span>

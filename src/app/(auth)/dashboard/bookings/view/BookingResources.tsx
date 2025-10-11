@@ -67,7 +67,7 @@ export default function BookingResources({
               <div className="mt-1">{member ? `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.email : "-"}</div>
               <div className="text-gray-500 text-sm">{member?.email || "-"}</div>
             </div>
-            {member?.id && (
+            {member?.id && !isRestrictedUser && (
               <Button
                 variant="ghost"
                 size="sm"

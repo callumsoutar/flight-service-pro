@@ -12,12 +12,20 @@ export type InstructorResult = {
   email: string;
 };
 
+type ProvidedInstructor = {
+  id: string;
+  user_id: string;
+  first_name?: string;
+  last_name?: string;
+  users?: { email: string };
+};
+
 type InstructorSelectProps = {
   onSelect: (instructor: InstructorResult | null) => void;
   value: InstructorResult | null;
   disabled?: boolean;
   unavailableInstructorIds?: Set<string>; // Set of instructor IDs that are unavailable due to conflicts
-  providedInstructors?: any[]; // Optional pre-fetched instructors to avoid duplicate API calls
+  providedInstructors?: ProvidedInstructor[]; // Optional pre-fetched instructors to avoid duplicate API calls
 };
 
 export default function InstructorSelect({ onSelect, value, disabled = false, unavailableInstructorIds, providedInstructors }: InstructorSelectProps) {
@@ -28,7 +36,7 @@ export default function InstructorSelect({ onSelect, value, disabled = false, un
   useEffect(() => {
     // If instructors are provided, use them directly (no fetch needed)
     if (providedInstructors && providedInstructors.length > 0) {
-      const transformedInstructors = providedInstructors.map((instructor: any) => ({
+      const transformedInstructors = providedInstructors.map((instructor) => ({
         id: instructor.id,
         user_id: instructor.user_id,
         first_name: instructor.first_name || "",
@@ -103,7 +111,7 @@ export default function InstructorSelect({ onSelect, value, disabled = false, un
                   return (
                     <SelectItem key={instructor.id} value={instructor.id} disabled={isUnavailable}>
                       <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-indigo-500" />
+                        <User className="w-4 h-4 text-[#6564db]" />
                         <span>
                           {instructor.first_name} {instructor.last_name}
                           {isUnavailable ? " (booked)" : ""}

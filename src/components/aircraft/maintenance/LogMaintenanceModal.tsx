@@ -347,9 +347,9 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
           {error && <div className="text-red-600 text-sm text-center">{error}</div>}
           <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2 sm:gap-4 w-full">
             <DialogClose asChild>
-              <Button variant="outline" type="button" className="w-full sm:w-auto border border-muted hover:border-indigo-400" disabled={loading}>Cancel</Button>
+              <Button variant="outline" type="button" className="w-full sm:w-auto border border-muted hover:border-[#89d2dc]" disabled={loading}>Cancel</Button>
             </DialogClose>
-            <Button type="submit" className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-md" disabled={loading}>{loading ? "Logging..." : "Log Visit"}</Button>
+            <Button type="submit" className="w-full sm:w-auto bg-[#6564db] hover:bg-[#232ed1] text-white font-semibold shadow-md" disabled={loading}>{loading ? "Logging..." : "Log Visit"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

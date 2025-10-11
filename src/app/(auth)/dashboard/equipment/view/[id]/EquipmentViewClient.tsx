@@ -243,9 +243,9 @@ export default function EquipmentViewClient({ equipment: initialEquipment, equip
                 <Tabs.Trigger
                   key={tab.id}
                   value={tab.id}
-                  className={`inline-flex items-center gap-2 px-4 py-2 pb-1 text-base font-medium border-b-2 border-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400
-                    data-[state=active]:border-indigo-700 data-[state=active]:text-indigo-800
-                    data-[state=inactive]:text-muted-foreground hover:text-indigo-600 whitespace-nowrap`}
+                  className={`inline-flex items-center gap-2 px-4 py-2 pb-1 text-base font-medium border-b-2 border-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#89d2dc]
+                    data-[state=active]:border-[#6564db] data-[state=active]:text-[#6564db]
+                    data-[state=inactive]:text-muted-foreground hover:text-[#6564db] whitespace-nowrap`}
                   style={{ background: "none", boxShadow: "none", borderRadius: 0 }}
                 >
                   <Icon className="w-5 h-5" />

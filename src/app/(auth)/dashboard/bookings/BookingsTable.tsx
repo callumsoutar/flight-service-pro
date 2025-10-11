@@ -216,9 +216,9 @@ export default function BookingsTable({
                           e.stopPropagation();
                           onConfirmBooking(b.id);
                         }}
-                        className="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1 h-6"
+                        className="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 h-7 rounded-md shadow-sm hover:shadow-md transition-all duration-200 font-medium"
                       >
-                        <Check className="w-3 h-3 mr-1" />
+                        <Check className="w-3 h-3 mr-1.5" />
                         Confirm
                       </Button>
                     )}
@@ -313,9 +313,9 @@ export default function BookingsTable({
                     e.stopPropagation();
                     onConfirmBooking(b.id);
                   }}
-                  className="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-2 w-full"
+                  className="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2.5 w-full rounded-md shadow-sm hover:shadow-md transition-all duration-200 font-medium"
                 >
-                  <Check className="w-3 h-3 mr-1" />
+                  <Check className="w-3 h-3 mr-1.5" />
                   Confirm Booking
                 </Button>
               </div>

@@ -109,8 +109,8 @@ export default function ChargeableSearchDropdown({ onAdd, taxRate, category, air
                               setFocused(false);
                             }}
                             className={
-                              "flex items-center justify-between px-2 py-2 rounded-md hover:bg-indigo-50 transition text-left cursor-pointer" +
-                              (selected?.id === item.id ? " bg-indigo-50" : "")
+                              "flex items-center justify-between px-2 py-2 rounded-md hover:bg-[#89d2dc]/10 transition text-left cursor-pointer" +
+                              (selected?.id === item.id ? " bg-[#89d2dc]/10" : "")
                             }
                           >
                             <div>
@@ -118,7 +118,7 @@ export default function ChargeableSearchDropdown({ onAdd, taxRate, category, air
                               <div className="text-xs text-gray-500">{item.description}</div>
                             </div>
                             <div className="flex flex-col items-end">
-                              <div className="font-semibold text-indigo-600 text-sm">
+                              <div className="font-semibold text-[#6564db] text-sm">
                                 ${(item.is_taxable ? item.rate * (1 + taxRate) : item.rate).toFixed(2)}
                               </div>
                               {!item.is_taxable && (

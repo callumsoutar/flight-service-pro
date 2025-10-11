@@ -89,7 +89,7 @@ export function UserMenu() {
             <button className="flex items-center gap-3 focus:outline-none">
               <span className="font-medium text-gray-900 hidden md:block">Hello, {user?.name}</span>
               <Avatar>
-                <AvatarFallback className="bg-violet-600 text-white font-bold">
+                <AvatarFallback className="bg-[#6564db] text-white font-bold">
                   {user.initials}
                 </AvatarFallback>
               </Avatar>

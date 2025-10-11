@@ -341,7 +341,7 @@ export default function BookingActions({
         <div className="relative">
           <Button
             onClick={handleAuthorizationNavigation}
-            className="h-10 px-6 text-base font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-purple-300"
+            className="h-10 px-6 text-base font-bold bg-[#6564db] hover:bg-[#232ed1] text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-[#89d2dc]"
           >
             {React.createElement(getAuthorizationStatusIcon(), { className: "w-4 h-4 mr-1" })}
             {getAuthorizationStatusText()}

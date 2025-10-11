@@ -125,7 +125,7 @@ export default function RenewMembershipModal({
           {/* Membership Type Selection */}
           <div className="space-y-4">
             <label className="text-sm font-medium flex items-center gap-2">
-              <Gift className="h-4 w-4 text-purple-600" />
+              <Gift className="h-4 w-4 text-[#6564db]" />
               Membership Type
             </label>
 

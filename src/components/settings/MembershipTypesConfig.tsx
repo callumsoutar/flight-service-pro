@@ -484,7 +484,7 @@ export default function MembershipTypesConfig() {
                         </Badge>
                       )}
                     </div>
-                    <span className="font-semibold text-indigo-600">
+                    <span className="font-semibold text-[#6564db]">
                       {(() => {
                         const chargeableRate = type.chargeables?.rate;
                         if (chargeableRate && type.chargeables?.is_taxable) {

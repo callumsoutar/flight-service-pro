@@ -7,7 +7,7 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
   const supabase = await createClient();
   let bookings: Booking[] = [];
   let members: { id: string; name: string }[] = [];
-  let instructors: { id: string; user_id: string; first_name?: string; last_name?: string; users?: { email?: string }; name: string }[] = [];
+  let instructors: { id: string; user_id: string; first_name?: string; last_name?: string; users?: { email: string }; name: string }[] = [];
   let aircraftList: { id: string; registration: string; type: string }[] = [];
 
   const isPrivilegedUser = ['instructor', 'admin', 'owner'].includes(userRole);
@@ -72,14 +72,17 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
         .in("id", uniqueInstructorIds);
       instructorRows = instructorData || [];
     }
-    instructors = instructorRows.map(instructor => ({
-      id: instructor.id,
-      user_id: instructor.user_id,
-      first_name: instructor.first_name,
-      last_name: instructor.last_name,
-      users: Array.isArray(instructor.users) && instructor.users.length > 0 ? instructor.users[0] : undefined,
-      name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.id,
-    }));
+    instructors = instructorRows.map(instructor => {
+      const userEmail = Array.isArray(instructor.users) && instructor.users.length > 0 ? instructor.users[0] : undefined;
+      return {
+        id: instructor.id,
+        user_id: instructor.user_id,
+        first_name: instructor.first_name,
+        last_name: instructor.last_name,
+        users: userEmail?.email ? { email: userEmail.email } : undefined,
+        name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.id,
+      };
+    });
 
     // Fetch ALL on_line aircraft for new booking creation (not just ones in existing bookings)
     const { data: aircraftRows } = await supabase
@@ -104,14 +107,17 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
       name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.id,
     }));
 
-    instructors = (instructorDataResponse.data || []).map(instructor => ({
-      id: instructor.id,
-      user_id: instructor.user_id,
-      first_name: instructor.first_name,
-      last_name: instructor.last_name,
-      users: Array.isArray(instructor.users) && instructor.users.length > 0 ? instructor.users[0] : undefined,
-      name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.id,
-    }));
+    instructors = (instructorDataResponse.data || []).map(instructor => {
+      const userEmail = Array.isArray(instructor.users) && instructor.users.length > 0 ? instructor.users[0] : undefined;
+      return {
+        id: instructor.id,
+        user_id: instructor.user_id,
+        first_name: instructor.first_name,
+        last_name: instructor.last_name,
+        users: userEmail?.email ? { email: userEmail.email } : undefined,
+        name: `${instructor.first_name || ""} ${instructor.last_name || ""}`.trim() || instructor.id,
+      };
+    });
 
     aircraftList = (aircraftResponse.data || []).map(a => ({
       id: a.id,

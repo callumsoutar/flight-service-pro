@@ -20,7 +20,7 @@ export default function AircraftPageHeader({ refresh }: AircraftPageHeaderProps)
         </div>
         <Button 
           onClick={() => setShowAddModal(true)}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-lg shadow text-base flex items-center gap-2"
+          className="bg-[#6564db] hover:bg-[#232ed1] text-white font-semibold px-6 py-2 rounded-lg shadow text-base flex items-center gap-2"
         >
           <Plane className="w-5 h-5" /> Add Aircraft
         </Button>

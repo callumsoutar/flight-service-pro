@@ -164,7 +164,7 @@ export default function EquipmentTable({ equipment, openIssuanceByEquipmentId, i
                 <TabsTrigger
                   key={tabItem.id}
                   value={tabItem.id}
-                  className="inline-flex items-center gap-2 px-4 py-2 pb-1 text-base font-medium border-b-2 border-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 data-[state=active]:border-indigo-700 data-[state=active]:text-indigo-800 data-[state=inactive]:text-muted-foreground hover:text-indigo-600 whitespace-nowrap"
+                  className="inline-flex items-center gap-2 px-4 py-2 pb-1 text-base font-medium border-b-2 border-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#89d2dc] data-[state=active]:border-[#6564db] data-[state=active]:text-[#6564db] data-[state=inactive]:text-muted-foreground hover:text-[#6564db] whitespace-nowrap"
                   style={{ background: "none", boxShadow: "none", borderRadius: 0 }}
                 >
                   <Icon className="w-5 h-5" />
@@ -200,7 +200,7 @@ export default function EquipmentTable({ equipment, openIssuanceByEquipmentId, i
             </SelectContent>
           </Select>
           <Button
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg shadow text-base flex items-center gap-2"
+            className="bg-[#6564db] hover:bg-[#232ed1] text-white font-semibold px-4 py-2 rounded-lg shadow text-base flex items-center gap-2"
             onClick={() => setAddModalOpen(true)}
           >
             <Package className="h-4 w-4" />

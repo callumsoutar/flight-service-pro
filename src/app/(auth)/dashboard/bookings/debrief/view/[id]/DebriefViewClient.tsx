@@ -341,7 +341,7 @@ export default function DebriefViewClient({
           {/* Lesson Breakdown */}
           <div className="bg-white rounded-2xl shadow-sm border p-6">
             <div className="flex items-center gap-3 mb-6 pb-3 border-b border-gray-100">
-              <ListChecks className="w-5 h-5 text-violet-600" />
+              <ListChecks className="w-5 h-5 text-[#6564db]" />
               <h2 className="text-xl font-bold text-gray-900">Lesson Assessment</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -422,7 +422,7 @@ export default function DebriefViewClient({
           {/* Next Steps */}
           <div className="bg-white rounded-2xl shadow-sm border p-6">
             <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
-              <ArrowRightCircle className="w-5 h-5 text-indigo-600" />
+              <ArrowRightCircle className="w-5 h-5 text-[#6564db]" />
               <h2 className="text-xl font-bold text-gray-900">Next Steps</h2>
             </div>
             <div className="text-base text-gray-900 whitespace-pre-line leading-relaxed">
