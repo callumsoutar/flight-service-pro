@@ -125,25 +125,17 @@
   position: relative;
   outline: none;
   box-shadow: none !important;
-  margin-left: 0.25rem;
-  margin-right: 0.25rem;
 }
 .sidebar-link:hover,
 .sidebar-link:focus {
-  background: rgba(255,255,255,0.10);
-  color: #fff;
-  font-weight: 800;
-  transform: scale(1.04);
-  text-shadow: 0 4px 16px rgba(60,0,120,0.18);
+  background: rgba(0,0,0,0.04);
   box-shadow: none !important;
   outline: none !important;
 }
 .sidebar-link-label {
-  font-size: 1.22rem;
-  font-family: inherit;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  transition: color 0.15s, text-shadow 0.15s;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  transition: color 0.15s;
 }
 
 /* Hide number input arrows for all browsers */

@@ -81,28 +81,28 @@ export function SidebarComponent() {
   // Render skeleton loading state while role data is loading
   if (rolesLoading) {
     return (
-      <aside className="fixed left-0 top-0 h-full w-64 bg-purple-700 text-white flex flex-col z-30 overflow-visible">
-        <div className="flex items-center h-16 px-6 font-extrabold text-2xl tracking-tight border-b border-white/10">
+      <aside className="fixed left-0 top-0 h-full w-56 bg-[#F7F5F2] border-r border-gray-200 text-gray-900 flex flex-col z-30 overflow-visible">
+        <div className="flex items-center h-14 px-6 font-bold text-xl tracking-tight border-b border-gray-200">
           Flight Desk Pro
         </div>
-        <nav className="flex-1 overflow-y-auto overflow-x-visible py-6 px-2 gap-1 flex flex-col">
+        <nav className="flex-1 overflow-y-auto overflow-x-visible py-4 px-3 gap-0.5 flex flex-col">
           {/* Skeleton loading for navigation items */}
           {Array.from({ length: 6 }).map((_, index) => (
             <div key={index} className="px-3 py-2 rounded-lg mb-1">
               <div className="flex items-center gap-3">
-                <div className="w-5 h-5 bg-white/20 rounded animate-pulse" />
-                <div className="h-5 bg-white/20 rounded animate-pulse flex-1 max-w-32" />
+                <div className="w-5 h-5 bg-gray-200 rounded animate-pulse" />
+                <div className="h-5 bg-gray-200 rounded animate-pulse flex-1 max-w-32" />
               </div>
             </div>
           ))}
         </nav>
         <div className="mt-auto mb-4 px-4">
-          <div className="w-full h-px mb-3" style={{ background: 'rgba(255,255,255,0.10)' }} />
+          <div className="w-full h-px mb-3 bg-gray-200" />
           {/* Settings skeleton */}
           <div className="px-3 py-2 rounded-lg mb-2">
             <div className="flex items-center gap-3">
-              <div className="w-5 h-5 bg-white/20 rounded animate-pulse" />
-              <div className="h-5 bg-white/20 rounded animate-pulse w-20" />
+              <div className="w-5 h-5 bg-gray-200 rounded animate-pulse" />
+              <div className="h-5 bg-gray-200 rounded animate-pulse w-20" />
             </div>
           </div>
         </div>
@@ -111,11 +111,11 @@ export function SidebarComponent() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-64 bg-purple-700 text-white flex flex-col z-30 overflow-visible">
-      <div className="flex items-center h-16 px-6 font-extrabold text-2xl tracking-tight border-b border-white/10">
+    <aside className="fixed left-0 top-0 h-full w-56 bg-[#F7F5F2] border-r border-gray-200 text-gray-900 flex flex-col z-30 overflow-visible">
+      <div className="flex items-center h-14 px-6 font-bold text-xl tracking-tight border-b border-gray-200">
         Flight Desk Pro
       </div>
-      <nav className="flex-1 overflow-y-auto overflow-x-visible py-6 px-2 gap-1 flex flex-col">
+      <nav className="flex-1 overflow-y-auto overflow-x-visible py-4 px-3 gap-0.5 flex flex-col">
         {filteredNavOptions.map((item) => {
           // Determine the correct href based on user role and item configuration
           let href = item.href;
@@ -155,21 +155,16 @@ export function SidebarComponent() {
             >
               <Link
                 href={href}
-                className="flex items-center justify-between px-3 py-2 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link"
-                style={{
-                  fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
-                  textShadow: '0 2px 8px rgba(60,0,120,0.10)',
-                  letterSpacing: '0.02em',
-                }}
+                className="flex items-center justify-between px-3 py-2.5 rounded-md text-gray-700 hover:text-gray-900 font-medium text-base transition-all duration-150 sidebar-link"
               >
                 <div className="flex items-center gap-3">
                   <item.icon className="w-5 h-5" />
-                  <span className="sidebar-link-label" style={{ fontSize: '1.2375rem', fontWeight: 500 }}>
+                  <span className="sidebar-link-label">
                     {item.label}
                   </span>
                 </div>
                 {item.hasSubmenu && (
-                  <LucideChevronRight className="w-4 h-4 text-white/70 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                  <LucideChevronRight className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                 )}
               </Link>
               
@@ -177,21 +172,16 @@ export function SidebarComponent() {
           );
         })}
       </nav>
-      <div className="mt-auto mb-4 px-4">
-        <div className="w-full h-px mb-3" style={{ background: 'rgba(255,255,255,0.10)' }} />
+      <div className="mt-auto mb-4 px-3">
+        <div className="w-full h-px mb-3 bg-gray-200" />
         {/* Show Settings for all users - different destinations based on role */}
         {!rolesLoading && (
           <Link
             href={userRole === 'admin' || userRole === 'owner' ? "/settings" : "/dashboard/profile"}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-white/90 font-medium tracking-wide text-lg shadow-sm transition-all duration-200 sidebar-link mb-2"
-            style={{
-              fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
-              textShadow: '0 2px 8px rgba(60,0,120,0.10)',
-              letterSpacing: '0.02em',
-            }}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-md text-gray-700 hover:text-gray-900 font-medium text-base transition-all duration-150 sidebar-link mb-2"
           >
             <LucideSettings className="w-5 h-5" />
-            <span className="sidebar-link-label" style={{ fontSize: '1.2375rem', fontWeight: 500 }}>
+            <span className="sidebar-link-label">
               Settings
             </span>
           </Link>
@@ -201,12 +191,11 @@ export function SidebarComponent() {
       {/* Portal-based Submenu */}
       {showStaffSubmenu && typeof window !== 'undefined' && createPortal(
         <div
-          className="fixed w-48 rounded-lg shadow-xl submenu-container bg-purple-700"
+          className="fixed w-48 rounded-lg shadow-xl submenu-container bg-[#F7F5F2] border border-gray-200"
           style={{
             zIndex: 10000,
             top: submenuPosition.top,
             left: submenuPosition.left,
-            border: '1px solid rgba(255,255,255,0.1)',
           }}
           onMouseEnter={() => {
             if (hideTimeout) {
@@ -225,7 +214,7 @@ export function SidebarComponent() {
               <Link
                 key={subItem.label}
                 href={subItem.href}
-                className="block px-4 py-2 text-white/90 hover:bg-white/10 transition-all duration-200 font-medium tracking-wide rounded-md"
+                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 transition-all duration-200 font-medium tracking-wide rounded-md"
                 style={{
                   fontFamily: 'Inter, ui-rounded, system-ui, sans-serif',
                   fontSize: '1.089rem',
