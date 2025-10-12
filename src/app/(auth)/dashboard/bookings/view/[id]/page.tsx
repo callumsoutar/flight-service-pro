@@ -285,98 +285,70 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
   return (
     <div className="w-full min-h-screen flex flex-col items-center">
       <div className="w-full max-w-6xl px-4 pt-8 pb-12 flex flex-col gap-8">
-        {/* Booking Header with Purple Accent */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-          {/* Purple accent line */}
-          <div className="h-1 bg-[#6564db] rounded-t-xl"></div>
-          
-          <div className="p-8">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-              {/* Left Section - Booking Identity */}
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-col gap-4">
-                  {/* Member name with role badge */}
-                  {booking && booking.user_id && (
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                      {(() => {
-                        const memberName = [booking.user?.first_name || member?.first_name, booking.user?.last_name || member?.last_name].filter(Boolean).join(" ") || booking.user_id;
-                        const isPrivileged = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
-                        
-                        return isPrivileged ? (
-                          <Link
-                            href={`/dashboard/members/view/${booking.user_id}`}
-                            className="text-3xl font-bold text-gray-900 hover:text-[#6564db] transition-colors duration-200"
-                          >
-                            {memberName}
-                          </Link>
-                        ) : (
-                          <span className="text-3xl font-bold text-gray-900">
-                            {memberName}
-                          </span>
-                        );
-                      })()}
-                      {/* Member role badge */}
-                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg">
-                        Member
-                      </span>
-                    </div>
-                  )}
-                  
-                  {/* Aircraft info */}
-                  {aircraft && (
-                    <div className="flex items-center gap-2 text-lg text-gray-600">
-                      <span className="font-medium">{aircraft.registration}</span>
-                      {aircraft.type && (
-                        <>
-                          <span className="text-gray-400">•</span>
-                          <span>{aircraft.type}</span>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                </div>
-              </div>
-              
-              {/* Right Section - Status and Actions */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-                <StatusBadge status={status} className="text-lg px-4 py-2 font-semibold" />
+        {/* Simplified Booking Header */}
+        <header className="flex flex-col gap-6">
+          {/* Top row: Member info and actions */}
+          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
+            {/* Left: Member name and status */}
+            <div className="flex-1 min-w-0">
+              {booking && booking.user_id && (
                 <div className="flex flex-wrap items-center gap-3">
-                  {/* Render Confirm button if booking is unconfirmed and user is not restricted */}
-                  {booking && booking.id && !isRestrictedUser && (
-                    <BookingConfirmActionClient bookingId={booking.id} status={booking.status} />
-                  )}
-                  {booking && booking.id && (
-                    <BookingActions
-                      booking={booking}
-                      status={status}
-                      bookingId={booking.id}
-                      currentUserId={user.id}
-                      flightAuthorization={flightAuthorization}
-                      requireFlightAuthorization={requireFlightAuthorization}
-                      isRestrictedUser={isRestrictedUser}
-                    />
-                  )}
-                  {booking && booking.id && (
-                    <BookingStagesOptions
-                      bookingId={booking.id}
-                      bookingStatus={booking.status}
-                      instructorCommentsCount={instructorCommentsCount || 0}
-                      hasLessonProgress={hasLessonProgress}
-                    />
-                  )}
+                  {(() => {
+                    const memberName = [booking.user?.first_name || member?.first_name, booking.user?.last_name || member?.last_name].filter(Boolean).join(" ") || booking.user_id;
+                    const isPrivileged = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+
+                    return isPrivileged ? (
+                      <Link
+                        href={`/dashboard/members/view/${booking.user_id}`}
+                        className="text-3xl font-bold text-gray-900 hover:text-[#6564db] transition-colors"
+                      >
+                        {memberName}
+                      </Link>
+                    ) : (
+                      <h1 className="text-3xl font-bold text-gray-900">
+                        {memberName}
+                      </h1>
+                    );
+                  })()}
+                  <StatusBadge status={status} className="text-sm px-3 py-1" />
                 </div>
-              </div>
+              )}
             </div>
-            
-            {/* Booking Stages - Only show for non-restricted users */}
-            {!isRestrictedUser && (
-              <div className="mt-6">
-                <BookingStages stages={BOOKING_STAGES} currentStage={currentStage} />
-              </div>
-            )}
+
+            {/* Right: Actions */}
+            <div className="flex flex-wrap items-center gap-3">
+              {booking && booking.id && !isRestrictedUser && (
+                <BookingConfirmActionClient bookingId={booking.id} status={booking.status} />
+              )}
+              {booking && booking.id && (
+                <BookingActions
+                  booking={booking}
+                  status={status}
+                  bookingId={booking.id}
+                  currentUserId={user.id}
+                  flightAuthorization={flightAuthorization}
+                  requireFlightAuthorization={requireFlightAuthorization}
+                  isRestrictedUser={isRestrictedUser}
+                />
+              )}
+              {booking && booking.id && (
+                <BookingStagesOptions
+                  bookingId={booking.id}
+                  bookingStatus={booking.status}
+                  instructorCommentsCount={instructorCommentsCount || 0}
+                  hasLessonProgress={hasLessonProgress}
+                />
+              )}
+            </div>
           </div>
-        </div>
+
+          {/* Booking Stages - Only show for non-restricted users */}
+          {!isRestrictedUser && (
+            <div className="pt-4 border-t border-gray-200">
+              <BookingStages stages={BOOKING_STAGES} currentStage={currentStage} />
+            </div>
+          )}
+        </header>
 
         
         {/* Main content row: 2/3 and 1/3 split using flex */}

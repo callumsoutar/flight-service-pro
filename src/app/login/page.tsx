@@ -36,6 +36,8 @@ export default function LoginPage() {
     if (error) {
       setError(error.message);
     } else {
+      // Refresh the page to update server-side session
+      router.refresh();
       router.push('/dashboard');
     }
   };

@@ -79,6 +79,19 @@ interface CheckOutFormData {
   briefing_completed: boolean;
 }
 
+interface InstructorComplianceData {
+  instructor_check_due_date: string | null;
+  class_1_medical_due_date: string | null;
+}
+
+interface UserComplianceData {
+  class_1_medical_due: string | null;
+  class_2_medical_due: string | null;
+  DL9_due: string | null;
+  BFR_due: string | null;
+  pilot_license_expiry: string | null;
+}
+
 interface CheckOutFormProps {
   booking: Booking;
   members: { id: string; name: string }[];
@@ -93,6 +106,9 @@ interface CheckOutFormProps {
   flightAuthorization?: unknown;
   requireFlightAuthorization?: boolean;
   selectedAircraftMeters?: { current_hobbs: number | null; current_tach: number | null; fuel_consumption: number | null } | null;
+  canOverrideAuthorization?: boolean;
+  instructorCompliance?: InstructorComplianceData | null;
+  userCompliance?: UserComplianceData | null;
 }
 
 // Helper to combine date and time strings into a UTC ISO string
@@ -134,7 +150,10 @@ export default function CheckOutForm({
   currentAircraftHours,
   flightAuthorization: serverFlightAuthorization,
   requireFlightAuthorization: serverRequireFlightAuthorization,
-  selectedAircraftMeters: serverSelectedAircraftMeters
+  selectedAircraftMeters: serverSelectedAircraftMeters,
+  canOverrideAuthorization: serverCanOverride,
+  instructorCompliance: serverInstructorCompliance,
+  userCompliance: serverUserCompliance
 }: CheckOutFormProps) {
   // Check if booking is read-only (completed bookings cannot be edited)
   const isReadOnly = booking.status === 'complete';
@@ -143,21 +162,30 @@ export default function CheckOutForm({
   const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
   const [authErrorDialogOpen, setAuthErrorDialogOpen] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<CheckOutFormData | null>(null);
-  const { data: canOverride = false } = useCanOverrideAuthorization();
+
+  // Use server-provided canOverride if available, otherwise fall back to client-side query
+  // Only query if server data not provided
+  const shouldQueryCanOverride = serverCanOverride === undefined;
+  const { data: clientCanOverride } = useCanOverrideAuthorization();
+  const canOverride = shouldQueryCanOverride ? (clientCanOverride ?? false) : serverCanOverride;
 
   // Use server-provided authorization data if available, otherwise fall back to client-side query
+  // Only query if server data not provided
+  const shouldQueryAuth = serverFlightAuthorization === undefined;
   const { data: clientAuthorization } = useFlightAuthorizationByBooking(
-    serverFlightAuthorization !== undefined ? '' : booking.id
+    shouldQueryAuth ? booking.id : ''
   );
-  const authorization = serverFlightAuthorization !== undefined ? serverFlightAuthorization : clientAuthorization;
+  const authorization = shouldQueryAuth ? clientAuthorization : serverFlightAuthorization;
 
   const overrideMutation = useOverrideAuthorization();
 
   // Use server-provided setting if available, otherwise fall back to client-side query
+  // Only query if server data not provided
+  const shouldQuerySetting = serverRequireFlightAuthorization === undefined;
   const { requireFlightAuthorization: clientRequireAuth } = useFlightAuthorizationSetting();
-  const requireFlightAuthorization = serverRequireFlightAuthorization !== undefined
-    ? serverRequireFlightAuthorization
-    : clientRequireAuth;
+  const requireFlightAuthorization = shouldQuerySetting
+    ? clientRequireAuth
+    : serverRequireFlightAuthorization;
 
   // Takeoff modal state
   const [showTakeoffModal, setShowTakeoffModal] = useState(false);
@@ -435,7 +463,7 @@ export default function CheckOutForm({
 
   return (
     <>
-    <form onSubmit={handleSubmit(onSubmit)} className="flex w-full max-w-6xl mx-auto gap-4 mt-8">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex w-full max-w-6xl mx-auto gap-4">
       <div className="flex-[2] bg-white border rounded-xl p-8 min-h-[300px] shadow-sm">
         {/* Check-Out Details form content (excluding Flight Information) */}
         <div className="font-semibold text-lg mb-4 flex items-center gap-2">
@@ -747,6 +775,8 @@ export default function CheckOutForm({
             <ComplianceWarnings
               instructorId={watchedInstructorId || null}
               userId={watch("member") || null}
+              serverInstructorCompliance={serverInstructorCompliance}
+              serverUserCompliance={serverUserCompliance}
             />
           </div>
       </div>
@@ -814,39 +844,43 @@ export default function CheckOutForm({
         </div>
         {/* Fuel on Board */}
         <div className="mb-6">
-          <label className="block text-xs font-semibold mb-2">FUEL ON BOARD</label>
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-base">L</span>
-            <Controller
-              name="fuel_on_board"
-              control={control}
-              render={({ field }) => (
-                <input
-                                  type="number"
-                {...field}
-                disabled={isReadOnly}
-                className="w-20 rounded-md border border-input bg-transparent px-2 py-1 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+          <label className="block text-xs font-semibold mb-2">
+            FUEL ON BOARD <span className="font-normal text-muted-foreground">(useable)</span>
+          </label>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-base">L</span>
+              <Controller
+                name="fuel_on_board"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    type="number"
+                    {...field}
+                    disabled={isReadOnly}
+                    className="w-20 rounded-md border border-input bg-transparent px-2 py-1 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+                  />
+                )}
               />
-              )}
-            />
-            <span className="ml-4 text-sm text-muted-foreground">
-              {fuelConsumption ? (
-                <>
-                  Total: {fuelOnBoard}L (
-                  <span className="text-blue-600 font-medium">
-                    {formatEndurance(endurance)} endurance
-                  </span>
-                  {endurance && (
-                    <span className="text-amber-600 ml-1">
-                      @ {fuelConsumption}L/hr
-                    </span>
-                  )}
-                  )
-                </>
-              ) : (
-                <>Total: {fuelOnBoard}L (<span className="text-gray-400">-- safe endurance</span>)</>
-              )}
-            </span>
+              <span className="text-sm text-muted-foreground">
+                Total: {fuelOnBoard}L
+              </span>
+            </div>
+            {fuelConsumption && endurance && (
+              <div className="ml-6 flex items-baseline gap-2 text-sm">
+                <span className="text-blue-600 font-medium">
+                  {formatEndurance(endurance)} endurance
+                </span>
+                <span className="text-muted-foreground">
+                  @ {fuelConsumption}L/hour
+                </span>
+              </div>
+            )}
+            {!fuelConsumption && fuelOnBoard > 0 && (
+              <div className="ml-6 text-sm text-gray-400">
+                -- safe endurance
+              </div>
+            )}
           </div>
         </div>
         {/* Passengers */}

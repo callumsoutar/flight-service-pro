@@ -341,7 +341,7 @@ export default function BookingActions({
         <div className="relative">
           <Button
             onClick={handleAuthorizationNavigation}
-            className="h-10 px-6 text-base font-bold bg-[#6564db] hover:bg-[#232ed1] text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-[#89d2dc]"
+            className="h-10 px-6 text-base font-bold bg-[#6564db] hover:bg-[#5453c8] text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-[#6564db]/30"
           >
             {React.createElement(getAuthorizationStatusIcon(), { className: "w-4 h-4 mr-1" })}
             {getAuthorizationStatusText()}
@@ -358,7 +358,7 @@ export default function BookingActions({
             (requireFlightAuthorization || authorization || booking.authorization_override) && canSeeAuthorization ? (
               <div className="relative flex gap-1">
                 {/* Main Button - Check Flight Out */}
-                <Button asChild className="h-10 px-6 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-l-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-blue-300 border-r border-blue-500">
+                <Button asChild className="h-10 px-6 text-base font-bold bg-[#6564db] hover:bg-[#5453c8] text-white rounded-l-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-[#6564db]/30 border-r border-[#5453c8]">
                   <Link href={`/dashboard/bookings/check-out/${actualBookingId}`}>
                     <Plane className="w-5 h-5 mr-1" />
                     Check Flight Out
@@ -368,7 +368,7 @@ export default function BookingActions({
                 {/* Dropdown Button */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button className="h-10 w-10 bg-blue-600 hover:bg-blue-700 text-white rounded-r-xl shadow transition-all flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-blue-300">
+                    <Button className="h-10 w-10 bg-[#6564db] hover:bg-[#5453c8] text-white rounded-r-xl shadow transition-all flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-[#6564db]/30">
                       <ChevronDown className="w-4 h-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -391,7 +391,7 @@ export default function BookingActions({
             ) : (
               // Simple button for solo flights when authorization is not required and no existing authorization
               <div className="relative">
-                <Button asChild className="h-10 px-6 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-blue-300">
+                <Button asChild className="h-10 px-6 text-base font-bold bg-[#6564db] hover:bg-[#5453c8] text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-[#6564db]/30">
                   <Link href={`/dashboard/bookings/check-out/${actualBookingId}`}>
                     <Plane className="w-5 h-5 mr-1" />
                     Check Flight Out
@@ -406,7 +406,7 @@ export default function BookingActions({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <div className="relative">
-                    <Button className="h-10 px-6 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-blue-300">
+                    <Button className="h-10 px-6 text-base font-bold bg-[#6564db] hover:bg-[#5453c8] text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-[#6564db]/30">
                       <Plane className="w-5 h-5 mr-1" />
                       Check Flight Out
                       <ChevronDown className="w-4 h-4 ml-1" />
@@ -434,7 +434,7 @@ export default function BookingActions({
               </DropdownMenu>
             ) : (
               <div className="relative">
-                <Button asChild className="h-10 px-6 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-blue-300">
+                <Button asChild className="h-10 px-6 text-base font-bold bg-[#6564db] hover:bg-[#5453c8] text-white rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer hover:ring-2 hover:ring-[#6564db]/30">
                   <Link href={`/dashboard/bookings/check-out/${actualBookingId}`}>
                     <Plane className="w-5 h-5 mr-1" />
                     Check Flight Out

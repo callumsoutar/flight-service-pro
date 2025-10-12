@@ -180,18 +180,16 @@ export default function BookingHistoryCollapse({ bookingId, lessons }: BookingHi
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto mt-2">
+    <div className="w-full max-w-6xl mx-auto px-4 mt-4">
       <Collapsible open={open} onOpenChange={setOpen}>
-        <div className="flex items-center gap-2 mb-2">
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="flex items-center gap-2">
-              {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-              Booking History
-            </Button>
-          </CollapsibleTrigger>
-        </div>
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" size="sm" className="flex items-center gap-2 mb-2">
+            {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            Booking History
+          </Button>
+        </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="rounded-xl border bg-muted/50 overflow-x-auto p-4">
+          <div className="rounded-lg border bg-card p-4">
             {loading ? (
               <div className="py-8 text-center text-muted-foreground">Loading…</div>
             ) : error ? (
@@ -200,43 +198,49 @@ export default function BookingHistoryCollapse({ bookingId, lessons }: BookingHi
               <div className="py-8 text-center text-muted-foreground">No history found.</div>
             ) : (
               <>
-                <Table>
-                  <TableHeader className="bg-muted/60">
-                    <TableRow>
-                      <TableHead className="w-56 text-xs font-semibold text-muted-foreground">Date</TableHead>
-                      <TableHead className="w-56 text-xs font-semibold text-muted-foreground">User</TableHead>
-                      <TableHead className="text-xs font-semibold text-muted-foreground">Description</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {logsToShow.map((log, i) => (
-                      <TableRow key={log.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                        <TableCell className="align-top text-xs text-muted-foreground whitespace-nowrap">
-                          {new Date(log.created_at).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}
-                        </TableCell>
-                        <TableCell className="align-top text-xs font-medium text-primary whitespace-nowrap">
-                          {log.user_id && users[log.user_id] ? `${users[log.user_id].first_name} ${users[log.user_id].last_name}` : <span className="text-muted-foreground">Unknown</span>}
-                        </TableCell>
-                        <TableCell className="align-top text-xs text-gray-900 whitespace-pre-line">{renderDescription(log)}</TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[180px] text-xs">Date</TableHead>
+                        <TableHead className="w-[140px] text-xs">User</TableHead>
+                        <TableHead className="text-xs">Description</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                {logs.length > 10 && !showAll && (
-                  <button
-                    className="mt-2 text-xs text-blue-600 hover:underline font-medium"
-                    onClick={() => setShowAll(true)}
+                    </TableHeader>
+                    <TableBody>
+                      {logsToShow.map((log) => (
+                        <TableRow key={log.id}>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {new Date(log.created_at).toLocaleString("en-US", {
+                              month: "short",
+                              day: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: true
+                            })}
+                          </TableCell>
+                          <TableCell className="text-xs font-medium whitespace-nowrap">
+                            {log.user_id && users[log.user_id]
+                              ? `${users[log.user_id].first_name} ${users[log.user_id].last_name}`
+                              : <span className="text-muted-foreground">Unknown</span>
+                            }
+                          </TableCell>
+                          <TableCell className="text-xs">{renderDescription(log)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {logs.length > 10 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-3 text-xs"
+                    onClick={() => setShowAll(!showAll)}
                   >
-                    View More
-                  </button>
-                )}
-                {logs.length > 10 && showAll && (
-                  <button
-                    className="mt-2 text-xs text-blue-600 hover:underline font-medium"
-                    onClick={() => setShowAll(false)}
-                  >
-                    Show Less
-                  </button>
+                    {showAll ? 'Show Less' : `View More (${logs.length - 10} hidden)`}
+                  </Button>
                 )}
               </>
             )}

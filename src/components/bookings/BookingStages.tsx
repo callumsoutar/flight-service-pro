@@ -24,17 +24,21 @@ export function BookingStages({ stages, currentStage }: BookingStagesProps) {
           let baseColor = '';
           let customBg = undefined;
           let borderClass = '';
+          let borderColor = undefined;
           if (isActiveOrComplete) {
-            baseColor = 'bg-violet-600 text-white';
-            customBg = undefined;
+            baseColor = 'text-white';
+            customBg = '#6564db'; // New purple accent color
             borderClass = '';
           } else {
-            baseColor = 'bg-violet-200 text-violet-800';
-            customBg = '#ddd6fe'; // Tailwind violet-200 hex
+            baseColor = 'text-gray-600';
+            customBg = '#e5e7eb'; // gray-200
             borderClass = '';
           }
           // Add outline to current stage
-          const outline = isCurrent ? 'border-violet-800 border-2' : 'border-none';
+          const outline = isCurrent ? 'border-2' : 'border-none';
+          if (isCurrent) {
+            borderColor = '#4f46e5'; // Darker purple for border
+          }
           // Chevron shape
           const chevronClip = !isLast
             ? 'polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 16px 50%)'
@@ -56,6 +60,7 @@ export function BookingStages({ stages, currentStage }: BookingStagesProps) {
                 zIndex: stages.length - idx,
                 height: 32,
                 backgroundColor: customBg,
+                borderColor: borderColor,
               }}
             >
               <span className="truncate text-center w-full text-xs font-medium px-2 whitespace-nowrap">

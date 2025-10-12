@@ -2,9 +2,25 @@
 
 import { useInstructorCompliance, useUserCompliance } from "@/hooks/use-checkout";
 
+interface InstructorComplianceData {
+  instructor_check_due_date: string | null;
+  class_1_medical_due_date: string | null;
+}
+
+interface UserComplianceData {
+  class_1_medical_due: string | null;
+  class_2_medical_due: string | null;
+  DL9_due: string | null;
+  BFR_due: string | null;
+  pilot_license_expiry: string | null;
+}
+
 interface ComplianceWarningsProps {
   instructorId: string | null;
   userId: string | null;
+  // Server-provided data to avoid client-side queries
+  serverInstructorCompliance?: InstructorComplianceData | null;
+  serverUserCompliance?: UserComplianceData | null;
 }
 
 interface ComplianceWarning {
@@ -71,12 +87,29 @@ function checkComplianceField(
   return null;
 }
 
-export default function ComplianceWarnings({ instructorId, userId }: ComplianceWarningsProps) {
-  const { data: instructorCompliance, isLoading: isLoadingInstructor } = useInstructorCompliance(instructorId);
-  const { data: userCompliance, isLoading: isLoadingUser } = useUserCompliance(userId);
+export default function ComplianceWarnings({
+  instructorId,
+  userId,
+  serverInstructorCompliance,
+  serverUserCompliance
+}: ComplianceWarningsProps) {
+  // Only query if server data not provided
+  const shouldQueryInstructor = serverInstructorCompliance === undefined && instructorId !== null;
+  const shouldQueryUser = serverUserCompliance === undefined && userId !== null;
 
-  // Don't render while loading
-  if (isLoadingInstructor || isLoadingUser) return null;
+  const { data: clientInstructorCompliance, isLoading: isLoadingInstructor } = useInstructorCompliance(
+    shouldQueryInstructor ? instructorId : null
+  );
+  const { data: clientUserCompliance, isLoading: isLoadingUser } = useUserCompliance(
+    shouldQueryUser ? userId : null
+  );
+
+  // Use server data if available, otherwise use client data
+  const instructorCompliance = shouldQueryInstructor ? clientInstructorCompliance : serverInstructorCompliance;
+  const userCompliance = shouldQueryUser ? clientUserCompliance : serverUserCompliance;
+
+  // Don't render while loading (only if we're actually querying)
+  if ((shouldQueryInstructor && isLoadingInstructor) || (shouldQueryUser && isLoadingUser)) return null;
 
   const warnings: ComplianceWarning[] = [];
 
