@@ -12,11 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import React, { useState, useEffect } from "react";
 import type { User } from '@/types/users';
-import { User as UserIcon, Calendar as StickyNote, Shield } from "lucide-react";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
-import { format } from "date-fns";
+import { User as UserIcon, StickyNote, Shield, ChevronDown, ChevronRight } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 interface AddMemberModalProps {
   open: boolean;
@@ -30,9 +27,9 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ open, onClose, r
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState<Date | null>(null);
   const [notes, setNotes] = useState("");
   const [createAuthUser, setCreateAuthUser] = useState(false);
+  const [notesExpanded, setNotesExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,9 +39,9 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ open, onClose, r
       setLastName("");
       setEmail("");
       setPhone("");
-      setDateOfBirth(null);
       setNotes("");
       setCreateAuthUser(false);
+      setNotesExpanded(false);
       setError(null);
       setLoading(false);
     }
@@ -64,7 +61,6 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ open, onClose, r
       last_name: lastName || null,
       email,
       phone: phone || null,
-      date_of_birth: dateOfBirth ? format(dateOfBirth, "yyyy-MM-dd") : null,
       notes: notes || null,
       role: "member", // Default role for new members (will be assigned via user_roles table)
       create_auth_user: createAuthUser, // Only create auth user if explicitly requested
@@ -120,10 +116,10 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ open, onClose, r
             <DialogTitle className="text-2xl font-bold mb-1 tracking-tight">Add New Member</DialogTitle>
             <DialogDescription className="mb-2 text-base text-muted-foreground font-normal">Enter details for the new member. Email is required.</DialogDescription>
           </DialogHeader>
-          <form className="flex flex-col gap-8 w-full" onSubmit={handleSubmit}>
+          <form className="flex flex-col gap-6 w-full" onSubmit={handleSubmit}>
             {/* Member Info */}
-            <div className="flex flex-col gap-6">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-2">
                 <UserIcon className="w-5 h-5 text-indigo-600" />
                 <h3 className="text-lg font-bold">Member Info</h3>
               </div>
@@ -140,74 +136,65 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ open, onClose, r
                   <label className="block font-medium mb-1">Email <span className="text-red-500">*</span></label>
                   <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="Email address" />
                 </div>
-                <div>
+                <div className="md:col-span-2">
                   <label className="block font-medium mb-1">Phone</label>
                   <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" />
                 </div>
-                <div>
-                  <label className="block font-medium mb-1">Date of Birth</label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={"w-full justify-start text-left font-normal " + (!dateOfBirth ? "text-muted-foreground" : "")}
-                      >
-                        {dateOfBirth ? format(dateOfBirth, "dd/MM/yyyy") : "Pick a date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={dateOfBirth ?? undefined}
-                        onSelect={date => setDateOfBirth(date ?? null)}
-                        captionLayout="dropdown"
-                        fromYear={1900}
-                        toYear={new Date().getFullYear()}
-                        initialFocus
-                        required={false}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
               </div>
             </div>
-            <hr className="my-2 border-muted" />
+            <hr className="border-muted" />
             {/* Account Access Section */}
-            <div className="flex flex-col gap-6">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-2">
                 <Shield className="w-5 h-5 text-green-600" />
                 <h3 className="text-lg font-bold">Account Access</h3>
               </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="createAuthUser" 
-                  checked={createAuthUser}
-                  onCheckedChange={(checked) => setCreateAuthUser(checked as boolean)}
-                />
-                <label 
-                  htmlFor="createAuthUser" 
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="createAuthUser"
+                  className="text-sm font-medium"
                 >
                   Create login account for this member
                 </label>
+                <Switch
+                  id="createAuthUser"
+                  checked={createAuthUser}
+                  onCheckedChange={setCreateAuthUser}
+                />
               </div>
               <p className="text-sm text-muted-foreground">
-                {createAuthUser 
+                {createAuthUser
                   ? "This member will be able to log in and access their account. You can send them an invitation email later."
                   : "This member will be added to the system but won't have login access. You can create an account and send an invitation later from their profile page."
                 }
               </p>
             </div>
-            <hr className="my-2 border-muted" />
+            <hr className="border-muted" />
             {/* Notes Section */}
-            <div className="flex flex-col gap-6">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="flex flex-col gap-4">
+              <button
+                type="button"
+                onClick={() => setNotesExpanded(!notesExpanded)}
+                className="flex items-center gap-2 text-left hover:opacity-70 transition-opacity"
+              >
+                {notesExpanded ? (
+                  <ChevronDown className="w-5 h-5 text-purple-600" />
+                ) : (
+                  <ChevronRight className="w-5 h-5 text-purple-600" />
+                )}
                 <StickyNote className="w-5 h-5 text-purple-600" />
                 <h3 className="text-lg font-bold">Notes</h3>
-              </div>
-              <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any additional notes..." className="min-h-[60px]" />
+              </button>
+              {notesExpanded && (
+                <Textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Any additional notes..."
+                  className="min-h-[80px]"
+                />
+              )}
             </div>
-            <DialogFooter className="pt-8 flex flex-col sm:flex-row gap-2 sm:gap-4 w-full">
+            <DialogFooter className="pt-6 flex flex-col sm:flex-row gap-2 sm:gap-4 w-full">
               <DialogClose asChild>
                 <Button variant="outline" type="button" className="w-full sm:w-auto border border-muted hover:border-indigo-400">Cancel</Button>
               </DialogClose>
