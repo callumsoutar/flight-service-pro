@@ -19,13 +19,29 @@ const CreateRosterRuleSchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient();
-    
-    // Auth check
+
+    // STEP 1: Authentication
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    
+
+    // STEP 2: Authorization - Only instructors and above can view roster rules
+    const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+      user_id: user.id
+    });
+
+    if (roleError) {
+      console.error('Error fetching user role:', roleError);
+      return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+    }
+
+    if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+      return NextResponse.json({
+        error: 'Forbidden: Viewing roster rules requires instructor, admin, or owner role'
+      }, { status: 403 });
+    }
+
     const { searchParams } = new URL(req.url);
     
     const instructor_id = searchParams.get('instructor_id');
@@ -87,6 +103,29 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient();
+
+    // STEP 1: Authentication
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // STEP 2: Authorization - Only admin/owner can create roster rules
+    const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+      user_id: user.id
+    });
+
+    if (roleError) {
+      console.error('Error fetching user role:', roleError);
+      return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+    }
+
+    if (!userRole || !['admin', 'owner'].includes(userRole)) {
+      return NextResponse.json({
+        error: 'Forbidden: Creating roster rules requires admin or owner role'
+      }, { status: 403 });
+    }
+
     const body = await req.json();
 
     const validatedData = CreateRosterRuleSchema.parse(body);

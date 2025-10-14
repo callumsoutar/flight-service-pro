@@ -14,5 +14,4 @@ async function StudentTrainingRecordPage({ params }: StudentTrainingRecordPagePr
 }
 
 // Export protected component with role restriction for instructors and above
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export default withRoleProtection(StudentTrainingRecordPage as any, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any;
+export default withRoleProtection(StudentTrainingRecordPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP);

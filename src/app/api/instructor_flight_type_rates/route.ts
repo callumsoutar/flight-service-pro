@@ -12,6 +12,29 @@ const rateSchema = z.object({
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check (financial data requires instructor+)
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Viewing instructor flight type rates requires instructor, admin, or owner role'
+    }, { status: 403 });
+  }
+
   const { searchParams } = new URL(req.url);
   const instructor_id = searchParams.get("instructor_id");
   const flight_type_id = searchParams.get("flight_type_id");
@@ -33,6 +56,29 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Only admin/owner can create rates (financial data)
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Creating instructor flight type rates requires admin or owner role'
+    }, { status: 403 });
+  }
+
   const body = await req.json();
   const parse = rateSchema.safeParse(body);
   if (!parse.success) {
@@ -49,6 +95,29 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Only admin/owner can update rates (financial data)
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Updating instructor flight type rates requires admin or owner role'
+    }, { status: 403 });
+  }
+
   const body = await req.json();
   const { id, ...update } = body;
   if (!id) {
@@ -71,6 +140,29 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Only admin/owner can delete rates (financial data)
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Deleting instructor flight type rates requires admin or owner role'
+    }, { status: 403 });
+  }
+
   const { id } = await req.json();
   if (!id) {
     return NextResponse.json({ error: "id required" }, { status: 400 });

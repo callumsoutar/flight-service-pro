@@ -24,5 +24,4 @@ async function InvoicesPage({}: ProtectedPageProps) {
 }
 
 // Export the protected component using the standardized HOC
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default withRoleProtection(InvoicesPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any; 
+export default withRoleProtection(InvoicesPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP); 

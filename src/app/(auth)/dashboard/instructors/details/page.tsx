@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/SupabaseServerClient";
 import { Users, UserCog, UserCheck, Award, Clock } from "lucide-react";
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
 
-export default async function InstructorDetailsPage() {
+async function InstructorDetailsPage({}: ProtectedPageProps) {
   const supabase = await createClient();
 
   // Fetch detailed instructor stats and information
@@ -140,3 +141,6 @@ export default async function InstructorDetailsPage() {
     </main>
   );
 }
+
+// Export the protected component using the standardized HOC
+export default withRoleProtection(InstructorDetailsPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP);

@@ -113,5 +113,4 @@ async function MembersPage({ user: _user, userRole }: ProtectedPageProps) {
 }
 
 // Export protected component with role restriction for instructors and above
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default withRoleProtection(MembersPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any; 
+export default withRoleProtection(MembersPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP); 

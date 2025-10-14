@@ -55,11 +55,21 @@ function calculateMembershipStatus(
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
-  
-  // Auth check
+
+  // STEP 1: Authentication
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
   }
 
   const { searchParams } = new URL(req.url);
@@ -68,6 +78,17 @@ export async function GET(req: NextRequest) {
 
   if (!user_id) {
     return NextResponse.json({ error: "Missing user_id" }, { status: 400 });
+  }
+
+  // STEP 3: Resource-level authorization
+  // Users can view their own memberships, instructors+ can view any membership
+  const isViewingOwnData = user.id === user_id;
+  const isPrivileged = userRole && ['instructor', 'admin', 'owner'].includes(userRole);
+
+  if (!isViewingOwnData && !isPrivileged) {
+    return NextResponse.json({
+      error: 'Forbidden: You can only view your own membership data'
+    }, { status: 403 });
   }
 
   // Fetch memberships with membership type details and invoice status
@@ -139,11 +160,28 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
-  
-  // Auth check
+
+  // STEP 1: Authentication
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check
+  // Only instructors and above can create/renew memberships
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Creating or renewing memberships requires instructor, admin, or owner role'
+    }, { status: 403 });
   }
 
   try {

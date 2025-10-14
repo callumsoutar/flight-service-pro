@@ -224,5 +224,4 @@ async function InvoiceViewPage({ params, userRole }: InvoiceViewPageProps) {
 }
 
 // Export protected component with role restriction for instructors and above
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export default withRoleProtection(InvoiceViewPage as any, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any; 
+export default withRoleProtection(InvoiceViewPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP); 

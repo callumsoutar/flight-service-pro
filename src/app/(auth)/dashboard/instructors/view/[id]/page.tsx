@@ -51,5 +51,4 @@ async function InstructorViewPage({ params }: InstructorViewPageProps) {
 }
 
 // Export the protected component using the standardized HOC
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export default withRoleProtection(InstructorViewPage as any, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any; 
+export default withRoleProtection(InstructorViewPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP); 

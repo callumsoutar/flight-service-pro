@@ -10,52 +10,62 @@ export async function POST(
     const supabase = await createClient();
     const { reason } = await request.json();
 
-    // Get current user
+    // STEP 1: Authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check permissions - admin, owner, instructor role, or user with instructor record
-    const { data: userRoles } = await supabase
-      .from('user_roles')
-      .select(`
-        roles!user_roles_role_id_fkey(name)
-      `)
-      .eq('user_id', user.id)
-      .eq('is_active', true);
+    // STEP 2: Authorization - Only instructors and above can override authorization
+    const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+      user_id: user.id
+    });
 
-    const isAdmin = userRoles?.some(ur => (ur.roles as unknown as { name: string })?.name === 'admin' || (ur.roles as unknown as { name: string })?.name === 'owner');
-    const isInstructorRole = userRoles?.some(ur => (ur.roles as unknown as { name: string })?.name === 'instructor');
-    
-    // Also check if user has an instructor record (users can be instructors without explicit role)
-    const { data: instructorRecord } = await supabase
-      .from('instructors')
-      .select('id')
-      .eq('user_id', user.id)
-      .single();
-
-    const hasInstructorRecord = !!instructorRecord;
-
-    if (!isAdmin && !isInstructorRole && !hasInstructorRecord) {
-      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    if (roleError) {
+      console.error('Error fetching user role:', roleError);
+      return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
     }
 
-    // Update booking with override
+    if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+      return NextResponse.json({
+        error: 'Forbidden: Overriding authorization requires instructor, admin, or owner role'
+      }, { status: 403 });
+    }
+
+    // STEP 3: Verify booking exists
+    const { data: existingBooking, error: fetchError } = await supabase
+      .from('bookings')
+      .select('id, user_id, status')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !existingBooking) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+    }
+
+    // STEP 4: Validate reason is provided
+    if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+      return NextResponse.json({
+        error: 'Override reason is required'
+      }, { status: 400 });
+    }
+
+    // STEP 5: Update booking with override
     const { data, error } = await supabase
       .from('bookings')
       .update({
         authorization_override: true,
         authorization_override_by: user.id,
         authorization_override_at: new Date().toISOString(),
-        authorization_override_reason: reason
+        authorization_override_reason: reason.trim()
       })
       .eq('id', id)
       .select()
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('Error setting authorization override:', error);
+      return NextResponse.json({ error: 'Failed to set authorization override' }, { status: 500 });
     }
 
     return NextResponse.json({ booking: data });
@@ -76,13 +86,40 @@ export async function DELETE(
     const { id } = await params;
     const supabase = await createClient();
 
-    // Get current user
+    // STEP 1: Authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Remove override
+    // STEP 2: Authorization - Only instructors and above can remove overrides
+    const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+      user_id: user.id
+    });
+
+    if (roleError) {
+      console.error('Error fetching user role:', roleError);
+      return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+    }
+
+    if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+      return NextResponse.json({
+        error: 'Forbidden: Removing authorization override requires instructor, admin, or owner role'
+      }, { status: 403 });
+    }
+
+    // STEP 3: Verify booking exists
+    const { data: existingBooking, error: fetchError } = await supabase
+      .from('bookings')
+      .select('id, authorization_override')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !existingBooking) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+    }
+
+    // STEP 4: Remove override
     const { data, error } = await supabase
       .from('bookings')
       .update({
@@ -96,7 +133,8 @@ export async function DELETE(
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('Error removing authorization override:', error);
+      return NextResponse.json({ error: 'Failed to remove authorization override' }, { status: 500 });
     }
 
     return NextResponse.json({ booking: data });

@@ -138,5 +138,4 @@ async function BookingsPage({ user, userRole }: ProtectedPageProps) {
 }
 
 // Export protected component - all authenticated users can access bookings
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default withRoleProtection(BookingsPage, ROLE_CONFIGS.AUTHENTICATED_ONLY) as any; 
+export default withRoleProtection(BookingsPage, ROLE_CONFIGS.AUTHENTICATED_ONLY);

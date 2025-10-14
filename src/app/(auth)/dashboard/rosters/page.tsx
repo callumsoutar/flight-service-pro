@@ -7,5 +7,4 @@ async function RostersPage({ user: _user, userRole: _userRole }: ProtectedPagePr
 }
 
 // Export protected component - instructors and above can access rosters
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default withRoleProtection(RostersPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any;
+export default withRoleProtection(RostersPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP);

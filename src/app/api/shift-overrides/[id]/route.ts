@@ -40,6 +40,28 @@ export async function GET(
     const { id } = await params;
     const supabase = await createClient();
 
+    // STEP 1: Authentication
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // STEP 2: Authorization - Only instructors+ can view shift overrides
+    const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+      user_id: user.id
+    });
+
+    if (roleError) {
+      console.error('Error fetching user role:', roleError);
+      return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+    }
+
+    if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+      return NextResponse.json({
+        error: 'Forbidden: Viewing shift overrides requires instructor, admin, or owner role'
+      }, { status: 403 });
+    }
+
     const { data, error } = await supabase
       .from('shift_overrides')
       .select(`
@@ -86,6 +108,29 @@ export async function PATCH(
   try {
     const { id } = await params;
     const supabase = await createClient();
+
+    // STEP 1: Authentication
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // STEP 2: Authorization - Only admin/owner can update shift overrides
+    const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+      user_id: user.id
+    });
+
+    if (roleError) {
+      console.error('Error fetching user role:', roleError);
+      return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+    }
+
+    if (!userRole || !['admin', 'owner'].includes(userRole)) {
+      return NextResponse.json({
+        error: 'Forbidden: Updating shift overrides requires admin or owner role'
+      }, { status: 403 });
+    }
+
     const body = await req.json();
 
     const validatedData = UpdateShiftOverrideSchema.parse(body);
@@ -183,6 +228,28 @@ export async function DELETE(
   try {
     const { id } = await params;
     const supabase = await createClient();
+
+    // STEP 1: Authentication
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // STEP 2: Authorization - Only admin/owner can delete shift overrides
+    const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+      user_id: user.id
+    });
+
+    if (roleError) {
+      console.error('Error fetching user role:', roleError);
+      return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+    }
+
+    if (!userRole || !['admin', 'owner'].includes(userRole)) {
+      return NextResponse.json({
+        error: 'Forbidden: Deleting shift overrides requires admin or owner role'
+      }, { status: 403 });
+    }
 
     // Soft delete by setting voided_at timestamp
     const { error } = await supabase

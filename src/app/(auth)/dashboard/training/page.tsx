@@ -7,5 +7,4 @@ async function TrainingPage({}: ProtectedPageProps) {
 }
 
 // Export the protected component using the standardized HOC
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default withRoleProtection(TrainingPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any;
+export default withRoleProtection(TrainingPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP);

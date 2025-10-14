@@ -26,10 +26,27 @@ const UpdateMembershipTypeSchema = z.object({
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
 
-  // Auth check
+  // STEP 1: Authentication
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check
+  // Only instructors and above can view membership types (contains pricing info)
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Viewing membership types requires instructor, admin, or owner role'
+    }, { status: 403 });
   }
 
   const { searchParams } = new URL(req.url);
@@ -65,10 +82,26 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
 
-  // Auth check - RLS policies will handle role-based authorization
+  // STEP 1: Authentication
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Only admin/owner can create membership types
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Creating membership types requires admin or owner role'
+    }, { status: 403 });
   }
 
   try {
@@ -156,9 +189,26 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient();
 
+  // STEP 1: Authentication
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Only admin/owner can update membership types
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Updating membership types requires admin or owner role'
+    }, { status: 403 });
   }
 
   try {

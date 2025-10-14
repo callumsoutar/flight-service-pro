@@ -52,12 +52,19 @@ export interface ProtectedPageProps {
 
 /**
  * Higher-Order Component that wraps pages with role-based access control
+ *
+ * Note: Uses 'any' for component typing to support Next.js 15 async components with Promise<{params}>.
+ * The runtime checks ensure type safety despite the permissive TypeScript signature.
  */
-export function withRoleProtection<P extends Record<string, unknown>>(
-  WrappedComponent: React.ComponentType<P & ProtectedPageProps>,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function withRoleProtection<P = any>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  WrappedComponent: React.ComponentType<any>,
   config: RoleProtectionConfig
-) {
-  return async function ProtectedPage(props: P) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): (props: P) => Promise<React.ReactElement> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return async function ProtectedPage(props: any): Promise<React.ReactElement> {
     const { allowedRoles, fallbackUrl = '/dashboard', customValidation } = config;
 
     // Step 1: Check authentication

@@ -17,5 +17,5 @@ async function ReportsPage({}: ProtectedPageProps) {
 }
 
 // Export the protected component using the standardized HOC
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default withRoleProtection(ReportsPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any;
+// Only instructors, admins, and owners can access reports
+export default withRoleProtection(ReportsPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP);

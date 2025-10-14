@@ -3,6 +3,30 @@ import { createClient } from "@/lib/SupabaseServerClient";
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check
+  // Charge rates are financial data - only instructors and above can view
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Viewing aircraft charge rates requires instructor, admin, or owner role'
+    }, { status: 403 });
+  }
+
   const searchParams = req.nextUrl.searchParams;
   const aircraftId = searchParams.get("aircraft_id");
   const flightTypeId = searchParams.get("flight_type_id");
@@ -42,6 +66,29 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check
+  // Only admin/owner can create charge rates (financial data)
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Creating aircraft charge rates requires admin or owner role'
+    }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -89,6 +136,29 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient();
 
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check
+  // Only admin/owner can update charge rates (financial data)
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Updating aircraft charge rates requires admin or owner role'
+    }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { id, flight_type_id, rate_per_hour, charge_hobbs, charge_tacho, charge_airswitch } = body;
@@ -123,6 +193,29 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check
+  // Only admin/owner can delete charge rates (financial data)
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Deleting aircraft charge rates requires admin or owner role'
+    }, { status: 403 });
+  }
 
   try {
     const body = await req.json();

@@ -24,27 +24,23 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
     }
 
-    // Get current user
+    // STEP 1: Authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin for private settings
-    const { data: userRole } = await supabase
-      .from('user_roles')
-      .select(`
-        role_id,
-        roles (name)
-      `)
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .single();
+    // STEP 2: Authorization - Role check using standardized pattern
+    const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+      user_id: user.id
+    });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const roles = userRole?.roles as any;
-    const roleName = Array.isArray(roles) ? roles[0]?.name : roles?.name;
-    const isAdmin = roleName === 'admin' || roleName === 'owner';
+    if (roleError) {
+      console.error('Error fetching user role:', roleError);
+      return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+    }
+
+    const isAdmin = userRole && ['admin', 'owner'].includes(userRole);
 
     // Build query
     let query = supabase

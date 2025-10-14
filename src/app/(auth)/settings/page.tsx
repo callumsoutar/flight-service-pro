@@ -24,5 +24,4 @@ async function SettingsPage({}: ProtectedPageProps) {
 }
 
 // Export protected component using standardized HOC
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default withRoleProtection(SettingsPage, ROLE_CONFIGS.ADMIN_ONLY) as any;
+export default withRoleProtection(SettingsPage, ROLE_CONFIGS.ADMIN_ONLY);

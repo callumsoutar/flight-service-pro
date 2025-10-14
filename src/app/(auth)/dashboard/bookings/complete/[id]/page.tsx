@@ -7,12 +7,13 @@ import BookingCompletionClient from "./BookingCompletionClient";
 import BookingActions from "@/components/bookings/BookingActionsClient";
 import BookingMemberLink from "@/components/bookings/BookingMemberLink";
 import { StatusBadge } from "@/components/bookings/StatusBadge";
+import { withRoleProtection, ROLE_CONFIGS, ProtectedPageProps } from "@/lib/rbac-page-wrapper";
 
-interface PageProps {
+interface BookingCompletePageProps extends ProtectedPageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function BookingCompletePage({ params }: PageProps) {
+async function BookingCompletePage({ params }: BookingCompletePageProps) {
   const { id: bookingId } = await params;
   const supabase = await createClient();
 
@@ -195,3 +196,5 @@ export default async function BookingCompletePage({ params }: PageProps) {
   );
 }
 
+// Export protected component - only instructors and above can complete bookings
+export default withRoleProtection(BookingCompletePage, ROLE_CONFIGS.INSTRUCTOR_AND_UP);

@@ -32,5 +32,4 @@ async function ProfilePage({ user }: ProtectedPageProps) {
 }
 
 // Export protected component - all authenticated users can access their profile
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default withRoleProtection(ProfilePage, ROLE_CONFIGS.AUTHENTICATED_ONLY) as any;
+export default withRoleProtection(ProfilePage, ROLE_CONFIGS.AUTHENTICATED_ONLY);

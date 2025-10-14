@@ -16,6 +16,26 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Role authorization check
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  const isPrivilegedUser = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+  const isStudent = userRole && userRole === 'student';
+  const isMember = userRole && userRole === 'member';
+
+  if (!isPrivilegedUser && !isStudent && !isMember) {
+    return NextResponse.json({
+      error: 'Forbidden: Flight authorization access requires member role or above'
+    }, { status: 403 });
+  }
+
   try {
     const { data: authorization, error } = await supabase
       .from("flight_authorizations")
@@ -48,8 +68,21 @@ export async function GET(
       );
     }
 
+    // Check permissions - students/members can only view their own authorizations
+    if ((isStudent || isMember) && authorization.student_id !== user.id) {
+      return NextResponse.json(
+        { error: 'Forbidden: You can only view your own authorization requests' },
+        { status: 403 }
+      );
+    }
+
+    // Filter sensitive data for students and members
+    const responseData = (isStudent || isMember)
+      ? filterAuthorizationData(authorization)
+      : authorization;
+
     return NextResponse.json({
-      authorization,
+      authorization: responseData,
       success: true
     });
 
@@ -126,10 +159,14 @@ export async function PATCH(
       }
     }
 
-    // Prevent students from updating approved authorizations (but allow updating rejected ones for resubmission)
-    if (existingAuth.student_id === user.id && existingAuth.status === 'approved') {
+    // Prevent students from updating approved or pending authorizations
+    // - Approved: Final state, cannot modify
+    // - Pending: Under review by instructor, should not be modified
+    // - Rejected: Can be updated and resubmitted
+    // - Draft: Can be freely updated
+    if (existingAuth.student_id === user.id && ['approved', 'pending'].includes(existingAuth.status)) {
       return NextResponse.json(
-        { error: "Cannot update approved authorizations" },
+        { error: `Cannot update ${existingAuth.status} authorizations. Please contact an instructor if changes are needed.` },
         { status: 403 }
       );
     }
@@ -260,4 +297,40 @@ export async function DELETE(
       { status: 500 }
     );
   }
+}
+
+// Filter sensitive flight authorization data for restricted users (students/members)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function filterAuthorizationData(authorization: any) {
+  // Students can see basic authorization info but not instructor notes/limitations
+  const filtered = { ...authorization };
+
+  // Remove sensitive instructor data
+  delete filtered.instructor_notes;
+  delete filtered.instructor_limitations;
+  delete filtered.authorizing_instructor_signature_data;
+  delete filtered.approving_instructor_signature_data;
+
+  // Keep only basic instructor identification
+  if (filtered.authorizing_instructor) {
+    filtered.authorizing_instructor = {
+      id: filtered.authorizing_instructor.id,
+      users: filtered.authorizing_instructor.users ? {
+        first_name: filtered.authorizing_instructor.users.first_name,
+        last_name: filtered.authorizing_instructor.users.last_name
+      } : null
+    };
+  }
+
+  if (filtered.approving_instructor) {
+    filtered.approving_instructor = {
+      id: filtered.approving_instructor.id,
+      users: filtered.approving_instructor.users ? {
+        first_name: filtered.approving_instructor.users.first_name,
+        last_name: filtered.approving_instructor.users.last_name
+      } : null
+    };
+  }
+
+  return filtered;
 }

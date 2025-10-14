@@ -36,11 +36,17 @@ async function FlightAuthorizationPage({ params, user, userRole }: FlightAuthori
     redirect('/dashboard/bookings');
   }
 
+  // Validate booking has a user_id before proceeding
+  if (!booking.user_id) {
+    console.error('Booking missing user_id:', booking.id);
+    redirect('/dashboard/bookings');
+  }
+
   // Check if user has permission to view this authorization using standardized validation
   const canAccessBooking = await validateBookingAccess({
     user,
     userRole,
-    bookingUserId: booking.user_id || ''
+    bookingUserId: booking.user_id
   });
 
   if (!canAccessBooking) {
@@ -131,8 +137,7 @@ async function FlightAuthorizationPage({ params, user, userRole }: FlightAuthori
 }
 
 // Export protected component with authenticated users (booking-specific validation inside)
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export default withRoleProtection(FlightAuthorizationPage as any, {
+export default withRoleProtection(FlightAuthorizationPage, {
   allowedRoles: ['student', 'member', 'instructor', 'admin', 'owner'],
   fallbackUrl: '/dashboard/bookings'
-}) as any;
+});

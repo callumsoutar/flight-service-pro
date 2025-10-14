@@ -14,6 +14,29 @@ async function BookingDebriefPage({ params, user, userRole }: BookingDebriefPage
   const { id: bookingId } = await params;
   const supabase = await createClient();
 
+  // SECURITY: First, fetch minimal booking data to check authorization
+  // This prevents data leakage through timing attacks or verbose errors
+  const { data: bookingMinimal, error: minimalError } = await supabase
+    .from("bookings")
+    .select("id, user_id")
+    .eq("id", bookingId)
+    .single();
+
+  // If booking doesn't exist, redirect
+  if (minimalError || !bookingMinimal) {
+    redirect('/dashboard/bookings');
+  }
+
+  // Check if user has permission to view this booking BEFORE fetching sensitive data
+  // Instructors/admins/owners can view all bookings
+  const isPrivilegedUser = userRole && ['instructor', 'admin', 'owner'].includes(userRole);
+  const isOwnBooking = bookingMinimal.user_id === user.id;
+
+  if (!isPrivilegedUser && !isOwnBooking) {
+    redirect('/dashboard/bookings');
+  }
+
+  // NOW fetch full booking data after authorization is confirmed
   let booking: Booking | null = null;
   const { data: bookingData } = await supabase
     .from("bookings")
@@ -34,17 +57,9 @@ async function BookingDebriefPage({ params, user, userRole }: BookingDebriefPage
     .single();
   booking = bookingData;
 
-  // If booking or booking.user is missing, redirect to bookings list
+  // Final validation after full fetch
   if (!booking || !booking.user) {
     redirect('/dashboard/bookings');
-  }
-
-  // Check if user has permission to view this booking
-  // Students can only view their own bookings, instructors/admins/owners can view all
-  if (booking.user_id !== user.id) {
-    if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
-      redirect('/dashboard/bookings');
-    }
   }
 
   const status = booking.status ?? "unconfirmed";
@@ -66,5 +81,4 @@ async function BookingDebriefPage({ params, user, userRole }: BookingDebriefPage
 }
 
 // Export protected component with role restriction for instructors and above
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export default withRoleProtection(BookingDebriefPage as any, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any; 
+export default withRoleProtection(BookingDebriefPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP);

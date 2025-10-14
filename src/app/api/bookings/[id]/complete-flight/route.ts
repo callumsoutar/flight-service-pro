@@ -135,13 +135,15 @@ async function handleCalculate(
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
 
-  // Check authorization
+  // Check authorization - Only instructors and above can complete bookings
+  // This is critical as it involves financial data (invoices) and aircraft meters
   const { data: userRole } = await supabase.rpc('get_user_role', { user_id: userId });
-  const isPrivileged = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
-  const isOwnBooking = booking.user_id === userId;
-  
-  if (!isPrivileged && !isOwnBooking) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const isInstructorOrAbove = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+
+  if (!isInstructorOrAbove) {
+    return NextResponse.json({
+      error: "Forbidden: Only instructors and above can complete bookings"
+    }, { status: 403 });
   }
 
   // 2. Get aircraft to determine billing method and total_time_method
@@ -529,6 +531,16 @@ async function handleComplete(
 
   if (bookingError || !booking) {
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+  }
+
+  // Check authorization - Only instructors and above can complete bookings
+  const { data: userRole } = await supabase.rpc('get_user_role', { user_id: userId });
+  const isInstructorOrAbove = userRole && ['admin', 'owner', 'instructor'].includes(userRole);
+
+  if (!isInstructorOrAbove) {
+    return NextResponse.json({
+      error: "Forbidden: Only instructors and above can complete bookings"
+    }, { status: 403 });
   }
 
   // 2. Get aircraft

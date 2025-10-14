@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/SupabaseServerClient";
 
-// TODO: Enforce RLS/auth for all operations
-
 const insertSchema = z.object({
   user_id: z.string().uuid(),
   status: z.enum(['pass', 'not yet competent']),
@@ -26,15 +24,54 @@ const updateSchema = insertSchema.partial();
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole) {
+    return NextResponse.json({
+      error: 'Forbidden: Access requires a valid role'
+    }, { status: 403 });
+  }
+
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   const booking_id = searchParams.get("booking_id");
   const user_id = searchParams.get("user_id");
 
+  // STEP 3: Resource-level authorization
+  // Instructors+ can view all progress, members/students can only view their own
+  const isPrivileged = ['instructor', 'admin', 'owner'].includes(userRole);
+
   let query = supabase.from("lesson_progress").select("*");
   if (id) query = query.eq("id", id);
   if (booking_id) query = query.eq("booking_id", booking_id);
-  if (user_id) query = query.eq("user_id", user_id);
+
+  // If user_id is specified, check if user can access it
+  if (user_id) {
+    if (!isPrivileged && user_id !== user.id) {
+      return NextResponse.json({
+        error: 'Forbidden: Cannot access other users\' progress'
+      }, { status: 403 });
+    }
+    query = query.eq("user_id", user_id);
+  } else if (!isPrivileged) {
+    // Non-privileged users can only see their own progress
+    query = query.eq("user_id", user.id);
+  }
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -43,6 +80,29 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Only instructors+ can create lesson progress records
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Creating lesson progress requires instructor, admin, or owner role'
+    }, { status: 403 });
+  }
+
   const body = await req.json();
   const parse = insertSchema.safeParse(body);
   if (!parse.success) {
@@ -55,6 +115,29 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Only instructors+ can update lesson progress
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Updating lesson progress requires instructor, admin, or owner role'
+    }, { status: 403 });
+  }
+
   const body = await req.json();
   const { id, ...rest } = body;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -69,6 +152,29 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Only admin/owner can delete lesson progress (sensitive training records)
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Deleting lesson progress requires admin or owner role'
+    }, { status: 403 });
+  }
+
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });

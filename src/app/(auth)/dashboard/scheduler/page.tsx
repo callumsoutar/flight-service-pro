@@ -7,5 +7,4 @@ async function SchedulerPage({ user: _user, userRole: _userRole }: ProtectedPage
 }
 
 // Export protected component - all authenticated users can access scheduler
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default withRoleProtection(SchedulerPage, ROLE_CONFIGS.AUTHENTICATED_ONLY) as any;
+export default withRoleProtection(SchedulerPage, ROLE_CONFIGS.AUTHENTICATED_ONLY);

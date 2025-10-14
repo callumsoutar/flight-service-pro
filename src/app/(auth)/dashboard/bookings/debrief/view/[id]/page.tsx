@@ -141,8 +141,7 @@ async function DebriefViewPage({ params, user, userRole }: DebriefViewPageProps)
 }
 
 // Export protected component with booking access validation
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export default withRoleProtection(DebriefViewPage as any, {
+export default withRoleProtection(DebriefViewPage, {
   ...ROLE_CONFIGS.AUTHENTICATED_ONLY,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   customValidation: async ({ user: _user, userRole: _userRole, context: _context }) => {
@@ -150,4 +149,4 @@ export default withRoleProtection(DebriefViewPage as any, {
     // since we need to fetch the booking first to get the user_id
     return true;
   }
-}) as any; 
+});

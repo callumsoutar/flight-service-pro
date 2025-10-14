@@ -75,11 +75,27 @@ export async function GET(req: NextRequest) {
 // POST /api/instructor-aircraft-ratings - Create new instructor aircraft rating
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
-  
-  // Auth check
+
+  // STEP 1: Authentication
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check (only admin/owner can create ratings)
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Creating instructor aircraft ratings requires admin or owner role'
+    }, { status: 403 });
   }
 
   try {

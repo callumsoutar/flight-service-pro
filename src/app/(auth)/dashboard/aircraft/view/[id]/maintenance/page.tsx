@@ -136,5 +136,4 @@ async function AircraftMaintenancePage({ params, user: _user, userRole: _userRol
 }
 
 // Export protected component with role restriction for instructors and above
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default withRoleProtection(AircraftMaintenancePage as any, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any;
+export default withRoleProtection(AircraftMaintenancePage, ROLE_CONFIGS.INSTRUCTOR_AND_UP);

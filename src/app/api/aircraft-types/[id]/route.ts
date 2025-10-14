@@ -41,11 +41,29 @@ export async function PATCH(
 ) {
   const supabase = await createClient();
   const { id } = await params;
-  
-  // Auth check
+
+  // STEP 1: Authentication
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check (only admin/owner can update aircraft types)
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  const isPrivileged = userRole && ['admin', 'owner'].includes(userRole);
+
+  if (!isPrivileged) {
+    return NextResponse.json({
+      error: 'Forbidden: Aircraft type updates require admin or owner role'
+    }, { status: 403 });
   }
 
   try {
@@ -98,11 +116,29 @@ export async function DELETE(
 ) {
   const supabase = await createClient();
   const { id } = await params;
-  
-  // Auth check
+
+  // STEP 1: Authentication
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check (only admin/owner can delete aircraft types)
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  const isPrivileged = userRole && ['admin', 'owner'].includes(userRole);
+
+  if (!isPrivileged) {
+    return NextResponse.json({
+      error: 'Forbidden: Aircraft type deletion requires admin or owner role'
+    }, { status: 403 });
   }
 
   try {

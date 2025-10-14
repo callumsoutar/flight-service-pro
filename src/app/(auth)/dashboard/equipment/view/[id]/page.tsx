@@ -54,5 +54,4 @@ async function EquipmentViewPage({ params, user: _user, userRole: _userRole }: E
 }
 
 // Export protected component with role restriction for instructors and above
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export default withRoleProtection(EquipmentViewPage as any, ROLE_CONFIGS.INSTRUCTOR_AND_UP) as any;
+export default withRoleProtection(EquipmentViewPage, ROLE_CONFIGS.INSTRUCTOR_AND_UP);

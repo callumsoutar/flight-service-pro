@@ -21,11 +21,50 @@ const InstructorCommentUpdateSchema = z.object({
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
   const { searchParams } = new URL(req.url);
   const bookingId = searchParams.get("booking_id");
   if (!bookingId) {
     return NextResponse.json({ error: "Missing booking_id" }, { status: 400 });
   }
+
+  // STEP 3: Resource-level authorization - check booking ownership
+  const { data: booking } = await supabase
+    .from("bookings")
+    .select("user_id")
+    .eq("id", bookingId)
+    .single();
+
+  if (!booking) {
+    return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+  }
+
+  // Users can view comments on their own bookings, instructors+ can view any
+  const isPrivileged = userRole && ['instructor', 'admin', 'owner'].includes(userRole);
+  const isOwnBooking = booking.user_id === user.id;
+
+  if (!isPrivileged && !isOwnBooking) {
+    return NextResponse.json({
+      error: 'Forbidden: You can only view comments on your own bookings'
+    }, { status: 403 });
+  }
+
   const { data, error } = await supabase
     .from("instructor_comments")
     .select("*")
@@ -39,6 +78,29 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Only instructors and above can create comments
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Creating instructor comments requires instructor, admin, or owner role'
+    }, { status: 403 });
+  }
+
   const body = await req.json();
   const parse = InstructorCommentSchema.safeParse(body);
   if (!parse.success) {
@@ -56,11 +118,11 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (instructorError || !instructorData) {
-      return NextResponse.json({ 
-        error: "User is not registered as an instructor" 
+      return NextResponse.json({
+        error: "User is not registered as an instructor"
       }, { status: 400 });
     }
-    
+
     instructorId = instructorData.id;
   }
 
@@ -84,6 +146,29 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient();
+
+  // STEP 1: Authentication
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Only instructors and above can update comments
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Updating instructor comments requires instructor, admin, or owner role'
+    }, { status: 403 });
+  }
+
   const body = await req.json();
   const { id, ...update } = body;
   if (!id) {

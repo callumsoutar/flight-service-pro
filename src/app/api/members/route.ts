@@ -9,13 +9,30 @@ export async function GET(req: NextRequest) {
   const limit = parseInt(searchParams.get("limit") || "20", 10);
   const search = searchParams.get("search") || "";
 
-  // Get current user
+  // STEP 1: Authentication
   const {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser();
   if (userError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // STEP 2: Authorization - Role check
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  // Only instructors and above can view member lists
+  if (!userRole || !['instructor', 'admin', 'owner'].includes(userRole)) {
+    return NextResponse.json({
+      error: 'Forbidden: Viewing member lists requires instructor, admin, or owner role'
+    }, { status: 403 });
   }
 
   // If ids param is present, fetch only those users
@@ -134,15 +151,15 @@ export async function PATCH(req: NextRequest) {
   const supabase = await createClient();
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
-  
+
   console.log('PATCH /api/members called with id:', id);
-  
+
   if (!id) {
     console.error('Missing member id in PATCH request');
     return NextResponse.json({ error: "Missing member id" }, { status: 400 });
   }
 
-  // Get current user
+  // STEP 1: Authentication
   const {
     data: { user },
     error: userError,
@@ -154,6 +171,27 @@ export async function PATCH(req: NextRequest) {
 
   console.log('Authenticated user:', user.id);
 
+  // STEP 2: Authorization - Role check
+  const { data: userRole, error: roleError } = await supabase.rpc('get_user_role', {
+    user_id: user.id
+  });
+
+  if (roleError) {
+    console.error('Error fetching user role:', roleError);
+    return NextResponse.json({ error: 'Authorization check failed' }, { status: 500 });
+  }
+
+  const isPrivileged = userRole && ['instructor', 'admin', 'owner'].includes(userRole);
+  const isOwnProfile = user.id === id;
+
+  // SECURITY: Users can update their own profile, OR privileged users (instructors+) can update any profile
+  // However, role changes and sensitive field updates require admin/owner (checked below)
+  if (!isPrivileged && !isOwnProfile) {
+    return NextResponse.json({
+      error: 'Forbidden: You can only update your own profile'
+    }, { status: 403 });
+  }
+
   // Parse body for updatable fields
   let body;
   try {
@@ -164,18 +202,27 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
   }
 
-  const allowedFields = [
+  // Define fields that regular users can update on their own profile
+  const userEditableFields = [
+    "phone",
+    "next_of_kin_name",
+    "next_of_kin_phone",
+    "street_address",
+    "class_1_medical_due",
+    "class_2_medical_due",
+    "DL9_due",
+    "BFR_due",
+  ];
+
+  // Define fields that only privileged users (instructors+) can update
+  const privilegedFields = [
     "first_name",
     "last_name",
     "email",
-    "phone",
     "company_name",
     "occupation",
     "employer",
     "notes",
-    "next_of_kin_name",
-    "next_of_kin_phone",
-    "street_address",
     "gender",
     "date_of_birth",
     "pilot_license_number",
@@ -183,11 +230,15 @@ export async function PATCH(req: NextRequest) {
     "pilot_license_id",
     "pilot_license_expiry",
     "medical_certificate_expiry",
-    "class_1_medical_due",
-    "class_2_medical_due",
-    "DL9_due",
-    "BFR_due",
-    "role"
+  ];
+
+  // Role changes require admin/owner
+  const adminOnlyFields = ["role"];
+
+  const allowedFields = [
+    ...userEditableFields,
+    ...privilegedFields,
+    ...adminOnlyFields
   ];
   
   interface UpdateUserFields {
@@ -217,24 +268,46 @@ export async function PATCH(req: NextRequest) {
     role?: string;
   }
   
+  // STEP 3: Validate field-level permissions
   const updates: UpdateUserFields = {};
-  for (const field of allowedFields) {
-    if (field in body) {
-      const value = body[field];
-      
-      // Handle date fields - convert empty strings to null
-      if (field === 'date_of_birth' || field === 'pilot_license_expiry' || field === 'medical_certificate_expiry' || 
-          field === 'class_1_medical_due' || field === 'class_2_medical_due' || field === 'DL9_due' || field === 'BFR_due') {
-        updates[field as keyof UpdateUserFields] = value === '' ? null : value;
+
+  for (const field of Object.keys(body)) {
+    if (!allowedFields.includes(field)) {
+      // Skip unknown fields
+      continue;
+    }
+
+    const value = body[field];
+
+    // Check if user is trying to update admin-only fields
+    if (adminOnlyFields.includes(field)) {
+      if (!userRole || !['admin', 'owner'].includes(userRole)) {
+        return NextResponse.json({
+          error: `Forbidden: Field '${field}' can only be updated by admin or owner`
+        }, { status: 403 });
       }
-      // Handle UUID fields - convert empty strings to null
-      else if (field === 'pilot_license_id') {
-        updates[field as keyof UpdateUserFields] = value === '' ? null : value;
-      }
-      // Handle other optional fields - only include if not empty string
-      else if (value !== '' || field === 'first_name' || field === 'last_name' || field === 'email') {
-        updates[field as keyof UpdateUserFields] = value;
-      }
+    }
+
+    // Check if regular user is trying to update privileged fields
+    if (privilegedFields.includes(field) && !isPrivileged) {
+      return NextResponse.json({
+        error: `Forbidden: Field '${field}' can only be updated by instructors, admins, or owners`
+      }, { status: 403 });
+    }
+
+    // If we reach here, user has permission to update this field
+    // Handle date fields - convert empty strings to null
+    if (field === 'date_of_birth' || field === 'pilot_license_expiry' || field === 'medical_certificate_expiry' ||
+        field === 'class_1_medical_due' || field === 'class_2_medical_due' || field === 'DL9_due' || field === 'BFR_due') {
+      updates[field as keyof UpdateUserFields] = value === '' ? null : value;
+    }
+    // Handle UUID fields - convert empty strings to null
+    else if (field === 'pilot_license_id') {
+      updates[field as keyof UpdateUserFields] = value === '' ? null : value;
+    }
+    // Handle other optional fields - only include if not empty string
+    else if (value !== '' || field === 'first_name' || field === 'last_name' || field === 'email') {
+      updates[field as keyof UpdateUserFields] = value;
     }
   }
 
