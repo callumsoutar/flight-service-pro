@@ -61,7 +61,6 @@ export function withRoleProtection<P = any>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   WrappedComponent: React.ComponentType<any>,
   config: RoleProtectionConfig
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): (props: P) => Promise<React.ReactElement> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return async function ProtectedPage(props: any): Promise<React.ReactElement> {
