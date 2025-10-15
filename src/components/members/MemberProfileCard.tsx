@@ -8,13 +8,14 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { ChevronDown, FileText, Calendar, Menu, UserPlus } from "lucide-react";
+import { ChevronDown, FileText, Calendar, Menu, UserPlus, KeyRound, Mail } from "lucide-react";
 import Link from "next/link";
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useState } from "react";
 import { getStatusBadgeClasses, getStatusText } from "@/lib/membership-utils";
 import { SendInvitationButton } from "./SendInvitationButton";
+import ResetPasswordModal from "./ResetPasswordModal";
 
 interface MemberProfileCardProps {
   member: User;
@@ -24,6 +25,7 @@ interface MemberProfileCardProps {
 
 export default function MemberProfileCard({ member, joinDate, membershipStatus = "none" }: MemberProfileCardProps) {
   const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [resetPasswordOpen, setResetPasswordOpen] = React.useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,26 +90,21 @@ export default function MemberProfileCard({ member, joinDate, membershipStatus =
                   <Menu className="w-4 h-4 mr-2 text-gray-600" /> Account
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
-                  {member.has_auth_account ? (
-                    <>
-                      <SendInvitationButton 
-                        userId={member.id}
-                        userEmail={member.email}
-                        userName={`${member.first_name} ${member.last_name}`}
-                        asDropdownItem={true}
-                      />
-                      <DropdownMenuItem onClick={() => alert('Reset Password')}>Reset Password</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => alert('Change Email')}>Change Email</DropdownMenuItem>
-                    </>
-                  ) : (
-                    <>
-                      <SendInvitationButton
-                        userId={member.id}
-                        userEmail={member.email}
-                        userName={`${member.first_name} ${member.last_name}`}
-                        asDropdownItem={true}
-                      />
-                    </>
+                  <SendInvitationButton 
+                    userId={member.id}
+                    userEmail={member.email}
+                    userName={`${member.first_name} ${member.last_name}`}
+                    asDropdownItem={true}
+                  />
+                  <DropdownMenuItem onClick={() => setResetPasswordOpen(true)}>
+                    <KeyRound className="w-4 h-4 mr-2" />
+                    Reset Password
+                  </DropdownMenuItem>
+                  {member.has_auth_account && (
+                    <DropdownMenuItem onClick={() => alert('Change Email')}>
+                      <Mail className="w-4 h-4 mr-2" />
+                      Change Email
+                    </DropdownMenuItem>
                   )}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
@@ -170,6 +167,18 @@ export default function MemberProfileCard({ member, joinDate, membershipStatus =
           {error && <div className="text-red-500 text-sm mt-2 w-full">{error}</div>}
         </DialogContent>
       </Dialog>
+      
+      {/* Password Reset Modal */}
+      <ResetPasswordModal
+        isOpen={resetPasswordOpen}
+        onClose={() => setResetPasswordOpen(false)}
+        member={{
+          id: member.id,
+          email: member.email,
+          first_name: member.first_name || '',
+          last_name: member.last_name || '',
+        }}
+      />
     </Card>
   );
 } 
