@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import QueryProvider from "@/components/QueryProvider";
+import { SettingsProvider } from "@/contexts/SettingsContext";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 
@@ -32,7 +33,9 @@ export default function RootLayout({
         suppressHydrationWarning={true}
       >
         <QueryProvider>
-          {children}
+          <SettingsProvider>
+            {children}
+          </SettingsProvider>
         </QueryProvider>
         <SpeedInsights />
         <Analytics />
