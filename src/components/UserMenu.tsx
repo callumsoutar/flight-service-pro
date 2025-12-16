@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "../lib/SupabaseBrowserClient";
+import { useQueryClient } from "@tanstack/react-query";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import {
   DropdownMenu,
@@ -12,6 +13,7 @@ import {
 import Link from "next/link";
 
 export function UserMenu() {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<{ name: string; initials: string; email: string }>({ name: "User", initials: "U", email: "" });
 
   useEffect(() => {
@@ -77,6 +79,9 @@ export function UserMenu() {
 
   const handleLogout = async () => {
     const supabase = createClient();
+    // Clear all query cache, especially user roles, before logout
+    // This ensures a new user logging in won't see the previous user's cached roles
+    queryClient.clear();
     await supabase.auth.signOut();
     window.location.href = "/login";
   };

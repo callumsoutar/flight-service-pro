@@ -55,7 +55,15 @@ export function useCurrentUserRoles() {
       }
       return response.json();
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh for 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes - cache persists for 10 minutes
+    // Prevent refetching on mount/window focus to avoid skeleton flash
+    // Data will still be refetched if it's stale (older than staleTime)
+    refetchOnMount: false, // Don't refetch when component mounts if data exists
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnReconnect: true, // Still refetch on reconnect (network recovery)
+    // Use placeholderData to show cached data immediately while refetching
+    placeholderData: (previousData) => previousData, // Keep showing previous data while loading
   });
 }
 

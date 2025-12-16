@@ -56,7 +56,7 @@ export function SidebarComponent() {
   // Get current user role using the secure endpoint
   const { data: userRoleData, isLoading: rolesLoading, error: rolesError } = useCurrentUserRoles();
 
-  // Get user's role name
+  // Get user's role name - use cached data if available, even if refetching
   const userRole = userRoleData?.role?.toLowerCase() || '';
 
   // Debug logging (only show errors or during development)
@@ -78,8 +78,11 @@ export function SidebarComponent() {
     return true;
   });
 
-  // Render skeleton loading state while role data is loading
-  if (rolesLoading) {
+  // Only show skeleton on true first load (no cached data available)
+  // With placeholderData, we'll have cached data on subsequent navigations
+  const showSkeleton = rolesLoading && !userRoleData;
+
+  if (showSkeleton) {
     return (
       <aside className="fixed left-0 top-0 h-full w-56 bg-[#101D42] border-r border-gray-200 text-white flex flex-col z-30 overflow-hidden">
         <div className="flex items-center gap-2 h-14 px-6 font-bold text-xl tracking-tight border-b border-[#89d2dc]/30">
@@ -111,6 +114,7 @@ export function SidebarComponent() {
     );
   }
 
+  // Render sidebar with cached or fresh data
   return (
     <aside className="fixed left-0 top-0 h-full w-56 bg-[#101D42] border-r border-gray-200 text-white flex flex-col z-30 overflow-hidden">
       <div className="flex items-center gap-2 h-14 px-6 font-bold text-xl tracking-tight border-b border-[#89d2dc]/30">
@@ -183,7 +187,7 @@ export function SidebarComponent() {
       <div className="mt-auto mb-4 px-3">
         <div className="w-full h-px mb-3 bg-[#89d2dc]/30" />
         {/* Show Settings for all users - different destinations based on role */}
-        {!rolesLoading && (
+        {userRoleData && (
           <Link
             href={userRole === 'admin' || userRole === 'owner' ? "/settings" : "/dashboard/profile"}
             className="flex items-center gap-3 px-3 py-2.5 rounded-md text-white hover:bg-white/10 hover:text-white font-extrabold text-base transition-all duration-150 sidebar-link mb-2"
