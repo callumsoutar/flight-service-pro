@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Loader2, DollarSign, FileText } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { User } from "@/types/users";
@@ -39,8 +39,8 @@ export default function MemberAccountTab({ memberId, member }: MemberAccountTabP
     setLoading(false);
   }, [memberId]);
 
-  // Fetch account statement
-  useEffect(() => {
+  // Function to fetch account statement
+  const fetchAccountStatement = useCallback(() => {
     if (!memberId) return;
     setStatementLoading(true);
     setStatementError(null);
@@ -57,6 +57,20 @@ export default function MemberAccountTab({ memberId, member }: MemberAccountTabP
       .finally(() => setStatementLoading(false));
   }, [memberId]);
 
+  // Fetch account statement on mount and when memberId changes
+  useEffect(() => {
+    fetchAccountStatement();
+  }, [fetchAccountStatement]);
+
+  // Refetch when window regains focus (handles cases where invoice/payment created in another tab)
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchAccountStatement();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [fetchAccountStatement]);
+
   // Fetch invoices for outstanding count
   useEffect(() => {
     if (!memberId) return;
@@ -66,7 +80,10 @@ export default function MemberAccountTab({ memberId, member }: MemberAccountTabP
       .catch(e => console.error("Failed to load invoices:", e));
   }, [memberId]);
 
-  const balance = member?.account_balance ?? 0;
+  // Use closingBalance from account statement API (calculated from transactions)
+  // Balance is calculated dynamically from all transactions - no stored column needed
+  // Fall back to 0 while statement is loading
+  const balance = statementLoading ? 0 : closingBalance;
 
   // Outstanding invoices: count pending/overdue invoices
   const outstandingInvoicesCount = invoices.filter(invoice => 

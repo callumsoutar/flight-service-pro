@@ -112,19 +112,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch credit notes" }, { status: 500 });
     }
 
-    // Fetch user's current account balance
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("account_balance")
-      .eq("id", user_id)
-      .single();
-
-    if (userError) {
-      console.error("Error fetching user:", userError);
-      return NextResponse.json({ error: "Failed to fetch user data" }, { status: 500 });
-    }
-
-    const currentBalance = userData?.account_balance || 0;
+    // Note: We calculate balance directly from transactions - this is the single source of truth
+    // The account_balance column has been removed; all balances are calculated dynamically
+    // This ensures closing_balance matches what's displayed in the transaction table
 
     // Create lookup maps
     const paymentMap = new Map(
@@ -206,18 +196,22 @@ export async function GET(req: NextRequest) {
     allEntries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // Calculate running balance FORWARD from opening balance = 0
+    // We assume opening balance is 0 before first transaction, or calculate it if needed
     let runningBalance = 0;
     
     // Cast to full AccountStatementEntry[] to add balance property
     const entriesWithBalance = allEntries as AccountStatementEntry[];
     
-    // Calculate opening balance by working backwards from current balance
-    // Opening + sum(all amounts) = Current
-    // Therefore: Opening = Current - sum(all amounts)
+    // Calculate total changes from all transactions
     const totalChanges = allEntries.reduce((sum, entry) => sum + entry.amount, 0);
-    const openingBalance = currentBalance - totalChanges;
     
-    // Now calculate forward from opening balance
+    // Calculate opening balance: If we have transactions, opening balance is the 
+    // negative of all changes before the first transaction (i.e., 0)
+    // If there's historical data, we can calculate: opening = closing - total changes
+    // For now, we'll start from 0 and calculate forward
+    const openingBalance = 0;
+    
+    // Calculate forward from opening balance
     runningBalance = openingBalance;
     
     for (let i = 0; i < entriesWithBalance.length; i++) {
@@ -225,6 +219,9 @@ export async function GET(req: NextRequest) {
       runningBalance = runningBalance + entry.amount;
       entry.balance = runningBalance;
     }
+    
+    // Closing balance is the final running balance (calculated from transactions)
+    const closingBalance = runningBalance;
 
     // Add opening balance entry if there are transactions OR if opening balance is non-zero
     if (entriesWithBalance.length > 0 || openingBalance !== 0) {
@@ -246,7 +243,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ 
       statement: entriesWithBalance,
       opening_balance: openingBalance,
-      closing_balance: currentBalance,
+      closing_balance: closingBalance, // Use calculated balance from transactions for consistency
       user_id: user_id,
     });
 

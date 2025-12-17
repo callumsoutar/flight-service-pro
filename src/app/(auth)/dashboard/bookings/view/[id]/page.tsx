@@ -240,7 +240,6 @@ async function BookingViewPage(props: ProtectedPageProps & { params: Promise<{ i
         first_name: u.name.split(" ")[0] || "",
         last_name: u.name.split(" ").slice(1).join(" ") || "",
         email: "",
-        account_balance: 0,
         is_active: true,
         public_directory_opt_in: false,
         created_at: "",

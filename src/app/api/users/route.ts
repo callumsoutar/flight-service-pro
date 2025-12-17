@@ -35,7 +35,6 @@ interface UserData {
   occupation?: string;
   employer?: string;
   notes?: string;
-  account_balance?: number;
   is_active?: boolean;
   public_directory_opt_in?: boolean;
   created_at?: string;
@@ -74,7 +73,7 @@ export async function GET(req: NextRequest) {
 
   if (isPrivileged) {
     // Privileged users can access all fields
-    selectFields = "id, first_name, last_name, email, phone, date_of_birth, gender, street_address, city, state, postal_code, country, next_of_kin_name, next_of_kin_phone, emergency_contact_relationship, medical_certificate_expiry, class_1_medical_due, class_2_medical_due, DL9_due, BFR_due, pilot_license_number, pilot_license_type, pilot_license_id, pilot_license_expiry, date_of_last_flight, company_name, occupation, employer, notes, account_balance, is_active, public_directory_opt_in, created_at, updated_at";
+    selectFields = "id, first_name, last_name, email, phone, date_of_birth, gender, street_address, city, state, postal_code, country, next_of_kin_name, next_of_kin_phone, emergency_contact_relationship, medical_certificate_expiry, class_1_medical_due, class_2_medical_due, DL9_due, BFR_due, pilot_license_number, pilot_license_type, pilot_license_id, pilot_license_expiry, date_of_last_flight, company_name, occupation, employer, notes, is_active, public_directory_opt_in, created_at, updated_at";
     
     // Fetch all users
     query = supabase
@@ -87,7 +86,7 @@ export async function GET(req: NextRequest) {
     
     if (id && id === user.id) {
       // Users can access their own full data
-      selectFields = "id, first_name, last_name, email, phone, date_of_birth, gender, street_address, city, state, postal_code, country, next_of_kin_name, next_of_kin_phone, emergency_contact_relationship, medical_certificate_expiry, pilot_license_number, pilot_license_type, pilot_license_id, pilot_license_expiry, date_of_last_flight, company_name, occupation, employer, notes, account_balance, is_active, public_directory_opt_in, created_at, updated_at";
+      selectFields = "id, first_name, last_name, email, phone, date_of_birth, gender, street_address, city, state, postal_code, country, next_of_kin_name, next_of_kin_phone, emergency_contact_relationship, medical_certificate_expiry, pilot_license_number, pilot_license_type, pilot_license_id, pilot_license_expiry, date_of_last_flight, company_name, occupation, employer, notes, is_active, public_directory_opt_in, created_at, updated_at";
       query = supabase
         .from("users")
         .select(selectFields)
@@ -163,7 +162,6 @@ export async function GET(req: NextRequest) {
         occupation: userData.occupation || "",
         employer: userData.employer || "",
         notes: userData.notes || "",
-        account_balance: userData.account_balance || 0,
         is_active: userData.is_active !== undefined ? userData.is_active : true,
         has_auth_account: includeAuthStatus ? authUserIds.has(userData.id) : undefined,
         updated_at: userData.updated_at,
