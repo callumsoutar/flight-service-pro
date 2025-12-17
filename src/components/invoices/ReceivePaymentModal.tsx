@@ -213,8 +213,21 @@ export default function ReceivePaymentModal({
                     type="number"
                     min={0}
                     step={0.01}
-                    value={amount}
-                    onChange={e => setAmount(Number(e.target.value))}
+                    value={amount === 0 ? '' : amount}
+                    onChange={e => {
+                      let value = e.target.value;
+                      // Remove leading zeros (except for decimal values like 0.5)
+                      if (value && value.length > 1 && value[0] === '0' && value[1] !== '.') {
+                        value = value.replace(/^0+/, '') || '0';
+                      }
+                      // Parse the number
+                      if (value === '' || value === '.') {
+                        setAmount(0);
+                      } else {
+                        const numValue = parseFloat(value);
+                        setAmount(isNaN(numValue) ? 0 : numValue);
+                      }
+                    }}
                     className="pl-8 pr-3 py-2 text-lg font-semibold h-11"
                     required
                     disabled={loading}
