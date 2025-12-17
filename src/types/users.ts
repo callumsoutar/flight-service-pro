@@ -31,7 +31,6 @@ export interface User {
   occupation?: string;
   employer?: string;
   notes?: string;
-  account_balance: number; // numeric, not nullable, default 0.00
   is_active: boolean; // boolean, not nullable, default true
   public_directory_opt_in: boolean; // boolean, not nullable, default false
   has_auth_account?: boolean; // computed field indicating if user has auth.users record

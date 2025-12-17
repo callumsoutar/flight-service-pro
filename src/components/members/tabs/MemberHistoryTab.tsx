@@ -53,7 +53,7 @@ const FIELD_LABELS: Record<string, string> = {
   occupation: 'Occupation',
   employer: 'Employer',
   notes: 'Notes',
-  account_balance: 'Account Balance',
+  // account_balance removed - now calculated from transactions
   public_directory_opt_in: 'Public Directory',
   class_1_medical_due: 'Class 1 Medical Due',
   class_2_medical_due: 'Class 2 Medical Due',
@@ -71,7 +71,6 @@ const FIELD_PRIORITY = [
   'email',
   'phone',
   'is_active',
-  'account_balance',
   'medical_certificate_expiry',
   'pilot_license_number',
   'pilot_license_expiry',
