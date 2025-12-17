@@ -202,13 +202,7 @@ export async function GET(req: NextRequest) {
     // Cast to full AccountStatementEntry[] to add balance property
     const entriesWithBalance = allEntries as AccountStatementEntry[];
     
-    // Calculate total changes from all transactions
-    const totalChanges = allEntries.reduce((sum, entry) => sum + entry.amount, 0);
-    
-    // Calculate opening balance: If we have transactions, opening balance is the 
-    // negative of all changes before the first transaction (i.e., 0)
-    // If there's historical data, we can calculate: opening = closing - total changes
-    // For now, we'll start from 0 and calculate forward
+    // Calculate opening balance: Start from 0 (balances are calculated from all transactions)
     const openingBalance = 0;
     
     // Calculate forward from opening balance
